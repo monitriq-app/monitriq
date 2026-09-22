@@ -78,6 +78,12 @@ These are distinct fields/concepts, never merged into a single "value":
 Valuation changes are recorded as their own history (see §7), separate from
 cash transactions.
 
+**Implemented for Assets (P0-E2-S3)**: Cost Basis, Estimated Current
+Value, Quick-Sale Estimate, and Target Value are each their own
+structurally distinct concept in `assets`/`asset_basis_events`/
+`asset_valuations` — see §19. Actual Sale Price is not implemented (no
+sale workflow exists yet).
+
 ## 5. Financial event principles and worked examples
 
 ### 5.1 Receivable recovery (e.g. ₦500,000 collected)
@@ -144,6 +150,11 @@ Valuation updates are their own record type (valuation history), separate
 from cash transactions. Changing an estimated value creates an **Unrealised
 Value Change** event where appropriate — it never creates a Money In/Out
 record. History is preserved; valuations are never silently overwritten.
+
+**Implemented (P0-E2-S3)** as `asset_valuations`: append-only, one row per
+valuation event, three distinct `valuation_type`s. Recording a valuation
+never creates a `financial_events`/`cash_movements` row — tested explicitly
+in `supabase/tests/assets/run.ts`. See §19.
 
 ## 8. Liabilities / debt
 
@@ -299,3 +310,66 @@ are both explicitly deferred, not built this phase — voiding is the
 minimum viable correction mechanism, not the final one. `cash_movements`
 rows are never editable at all; the only way to change what an event
 recorded is to void it.
+
+## 19. Assets domain implementation summary (P0-E2-S3)
+
+Full detail in `supabase/migrations/*_create_assets_domain.sql` and
+[MULTI_CURRENCY_MODEL.md](./MULTI_CURRENCY_MODEL.md). Summary:
+
+- **Generic on purpose.** `assets.asset_type` is a controlled vocabulary
+  (`asset_types` reference table: vehicle, property, business_interest,
+  financial_investment, equipment, inventory, collectible, other) — no
+  vehicle-specific, property-specific, or any single-subtype columns
+  anywhere in the schema. Receivables get their own dedicated domain
+  shortly, deliberately not forced into this generic list this phase.
+- **Cost basis is history, not a mutable field.** `asset_basis_events` is
+  an append-only signed ledger (`initial_basis`/`capital_improvement`
+  positive, `basis_reduction` negative), mirroring `cash_movements`'
+  philosophy exactly — current basis is always `sum(amount)` per asset
+  (`asset_current_basis()`), never an overwritten column. This is
+  deliberately the same shape that will later carry asset purchase,
+  capital improvement, repair capitalization, and partial disposal
+  without any schema change.
+- **Valuation is history, not a mutable field.** `asset_valuations` is
+  likewise append-only, with `valuation_type` in
+  (`estimated_current_value`, `quick_sale_estimate`, `target_value`) —
+  three structurally distinct concepts (§4), never collapsed. The latest
+  row per `(asset_id, valuation_type)` is the current value
+  (`asset_latest_valuations()`/`asset_summary()`); a correction is a new
+  row with a newer `valued_at`, never an edit to an old one.
+- **Asset creation and valuation/basis recording never move cash.**
+  `create_asset()`, `record_asset_valuation()`, and
+  `record_asset_basis_event()` never touch `financial_events` or
+  `cash_movements` — there is no code path connecting them. An existing
+  asset (owned for years before the user started using Monatriq) can be
+  onboarded with a historical cost basis without fabricating today's Money
+  Out — tested explicitly (`supabase/tests/assets/run.ts`).
+- **Potential Liquidity is never invented.** `lib/domain/assets/
+  liquidity.ts` uses the quick-sale estimate as liquidity evidence only
+  when the user explicitly supplied one; absent that, the result is
+  `not_calculated` — no automatic haircut off estimated current value or
+  target value.
+- **Asset currency is immutable once it has history** — same mechanism as
+  bucket currency (`enforce_asset_currency_immutable()`). Valuations and
+  basis events must match the asset's native currency exactly; a mismatch
+  is rejected, never guessed (no cross-currency appraisal this phase —
+  see [MULTI_CURRENCY_MODEL.md §12](./MULTI_CURRENCY_MODEL.md#12-assets-no-cross-currency-appraisal-this-phase)).
+- **All `SECURITY INVOKER`** — no elevated privilege anywhere in Assets,
+  same discipline as Money. `record_asset_valuation()`/
+  `record_asset_basis_event()` exist as thin ownership-checking wrappers
+  specifically to avoid a TypeScript-generated-type-vs-column-grant
+  mismatch, not to bypass any permission — see
+  [SECURITY_AND_RLS_PRINCIPLES.md §14](../security/SECURITY_AND_RLS_PRINCIPLES.md).
+
+## 20. Net worth preparation (Assets, P0-E2-S3)
+
+Final Net Worth is not implemented this phase, but Assets is structured so
+a future Net Worth calculation can consume `asset_native_currency_totals()`
+— the latest `estimated_current_value` per asset, grouped by native
+currency, excluding archived assets — and convert through the same shared
+`convertToReportingCurrency()` layer Money uses
+([MULTI_CURRENCY_MODEL.md §10, §13](./MULTI_CURRENCY_MODEL.md#10-reporting-currency-conversion-an-explicit-unwired-boundary)).
+`target_value` is always excluded from this total (it is aspirational, not
+current); `quick_sale_estimate` is not the default Net Worth basis either
+— both are deliberately absent from `asset_native_currency_totals()`'s
+source query, not merely omitted from a future formula's intentions.

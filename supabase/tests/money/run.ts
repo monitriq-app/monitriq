@@ -26,7 +26,7 @@ import {
   getCurrencyTotals,
   getRecentActivity,
 } from "../../../lib/domain/money/repository.ts";
-import { convertToReportingCurrency } from "../../../lib/domain/money/conversion.ts";
+import { convertToReportingCurrency } from "../../../lib/domain/currency/conversion.ts";
 import { randomUUID } from "node:crypto";
 
 async function main() {

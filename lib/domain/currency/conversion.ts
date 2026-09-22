@@ -19,10 +19,15 @@ export type ReportingConversionResult =
  * the fx_rates table (that currency is the base, reportingCurrency is the
  * quote).
  *
- * Not wired into any UI this phase — no rate source (manual entry or
- * otherwise) is presented to the user yet, so Money only ever shows
- * per-currency balances (money_currency_totals). This function exists so
- * that boundary is real and tested, not just documented as a future TODO.
+ * Shared by Money and Assets (and anything else that reports per-currency
+ * totals) — one reporting-conversion contract, per
+ * docs/architecture/MULTI_CURRENCY_MODEL.md's "one shared currency
+ * domain" rule, not a second copy living under either domain. Not wired
+ * into any UI this phase — no rate source (manual entry or otherwise) is
+ * presented to the user yet, so both Money and Assets only ever show
+ * per-currency totals (money_currency_totals / asset_native_currency_
+ * totals). This function exists so that boundary is real and tested, not
+ * just documented as a future TODO.
  */
 export function convertToReportingCurrency(
   balances: CurrencyAmount[],

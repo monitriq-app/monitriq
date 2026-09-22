@@ -1,20 +1,21 @@
 import { formatCurrencyAmount } from "@/lib/domain/currency/format";
 import type { Currency, CurrencyAmount } from "@/lib/domain/currency/types";
 
-interface CashByCurrencyProps {
+interface AssetsByCurrencyProps {
   totals: CurrencyAmount[];
   currencies: Map<string, Currency>;
 }
 
 /**
- * Per-currency totals only — never a consolidated single total. See
- * docs/architecture/MULTI_CURRENCY_MODEL.md: unlike currencies are never
- * directly summed, and no reporting-currency conversion is wired into any
- * UI this phase (no rate source exists to convert with yet).
+ * Per-currency totals of each asset's LATEST estimated_current_value only
+ * (never target_value, never quick_sale_estimate) — never a consolidated
+ * single total. See docs/architecture/FINANCIAL_DOMAIN_MODEL.md, "net
+ * worth preparation": unlike currencies are never directly summed, and no
+ * reporting-currency conversion is wired into any UI this phase.
  */
-export function CashByCurrency({ totals, currencies }: CashByCurrencyProps) {
+export function AssetsByCurrency({ totals, currencies }: AssetsByCurrencyProps) {
   if (totals.length === 0) {
-    return <p className="text-text-muted">No cash buckets yet.</p>;
+    return <p className="text-text-muted">No assets yet.</p>;
   }
 
   return (

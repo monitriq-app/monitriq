@@ -6,7 +6,6 @@ import type {
   CashBucket,
   CashBucketInput,
   CashBucketUpdate,
-  Currency,
   CurrencyAmount,
   FinancialEvent,
   MoneyActivityItem,
@@ -31,14 +30,9 @@ function asNumericParam(value: string): number {
 }
 
 // ---------------------------------------------------------------------------
-// Reference data
+// Reference data (currencies: see lib/domain/currency/repository.ts —
+// the one canonical source, not duplicated here)
 // ---------------------------------------------------------------------------
-
-export async function listCurrencies(client: Client): Promise<Currency[]> {
-  const { data, error } = await client.from("currencies").select("*").order("code");
-  if (error) throw error;
-  return data;
-}
 
 export async function listMoneyReceivedCategories(client: Client): Promise<MoneyReceivedCategory[]> {
   const { data, error } = await client

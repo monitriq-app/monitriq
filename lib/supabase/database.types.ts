@@ -38,6 +38,183 @@ export type Database = {
   }
   public: {
     Tables: {
+      asset_basis_events: {
+        Row: {
+          amount: number
+          asset_id: string
+          basis_event_type: string
+          created_at: string
+          currency_code: string
+          description: string | null
+          id: string
+          occurred_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          asset_id: string
+          basis_event_type: string
+          created_at?: string
+          currency_code: string
+          description?: string | null
+          id?: string
+          occurred_at: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          asset_id?: string
+          basis_event_type?: string
+          created_at?: string
+          currency_code?: string
+          description?: string | null
+          id?: string
+          occurred_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_basis_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_basis_events_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      asset_types: {
+        Row: {
+          code: string
+          created_at: string
+          display_name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          display_name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          display_name?: string
+        }
+        Relationships: []
+      }
+      asset_valuations: {
+        Row: {
+          asset_id: string
+          created_at: string
+          currency_code: string
+          id: string
+          note: string | null
+          source: string | null
+          user_id: string
+          valuation_type: string
+          value: number
+          valued_at: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          currency_code: string
+          id?: string
+          note?: string | null
+          source?: string | null
+          user_id: string
+          valuation_type: string
+          value: number
+          valued_at: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          currency_code?: string
+          id?: string
+          note?: string | null
+          source?: string | null
+          user_id?: string
+          valuation_type?: string
+          value?: number
+          valued_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_valuations_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_valuations_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      assets: {
+        Row: {
+          acquired_at: string | null
+          asset_type: string
+          created_at: string
+          currency_code: string
+          description: string | null
+          id: string
+          is_archived: boolean
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          acquired_at?: string | null
+          asset_type: string
+          created_at?: string
+          currency_code: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          acquired_at?: string | null
+          asset_type?: string
+          created_at?: string
+          currency_code?: string
+          description?: string | null
+          id?: string
+          is_archived?: boolean
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assets_asset_type_fkey"
+            columns: ["asset_type"]
+            isOneToOne: false
+            referencedRelation: "asset_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "assets_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       cash_buckets: {
         Row: {
           bucket_type: string
@@ -353,6 +530,78 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      asset_current_basis: {
+        Args: never
+        Returns: {
+          asset_id: string
+          basis: string
+          currency_code: string
+        }[]
+      }
+      asset_latest_valuations: {
+        Args: never
+        Returns: {
+          asset_id: string
+          currency_code: string
+          valuation_type: string
+          value: string
+          valued_at: string
+        }[]
+      }
+      asset_native_currency_totals: {
+        Args: never
+        Returns: {
+          currency_code: string
+          total_estimated_value: string
+        }[]
+      }
+      asset_summary: {
+        Args: never
+        Returns: {
+          asset_id: string
+          asset_type: string
+          cost_basis: string
+          currency_code: string
+          estimated_current_value: string
+          is_archived: boolean
+          latest_valued_at: string
+          name: string
+          quick_sale_estimate: string
+          target_value: string
+        }[]
+      }
+      create_asset: {
+        Args: {
+          p_acquired_at?: string
+          p_asset_type: string
+          p_currency_code: string
+          p_description?: string
+          p_estimated_current_value?: number
+          p_initial_basis_amount?: number
+          p_name: string
+          p_quick_sale_estimate?: number
+          p_target_value?: number
+          p_valued_at?: string
+        }
+        Returns: {
+          acquired_at: string | null
+          asset_type: string
+          created_at: string
+          currency_code: string
+          description: string | null
+          id: string
+          is_archived: boolean
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "assets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       money_bucket_balances: {
         Args: never
         Returns: {
@@ -384,6 +633,60 @@ export type Database = {
           spending_category_code: string
           voided_at: string
         }[]
+      }
+      record_asset_basis_event: {
+        Args: {
+          p_amount: number
+          p_asset_id: string
+          p_basis_event_type: string
+          p_description?: string
+          p_occurred_at?: string
+        }
+        Returns: {
+          amount: number
+          asset_id: string
+          basis_event_type: string
+          created_at: string
+          currency_code: string
+          description: string | null
+          id: string
+          occurred_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_basis_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_asset_valuation: {
+        Args: {
+          p_asset_id: string
+          p_note?: string
+          p_source?: string
+          p_valuation_type: string
+          p_value: number
+          p_valued_at?: string
+        }
+        Returns: {
+          asset_id: string
+          created_at: string
+          currency_code: string
+          id: string
+          note: string | null
+          source: string | null
+          user_id: string
+          valuation_type: string
+          value: number
+          valued_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "asset_valuations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       record_fx_transfer: {
         Args: {

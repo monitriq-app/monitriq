@@ -1,7 +1,7 @@
-import { formatCurrencyAmount } from "@/lib/domain/money/format";
+import { formatCurrencyAmount } from "@/lib/domain/currency/format";
+import type { Currency } from "@/lib/domain/currency/types";
 import type {
   CashBucket,
-  Currency,
   MoneyActivityItem,
   MoneyReceivedCategory,
   MoneySpendingCategory,

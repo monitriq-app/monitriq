@@ -31,6 +31,9 @@ export async function AppShell({ children }: AppShellProps) {
               <Link href="/money" className="hover:text-text-primary">
                 Money
               </Link>
+              <Link href="/assets" className="hover:text-text-primary">
+                Assets
+              </Link>
             </nav>
           </div>
           <div className="flex items-center gap-4 text-sm text-text-secondary">

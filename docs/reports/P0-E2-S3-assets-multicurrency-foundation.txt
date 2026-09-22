@@ -1,0 +1,575 @@
+MONATRIQ — PHASE REPORT
+========================
+
+1. PHASE
+--------
+P0-E2-S3 — Currency Registry Hardening, Assets & Valuation Foundation.
+
+2. STATUS
+---------
+Complete. Part A (currency registry hardening) and Part B (Assets domain)
+are both implemented and validated against a real local Supabase
+database: 20 (Profile, regression) + 37 (Money, regression) + 11
+(currency registry) + 28 (Assets) = 96/96 assertions passed after a fresh
+`supabase db reset`. Lint, TypeScript, and production build all pass, both
+with and without a Supabase project configured. Migrations were also
+pushed to a real remote project this phase (Monatriq Dev, confirmed with
+the user before acting) — schema deployment is confirmed there via
+`supabase migration list --linked`; RLS/isolation test *execution*
+remains local-only, per this phase's explicit instruction not to loosen
+the localhost-only safety guard. BUILD_STATE updated. This report written.
+
+3. OBJECTIVE
+------------
+Two tightly related objectives: (A) harden the multi-currency foundation
+— expand the currency registry to comprehensive, reliably-sourced fiat
+coverage, and resolve the currency-list duplication flagged in P0-E2-S2
+by making public.currencies the one source of truth Profile/Money/Assets
+all read; (B) build the core Assets + valuation domain — generic asset
+ownership, asset types, native currency, cost basis, valuation history
+(current/quick-sale/target, kept structurally distinct), archiving,
+multi-currency asset summaries, RLS, cross-tenant reference protections,
+adversarial isolation tests, exact-decimal calculations, and enough
+application integration to prove the model. Explicitly not: final Stitch
+Assets UI, Goals, Decisions, final Home, full Receivables, liabilities/
+debt, autonomous recommendations.
+
+4. REPOSITORY STATE BEFORE WORK
+---------------------------------
+`git rev-parse --show-toplevel` resolved to /Users/datamatics/Monatriq
+(correct). `git status` was clean — P0-E2-S2 had been committed by the
+user between sessions (commit 49254e4, "feat: establish multicurrency
+money engine"). No unrelated changes were present.
+
+5. SUPABASE ENVIRONMENT STATE
+--------------------------------
+Changed materially since P0-E2-S2. Inspected before any work (without
+printing secret values): `supabase projects list` now shows exactly one
+project, "monatriq's Project" (ref mvnwrkfcszazqqccmmxq, region us-west-1,
+status ACTIVE_HEALTHY), already linked to this directory
+(supabase/.temp/project-ref present). "Nemryn" — the unrelated client
+project flagged and avoided in every prior phase — no longer appears in
+the account's project list at all.
+
+Per this phase's explicit instruction not to infer identity merely from
+there being one available project, this was confirmed with the user
+directly via a clarifying question before any linking-adjacent action:
+confirmed as the intended Monatriq Dev environment, and confirmed to push
+this phase's migrations to it.
+
+Sequence followed: `supabase db push --linked --dry-run` first (output:
+all 4 migrations would be applied — the remote had no migration history
+at all, confirming a genuinely fresh project, not one with existing data
+at risk), then `supabase db push --linked --yes` (the migration-safe
+additive deploy command; `supabase db reset`, a local-testing-only
+operation, was never run against this project). A non-fatal warning
+appeared during the push about a pg-delta migration-catalog caching
+feature failing (missing a certificate file inside the CLI's internal
+sandbox) — unrelated to whether the migrations themselves applied.
+Verified independently via `supabase migration list --linked`: all 4
+local migration timestamps (20260922201924, 20260922210653, 20260922220526,
+20260922221247) match remote exactly.
+
+RLS/adversarial test suites were deliberately NOT run against remote:
+they create and delete real auth.users rows using
+SUPABASE_TEST_SERVICE_ROLE_KEY, and this phase's brief explicitly says to
+keep that key restricted to the local fixture harness and not loosen the
+localhost-only guard in supabase/tests/shared/env.ts. So: REMOTE SCHEMA
+DEPLOYMENT CONFIRMED. REMOTE RLS/ISOLATION TEST EXECUTION NOT RUN.
+
+Local validation used the same Docker-based stack as prior phases, reset
+from migration history multiple times this phase to confirm
+reproducibility, most recently as the final step before the validation
+run recorded in section 29. `.env.local` needed rebuilding again at the
+start of this phase (another IDE-extension interference appended
+stray/duplicate lines, visible as a system notification) — rebuilt
+cleanly via `supabase status -o env`, no value printed to this
+conversation or this report at any point.
+
+6. CURRENCY REGISTRY CHANGES
+---------------------------------
+Expanded from 26 to 158 currencies
+(supabase/migrations/20260922220526_expand_currency_registry.sql).
+Method, fully reproducible and documented in the migration file's header
+and docs/architecture/MULTI_CURRENCY_MODEL.md §3:
+  1. Intl.supportedValuesOf('currency') (Node v24.14.0, ICU 78.2, Unicode
+     17.0) — ICU's own list of currently-active, formattable currency
+     codes. Already excludes precious-metal codes (XAU/XAG/XPD/XPT) and
+     the "no currency"/testing placeholders (XXX/XTS).
+  2. Two further exclusions: XDR (IMF Special Drawing Rights — a reserve/
+     accounting unit, not spendable personal-finance currency) and XSU
+     (Sucre — an ALBA regional clearing unit, same reasoning). Genuine
+     regional fiat currencies that happen to use an "X" prefix (XAF, XCD,
+     XCG, XOF, XPF) were kept — real, actively used money.
+  3. Two superseded/historical exclusions, both with real replacements
+     already in the list: SLL ("Sierra Leonean Leone (1964-2022)",
+     replaced by SLE) and ZWL ("Zimbabwean Dollar (2009-2024)", replaced
+     by ZWG).
+  4. For each remaining code: Intl.DisplayNames for the display name,
+     Intl.NumberFormat's formatted currency part for the symbol (falls
+     back to the code itself when ICU has no distinct 'en'-locale symbol
+     — expected, since symbol is presentation-only, never identity), and
+     that formatter's maximumFractionDigits for decimal_exponent.
+Result: 158 rows, verified duplicate-free before writing the migration.
+The INSERT uses ON CONFLICT (code) DO UPDATE, so it is idempotent and the
+original 26 rows now carry the exact same ICU-sourced metadata as the
+other 132 — one consistent source for all 158, not "26 hand-typed + 132
+generated." Crypto was never in scope — ISO 4217/ICU's currency list
+never included it, so nothing had to be filtered out for that reason
+specifically.
+
+7. CURRENCY SOURCE-OF-TRUTH RESOLUTION
+--------------------------------------------
+lib/domain/profile/currencies.ts (P0-E2-S1's hand-maintained 26-entry
+onboarding picker, flagged as duplication in P0-E2-S2's report) is
+deleted. lib/domain/currency/ is now the one canonical currency stack:
+types.ts (Currency, CurrencyAmount), repository.ts (listCurrencies,
+getCurrency), format.ts and conversion.ts (both relocated here from
+lib/domain/money/ this phase — neither was ever actually Money-specific).
+listCurrencies() is called by:
+  - app/onboarding/page.tsx (Profile onboarding's currency picker)
+  - app/(app)/money/page.tsx (cash bucket creation)
+  - app/(app)/assets/page.tsx (asset creation)
+The removal is enforced by a test, not just a claim:
+supabase/tests/currency/run.ts asserts
+lib/domain/profile/currencies.ts does not exist on disk, so this
+duplication cannot silently reappear.
+
+8. FILES CREATED
+-----------------
+supabase/migrations/20260922220526_expand_currency_registry.sql
+supabase/migrations/20260922221247_create_assets_domain.sql
+lib/domain/currency/{types.ts, repository.ts} (new)
+lib/domain/assets/{types.ts, repository.ts, liquidity.ts}
+app/(app)/assets/page.tsx
+components/assets/{AssetList.tsx, AssetsByCurrency.tsx, AddAssetForm.tsx}
+supabase/tests/currency/run.ts
+supabase/tests/assets/run.ts
+docs/reports/P0-E2-S3-assets-multicurrency-foundation.txt (this file)
+
+9. FILES MODIFIED
+-------------------
+app/(app)/money/page.tsx, app/onboarding/page.tsx — listCurrencies import
+  path updated to lib/domain/currency/repository.
+components/onboarding/OnboardingForm.tsx — now accepts a `currencies`
+  prop (fetched server-side) instead of importing the deleted static list.
+components/money/{ActivityList,BucketList,CashByCurrency,
+  CreateBucketForm}.tsx — Currency type and formatCurrencyAmount imports
+  updated to lib/domain/currency/.
+components/layout/AppShell.tsx — added an Assets nav link.
+lib/domain/money/{repository.ts,types.ts} — Currency/listCurrencies/
+  CurrencyAmount removed (now live solely in lib/domain/currency/;
+  money/types.ts re-exports CurrencyAmount for convenience, not
+  duplication — the single definition still lives in currency/types.ts).
+lib/domain/currency/conversion.ts (moved from lib/domain/money/,
+  doc comment updated to reflect shared Money+Assets usage).
+lib/supabase/database.types.ts — regenerated (Assets tables/functions,
+  expanded currencies).
+package.json — added test:currency/test:assets scripts and extended the
+  combined test script; no new dependency this phase, package-lock.json
+  unchanged.
+supabase/tests/money/run.ts — conversion.ts import path updated.
+docs/architecture/{FINANCIAL_DOMAIN_MODEL,MULTI_CURRENCY_MODEL,
+  SYSTEM_ARCHITECTURE}.md, docs/security/SECURITY_AND_RLS_PRINCIPLES.md,
+  docs/project/BUILD_STATE.md — see sections 30-31 below and the git diff
+  for detail; existing sections were extended/pointed-to, not rewritten.
+
+10. MIGRATIONS
+-----------------
+Two new migrations this phase, both applied cleanly (local and remote):
+  20260922220526_expand_currency_registry.sql — see section 6.
+  20260922221247_create_assets_domain.sql — see section 11.
+Confirmed reproducible via repeated `supabase db reset` from migration
+history (profiles -> money -> currency-expansion -> assets, in that
+order) throughout this phase, most recently immediately before the final
+validation run (section 29).
+
+11. ASSET SCHEMA
+--------------------
+public.asset_types (code PK, display_name, created_at) — seeded: vehicle,
+  property, business_interest, financial_investment, equipment,
+  inventory, collectible, other. RLS enabled, permissive SELECT-only
+  policy (public reference data, same pattern as currencies/money
+  categories).
+public.assets (id, user_id, asset_type FK, name, description, currency_code
+  FK, acquired_at, is_archived, created_at, updated_at) — no stored
+  balance/value column. currency_code immutable once basis/valuation
+  history exists (enforce_asset_currency_immutable(), same mechanism as
+  cash_buckets).
+public.asset_basis_events (id, asset_id FK, user_id, basis_event_type
+  CHECK in (initial_basis, capital_improvement, basis_reduction), amount
+  numeric(20,6) signed, currency_code FK, occurred_at, description,
+  created_at) — append-only; current basis = sum(amount).
+public.asset_valuations (id, asset_id FK, user_id, valuation_type CHECK
+  in (estimated_current_value, quick_sale_estimate, target_value), value
+  numeric(20,6) positive, currency_code FK, valued_at, source, note,
+  created_at) — append-only; latest row per (asset_id, valuation_type) is
+  current.
+Full column-level detail and every constraint/trigger/comment is in the
+migration file, the canonical source.
+
+12. ASSET TYPE STRATEGY
+----------------------------
+A controlled-vocabulary reference table (asset_types), not a bare
+CHECK-only enum scattered through the schema and not an arbitrary
+client-supplied string — same pattern already proven by
+money_received_categories/money_spending_categories. Extending the
+supported type list later is a migration that inserts a row, not a
+schema change. Deliberately generic: no vehicle-specific, property-
+specific, or any single-subtype columns anywhere. Receivables are
+explicitly not forced into this list this phase — they get their own
+dedicated domain shortly, per the brief.
+
+13. COST-BASIS STRATEGY
+----------------------------
+Chosen: (B) an append-only basis-event history table
+(asset_basis_events), not (A) a mutable field on assets or a bare
+overwrite-in-place column. Signed amounts, same convention as
+cash_movements: initial_basis/capital_improvement positive,
+basis_reduction negative (enforced by a trigger, not client discipline).
+Current basis is always sum(amount) per asset
+(asset_current_basis()), never a stored/overwritten column. This shape is
+deliberately the same one that will later carry a real asset-purchase
+workflow, capital improvements, vehicle-repair capitalization, and
+partial disposal without requiring the table to be redesigned — each of
+those becomes another basis_event_type value and another row, not a
+schema migration for the core mechanism.
+
+14. VALUATION-HISTORY STRATEGY
+------------------------------------
+Append-only (asset_valuations), three structurally distinct
+valuation_type values (estimated_current_value, quick_sale_estimate,
+target_value) — never collapsed into one "value" column. A correction is
+a new row with a newer valued_at, never an edit to an existing row (no
+UPDATE grant or policy exists on this table for anyone). Latest row per
+(asset_id, valuation_type) is the authoritative current value for that
+type.
+
+15. CURRENT-VALUE READ MODEL
+----------------------------------
+asset_latest_valuations() (DISTINCT ON per asset_id+valuation_type,
+ordered by valued_at desc, created_at desc) and the combined
+asset_summary() (one row per asset with cost_basis,
+estimated_current_value, quick_sale_estimate, target_value, and
+latest_valued_at, via LEFT JOIN LATERAL per valuation type) are the sole
+authoritative "what is this asset worth right now" calculations — SQL
+functions, SECURITY INVOKER, never re-derived per screen. A known
+Supabase type-generator limitation: these columns are generated as
+non-nullable string even though Postgres genuinely returns NULL for an
+asset with no basis/valuation of a given type; corrected in
+lib/domain/assets/repository.ts's mapping layer (documented inline), so
+the rest of the application sees the honest string | null shape.
+
+16. QUICK-SALE MODEL
+-------------------------
+Optional, never fabricated, never auto-derived from target_value or
+estimated_current_value. Absent a recorded quick_sale_estimate,
+asset_summary() returns null for that field (mapped to "Not set" at the
+UI layer) — tested explicitly (section 22). lib/domain/assets/
+liquidity.ts's getPotentialLiquidity() uses it as the sole liquidity
+evidence when present, returning {status: "not_calculated"} otherwise —
+no invented haircut off any other value.
+
+17. TARGET-VALUE MODEL
+---------------------------
+Aspirational figure, structurally separate from estimated_current_value
+and never returned in its place — tested explicitly (section 22).
+Excluded from asset_native_currency_totals() (section 18) and therefore
+from the future Net Worth calculation that will consume it
+(FINANCIAL_DOMAIN_MODEL.md §20).
+
+18. MULTI-CURRENCY ASSET MODEL
+------------------------------------
+asset_native_currency_totals() sums only the latest
+estimated_current_value per asset, grouped by currency_code, excluding
+archived assets — never target_value, never quick_sale_estimate, never
+across currencies (verified: separate NGN and USD totals in the same
+test run, never merged into one figure). Reuses the exact
+{currencyCode, amount}[] shape money_currency_totals() returns, so the
+one shared convertToReportingCurrency() (lib/domain/currency/
+conversion.ts, relocated this phase) accepts Assets' totals without any
+translation — verified directly: calling it with Assets' totals and no
+supplied rate returns {status: "not_calculated", missingRates: ["USD"]},
+proving reuse rather than a parallel implementation.
+
+19. EXACT-DECIMAL STRATEGY
+-------------------------------
+Identical discipline to Money, reused rather than reinvented:
+numeric(20,6) for both asset_basis_events.amount and
+asset_valuations.value (no REAL/DOUBLE PRECISION anywhere). A trigger
+(prepare_asset_basis_event/prepare_asset_valuation) rejects any
+amount/value with more fractional precision than its currency's
+decimal_exponent allows — tested explicitly for JPY (0-decimal,
+fractional valuation rejected). Read functions cast every amount to text
+in their RETURNS TABLE shape, for the same PostgREST-numeric-as-JSON-
+number reason documented for Money. decimal.js remains the one
+arbitrary-precision library in the codebase — not reintroduced or
+duplicated for Assets.
+
+20. RLS POLICIES
+---------------------
+asset_types: SELECT-only, permissive, to authenticated.
+assets: SELECT/INSERT/UPDATE scoped to auth.uid() = user_id; UPDATE grant
+  columns (asset_type, name, description, currency_code, is_archived) —
+  excludes user_id; no DELETE grant/policy.
+asset_basis_events: SELECT/INSERT to authenticated; INSERT policy
+  requires auth.uid() = user_id AND an EXISTS check that the referenced
+  asset belongs to auth.uid(); no UPDATE, no DELETE.
+asset_valuations: identical shape to asset_basis_events.
+Nothing granted to anon anywhere in this domain.
+
+21. CROSS-TENANT REFERENCE PROTECTIONS
+--------------------------------------------
+Same pattern proven in Money (docs/security/SECURITY_AND_RLS_
+PRINCIPLES.md §13), reapplied and reconfirmed here: asset_basis_events'
+and asset_valuations' INSERT policies check both the row's own user_id
+AND an EXISTS(asset owned by auth.uid()) for the foreign reference — a
+user cannot satisfy the first by claiming their own user_id while
+pointing asset_id at someone else's asset. Additionally, record_asset_
+valuation()/record_asset_basis_event() (section 27) independently
+re-validate asset ownership in PL/pgSQL before ever attempting the
+insert, so the protection exists at two independent layers (RPC-level
+explicit check, and RLS-policy-level EXISTS check reached by either the
+RPC or a hypothetical raw insert) — both were exercised directly by the
+adversarial suite (section 22), not just one or the other.
+
+22. ADVERSARIAL TESTS
+--------------------------
+All 25 required scenarios from the phase brief's matrix are present in
+supabase/tests/assets/run.ts, plus several beyond it — see the test names
+printed in section 29's output for the complete, literal list. Highlights
+beyond the minimum: a raw asset_valuations insert forging
+user_id=attacker/asset_id=victim (the realistic attack shape, not just
+the RPC path); the identical raw-insert attack repeated against
+asset_basis_events; both record_asset_valuation() and record_asset_
+basis_event() independently confirmed to reject a victim's asset id;
+archived-asset retrievability confirmed together with its exclusion from
+native-currency totals in one test, rather than as two disconnected
+claims; a JPY 0-decimal precision rejection test mirroring Money's; an
+asset-currency-immutability test mirroring cash_buckets'.
+
+23. CURRENCY TESTS
+-----------------------
+supabase/tests/currency/run.ts, 11 assertions: registry comprehensiveness
+(>=150 rows), the removed-file assertion (section 7), onboarding's source
+module returning known real codes, Money bucket creation and Assets
+creation both accepting currencies well outside the old 26-code list
+(KRW, AFN respectively — proving both domains read the expanded
+registry, not a stale cached list), representative 0/2/3-decimal
+currencies (JPY/USD/KWD) each accepted in the domain where they were
+exercised, malformed/unregistered codes rejected for both a bucket and an
+asset, and a direct read confirming the registry's own metadata (JPY's
+decimal_exponent) is correct.
+
+24. REGRESSION TESTS
+-------------------------
+After the same fresh `supabase db reset` used for this phase's own
+suites: Profile RLS suite 20/20 (unchanged from P0-E2-S1), Money suite
+37/37 (unchanged from P0-E2-S2, including its own JPY/KWD precision
+tests) — both re-run in full, not spot-checked, confirming the currency-
+registry expansion and the format.ts/conversion.ts relocation did not
+regress either domain.
+
+25. APPLICATION INTEGRATION
+--------------------------------
+/assets (app/(app)/assets/page.tsx, Server Component): Assets by Native
+Currency, Tracked Assets (name, type, cost basis, current value,
+quick-sale estimate, target value — each explicitly labeled and shown as
+"Not set" when absent, never blank or fabricated), Add Asset form
+(type/name/currency/acquired date/cost basis/current value/quick-sale/
+target, all but type/name/currency optional). No fake records — a new
+user sees "No assets yet." Not the final Stitch design, labeled as such
+in the page itself, same as /money. lib/domain/assets/repository.ts is
+the sole data-access boundary. Server-first: all initial reads happen in
+the page's Server Component; the one Client Component (AddAssetForm)
+calls the browser Supabase client only from its submit handler. AppShell
+gained an Assets nav link alongside Home/Money. The same P0-E1-S2/P0-E2-S2
+concurrent-rendering guard (check getCurrentUser() first, return null if
+absent, before any domain data fetch) was applied to /assets/page.tsx
+from the start this time, rather than being discovered by a runtime
+smoke test as it was for /money.
+
+26. GENERATED DATABASE TYPES
+---------------------------------
+lib/supabase/database.types.ts regenerated via `supabase gen types
+typescript --local` after the final schema change (the Assets migration).
+All four new tables and seven new functions (create_asset,
+record_asset_valuation, record_asset_basis_event, asset_current_basis,
+asset_latest_valuations, asset_native_currency_totals, asset_summary)
+appear correctly typed, including the text-typed
+balance/value return columns confirming the precision-safety cast is
+visible in the type system too. lib/domain/assets/types.ts derives every
+domain type from this generated Database type.
+
+27. SECURITY REVIEW
+------------------------
+- Recursive search of app/, components/, lib/ for "service_role"/
+  "SUPABASE_SERVICE_ROLE": clean.
+- The old variable name SUPABASE_SERVICE_ROLE_KEY appears only in
+  historical/explanatory prose (prior phase reports, and env.ts's own
+  comment explaining why it was renamed away from that name) — never a
+  live configuration value.
+- No "Capital Compass" in app/, components/, lib/, supabase/.
+- No hardcoded prototype personal data (no "Victor", no BMW/Autodrip
+  references) anywhere in application or migration code.
+- .env.local confirmed gitignored via `git check-ignore -v`; never
+  printed to this report or the conversation at any point, including
+  during the two rebuilds necessitated by IDE interference.
+- New design lesson this phase, documented in
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md §14: a trigger-derived,
+  grant-excluded user_id column doesn't compose cleanly with a direct
+  single-table insert through the generated TypeScript client (the
+  generated Insert type still marks it required, even though the
+  database will never accept it from the client). Resolved with two
+  narrow SECURITY INVOKER wrapper RPCs, not by loosening any grant or
+  policy — the underlying table-level protections were already correct
+  and were exercised directly by the raw-insert adversarial tests
+  (section 22) to confirm that.
+
+28. SERVICE-ROLE USAGE
+---------------------------
+Unchanged from P0-E2-S2: used only in supabase/tests/shared/{env.ts,
+fixtures.ts}, under the name SUPABASE_TEST_SERVICE_ROLE_KEY, restricted
+to local fixture creation/cleanup, hard-refusing to run against anything
+but 127.0.0.1/localhost. This phase's remote work (migration push) used
+the Supabase CLI's own project-linked authentication, not this key — the
+test harness's service-role credential was never used against the remote
+project, consistent with the explicit instruction not to loosen that
+guard.
+
+29. VALIDATION RESULTS
+---------------------------
+1. Fresh `supabase db reset` from migration history — clean, all four
+   migrations apply in order.
+2. Profile RLS suite — 20/20 passed.
+3. Money suite — 37/37 passed.
+4. Currency registry suite — 11/11 passed.
+5. Assets suite — 28/28 passed.
+   (96/96 combined, via `npm run test`.)
+6. Cross-tenant attacks fail — confirmed throughout sections 21/22.
+7. Asset/valuation financial-invariance tests pass — confirmed (asset
+   creation and valuation recording proven not to touch financial_events/
+   cash_movements; see section 22).
+8. Multi-currency asset tests pass — confirmed (section 18/23).
+9. `eslint .` — 0 errors, 0 warnings.
+10. `tsc --noEmit` (app + supabase/tests) — 0 errors.
+11. `next build` — clean, both with .env.local present (assets/money/
+    home/onboarding correctly dynamic) and with .env.local removed (all
+    four correctly degrade to static redirects — the "no Supabase
+    project assumption" guarantee re-verified, not broken by this
+    phase).
+12. service-role exposure search — clean (section 27).
+13. hardcoded prototype-data search — clean (section 27).
+14. "Capital Compass" production-source search — clean (section 27).
+15. `git diff` — reviewed, section 32.
+16. `git status` — reviewed, section 33.
+Remote migration deployment: confirmed via `supabase migration list
+--linked` (section 5). Remote RLS/isolation test execution: NOT RUN,
+deliberately, per instruction. No validation in this list is reported as
+passing without having actually been run this phase, and remote test
+execution is explicitly distinguished from remote schema deployment
+rather than conflated with it.
+
+30. ASSUMPTIONS
+--------------------
+- "monatriq's Project" (ref mvnwrkfcszazqqccmmxq) is Monatriq Dev —
+  confirmed with the user directly rather than inferred, per this
+  phase's explicit instruction.
+- The two ICU-list exclusions beyond the already-excluded metals/
+  placeholders (XDR, XSU) and the two historical exclusions (SLL, ZWL)
+  are a judgment call, not something the brief specified exactly — each
+  is individually justified and documented in the migration file; a
+  different, equally defensible cut could keep or drop one or two edge
+  cases differently.
+- Asset acquired_at is stored as timestamptz (matching the rest of the
+  schema's temporal convention) rather than a plain date, even though
+  acquisition is typically a calendar-date-level fact — chosen for
+  schema consistency over introducing a second temporal type.
+- Basis events and valuations have no void/correction mechanism this
+  phase (unlike financial_events' voided_at) — not requested by the
+  brief, and "add a new row" already serves correction without one.
+- FX/cross-currency appraisal for Assets is out of scope this phase, per
+  the brief's own explicit direction ("reject currency mismatch rather
+  than guessing").
+
+31. OPEN QUESTIONS
+-----------------------
+1. Exact schema for Goals/Decisions/Financial Rules/Receivables/
+   Liabilities/Businesses/Valuation History (asset valuation history now
+   exists; the others remain deferred).
+2. Whether "Businesses" is first-class or folded into Assets/Recurring
+   Income (Assets now has a business_interest type, but no dedicated
+   Businesses domain).
+3. Exact "Safe to Deploy" formula inputs (unchanged).
+4. Timing of the curated final Stitch/design-reference set (unchanged).
+5. Now that a real Monatriq Dev project exists and is linked: should the
+   RLS/isolation suites ever run against it, or does local-only
+   validation remain the permanent policy for this class of test? Not
+   decided this phase — deliberately left to the user/a future phase.
+6. Account-deletion / data-removal flow (unchanged, now applies to
+   Assets data too).
+7. Should a future phase add cross-currency appraisal for Assets, and if
+   so, does it reuse Money's fx_rates table or need its own?
+
+32. RISKS
+-------------
+1. No production traffic has touched the remote Monatriq Dev project yet
+   — schema is deployed but genuinely untested there beyond the push
+   itself succeeding and the migration-list confirmation.
+2. Assets UI has only been smoke-tested at the route/build/repository-
+   function level, not driven end-to-end through a real browser.
+3. asset_valuations/asset_basis_events now have a SELECT grant to
+   authenticated (same reasoning as cash_movements) — RLS scopes it
+   correctly (proven by the isolation suite), but any future code
+   querying these tables directly instead of through the text-casting
+   functions needs the same float-precision review documented for Money.
+4. The local-vs-remote RLS-testing policy (Open Question 5) isn't fully
+   settled — if a future phase decides remote testing is needed, the
+   safety guard in supabase/tests/shared/env.ts will need a deliberate,
+   reviewed change, not an ad hoc bypass.
+
+33. GIT DIFF SUMMARY
+-------------------------
+20 previously-tracked files changed (761 insertions, 297 deletions):
+  app/(app)/money/page.tsx, app/onboarding/page.tsx,
+  components/layout/AppShell.tsx, components/money/{ActivityList,
+  BucketList,CashByCurrency,CreateBucketForm}.tsx,
+  components/onboarding/OnboardingForm.tsx,
+  docs/architecture/{FINANCIAL_DOMAIN_MODEL,MULTI_CURRENCY_MODEL,
+  SYSTEM_ARCHITECTURE}.md, docs/project/BUILD_STATE.md,
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md,
+  lib/domain/currency/conversion.ts, lib/domain/money/{repository,
+  types}.ts, lib/supabase/database.types.ts, package.json,
+  supabase/tests/money/run.ts
+Git recorded as renames (moved lib/domain/money/ -> lib/domain/currency/,
+  edited in place): conversion.ts, format.ts
+1 deletion: lib/domain/profile/currencies.ts (section 7)
+9 new untracked top-level entries: app/(app)/assets/, components/assets/,
+  lib/domain/assets/, lib/domain/currency/{repository.ts,types.ts},
+  supabase/migrations/{20260922220526_expand_currency_registry.sql,
+  20260922221247_create_assets_domain.sql},
+  supabase/tests/{assets/,currency/}
+docs/reference/brand/* and everything from prior phases not listed above
+— unchanged.
+
+34. GIT STATUS
+-------------------
+Branch main, on top of commit 49254e4. Nothing staged or committed by
+this phase, per instruction. .env.local exists locally (real local-stack
+credentials, rebuilt this phase after IDE interference) and is confirmed
+gitignored — not shown in git status, not part of the diff, never printed
+anywhere in this report or the conversation. supabase/.temp/project-ref
+(the remote link marker) is gitignored by the existing supabase/.gitignore
+and root .gitignore, consistent with prior phases.
+
+35. RECOMMENDED NEXT PHASE
+-------------------------------
+P0-E3-S1 — Home aggregation layer, now with two real domains (Money +
+Assets) to aggregate — the first real proof that "one shared domain
+calculation, multiple consumers" holds once there is more than one domain
+to combine, per docs/architecture/SYSTEM_ARCHITECTURE.md §4.
+Alternatively, the Receivables domain (explicitly deferred from this
+phase) or Liabilities, both now able to follow the pattern proven three
+times over (profiles, Money, Assets).
+
+Do not begin the next phase automatically. Awaiting review.

@@ -1,5 +1,6 @@
-import { formatCurrencyAmount } from "@/lib/domain/money/format";
-import type { BucketBalance, CashBucket, Currency } from "@/lib/domain/money/types";
+import { formatCurrencyAmount } from "@/lib/domain/currency/format";
+import type { Currency } from "@/lib/domain/currency/types";
+import type { BucketBalance, CashBucket } from "@/lib/domain/money/types";
 
 interface BucketListProps {
   buckets: CashBucket[];

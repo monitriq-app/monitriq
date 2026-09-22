@@ -1,8 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
+import { listCurrencies } from "@/lib/domain/currency/repository";
 import {
   listBuckets,
-  listCurrencies,
   listMoneyReceivedCategories,
   listMoneySpendingCategories,
   getBucketBalances,

@@ -4,7 +4,7 @@ import { useState, useSyncExternalStore, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateProfile } from "@/lib/domain/profile/repository";
-import { CURRENCY_OPTIONS } from "@/lib/domain/profile/currencies";
+import type { Currency } from "@/lib/domain/currency/types";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
@@ -18,6 +18,7 @@ interface OnboardingFormValues {
 }
 
 interface OnboardingFormProps {
+  currencies: Currency[];
   initial: OnboardingFormValues;
 }
 
@@ -47,7 +48,7 @@ function useDetectedTimezone(): string {
   );
 }
 
-export function OnboardingForm({ initial }: OnboardingFormProps) {
+export function OnboardingForm({ currencies, initial }: OnboardingFormProps) {
   const router = useRouter();
   const [values, setValues] = useState(initial);
   const [error, setError] = useState<string | null>(null);
@@ -117,9 +118,9 @@ export function OnboardingForm({ initial }: OnboardingFormProps) {
           <option value="" disabled>
             Select a currency
           </option>
-          {CURRENCY_OPTIONS.map((currency) => (
+          {currencies.map((currency) => (
             <option key={currency.code} value={currency.code}>
-              {currency.code} — {currency.name}
+              {currency.code} — {currency.display_name}
             </option>
           ))}
         </Select>

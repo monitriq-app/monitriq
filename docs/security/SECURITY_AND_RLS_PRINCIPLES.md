@@ -207,3 +207,36 @@ weren't visible with `profiles` alone:
   grant) was deliberately rejected: that is exactly the "use DEFINER to
   bypass permissions" pattern §11 warns against, for a problem that a
   correctly-scoped GRANT already solves without any elevated privilege.
+
+## 14. Established pattern: Assets domain (P0-E2-S3)
+
+`supabase/migrations/*_create_assets_domain.sql` applies §10/§13's
+patterns to a second, independent domain (`assets` ← `asset_basis_events`,
+`assets` ← `asset_valuations`) — confirming they generalize rather than
+being Money-specific accidents. One new lesson:
+
+- **A trigger-derived, grant-excluded `user_id` column doesn't compose
+  cleanly with direct client inserts through a generated TypeScript
+  client — wrap it in a narrow RPC instead of fighting the type
+  generator.** `asset_valuations.user_id` and `asset_basis_events.user_id`
+  are, like `cash_movements.user_id`, derived by a trigger from the
+  parent row and deliberately outside the table's INSERT column grant
+  (§10's "grants, not just policies" pattern). Money never hit the
+  resulting friction because `cash_movements` is only ever written by its
+  `record_*` RPCs, never a direct client insert. Assets initially tried
+  direct `.from("asset_valuations").insert(...)` calls for the (genuinely
+  single-table, no-atomicity-needed) case of adding one more valuation to
+  an existing asset — but the generated `Insert` type still marks
+  `user_id` as required, so satisfying TypeScript would have meant
+  sending a column the database will never actually accept. Resolved by
+  adding two narrow `SECURITY INVOKER` wrapper functions
+  (`record_asset_valuation()`, `record_asset_basis_event()`) that look up
+  the asset scoped to `auth.uid()` (never trusting a caller-supplied
+  owner) and insert only the columns actually meant to be client-settable
+  — the underlying trigger and RLS policy are unchanged and still run
+  regardless of which path reached the table. This is not a permissions
+  workaround (the table-level grant + policy alone were already
+  correctly scoped, proven by `supabase/tests/assets/run.ts`'s raw-insert
+  adversarial tests, which still target the table directly); it exists
+  purely to keep the TypeScript application layer honest about what it's
+  allowed to send.

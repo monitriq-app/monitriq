@@ -1,52 +1,74 @@
 # Monatriq — Multi-Currency Model
 
-Status: Canonical. Established P0-E2-S2, alongside the Money domain
-(`supabase/migrations/*_create_money_domain.sql`). This document is the
-implementation record for currency, precision, and FX — the pieces of
+Status: Canonical. Established P0-E2-S2 (Money), hardened P0-E2-S3
+(comprehensive registry + Assets). This document is the implementation
+record for currency, precision, and FX — the pieces of
 [FINANCIAL_DOMAIN_MODEL.md](./FINANCIAL_DOMAIN_MODEL.md) that needed more
 room than a section there.
 
-## 1. Three currency concepts, never confused
+## 1. Four currency concepts, never confused
 
 - **Bucket currency** — the currency a `cash_buckets` row actually holds
   (`cash_buckets.currency_code`). Fixed once the bucket has any
   `cash_movements` — see §4.
-- **Movement currency** — the currency of one specific `cash_movements`
-  row. Always equal to its bucket's currency (enforced by a trigger, not
-  just convention — see §4).
+- **Asset (native) currency** — the currency an `assets` row is valued and
+  cost-based in (`assets.currency_code`). Fixed once the asset has any
+  `asset_basis_events` or `asset_valuations` — same immutability mechanism
+  as bucket currency, established P0-E2-S3. An asset's currency is
+  independent of any bucket's currency and independent of the user's
+  reporting currency — see §2.
+- **Movement/valuation/basis-event currency** — the currency of one
+  specific `cash_movements` / `asset_valuations` / `asset_basis_events`
+  row. Always equal to its parent bucket's/asset's currency (enforced by a
+  trigger, not just convention — see §4, §15).
 - **Reporting currency** — the user's preferred currency for consolidated
   views (`profiles.preferred_currency`, established P0-E2-S1). A user's
-  reporting currency does not constrain which currencies their buckets can
-  hold — see §2.
+  reporting currency does not constrain which currencies their buckets or
+  assets hold — see §2.
 
 Monatriq is multi-currency from day one: NGN is one supported currency
 among many, never assumed.
 
-## 2. A user's buckets do not have to share a currency
+## 2. A user's buckets and assets do not have to share a currency
 
 A user with `preferred_currency = NGN` can hold a NGN bank account, a USD
-savings bucket, and a GBP cash wallet simultaneously. Nothing about the
-schema or RLS policies constrains a user to one currency.
+savings bucket, a GBP cash wallet, an NGN property, and a USD brokerage
+account simultaneously. Nothing about the schema or RLS policies
+constrains a user to one currency anywhere.
 
-## 3. Currency registry
+## 3. Currency registry — one comprehensive source of truth
 
 `public.currencies` (code, display_name, symbol, decimal_exponent) is the
-canonical identifier list — not user-owned, RLS enabled with a permissive
-read policy (public reference data, not a security boundary; see
-[SECURITY_AND_RLS_PRINCIPLES.md §10](../security/SECURITY_AND_RLS_PRINCIPLES.md#10-established-pattern-profiles-p0-e2-s1)
-for when `USING (true)` is correct rather than a shortcut). `code` (e.g.
-`USD`) is the canonical identifier everywhere in the schema; `symbol`
-(e.g. `$`) is presentation metadata only, never used for identity or
-comparison. Seeded with ~26 real ISO-4217-shaped codes spanning 0-decimal
-(JPY), 2-decimal (most), and 3-decimal (KWD) currencies — deliberately not
-a short Nigeria-centric list. Extending it is a migration that inserts a
-row, not a schema change.
+**one** canonical supported-currency source for the whole application —
+Profile onboarding, Money (cash buckets), and Assets all read it via
+`lib/domain/currency/repository.ts`'s `listCurrencies()`; none maintains
+its own list. `lib/domain/profile/currencies.ts`, a hand-maintained
+26-code list that duplicated this registry, was **removed in P0-E2-S3**
+(not just documented as removable — `supabase/tests/currency/run.ts`
+asserts the file no longer exists, so this can't silently regress).
 
-`lib/domain/profile/currencies.ts` (P0-E2-S1's onboarding currency picker)
-is a separate, hand-maintained list that happens to overlap with this
-registry. **Known duplication, not yet reconciled** — see Open Questions
-in the phase report. A future pass should have onboarding read from
-`public.currencies` instead.
+Not user-owned — RLS enabled with a permissive `USING (true)` read policy
+(public reference data, not a security boundary; see
+[SECURITY_AND_RLS_PRINCIPLES.md §10](../security/SECURITY_AND_RLS_PRINCIPLES.md#10-established-pattern-profiles-p0-e2-s1)
+for when that's correct rather than a shortcut). `code` (e.g. `USD`) is
+the canonical identifier everywhere in the schema; `symbol` (e.g. `$`) is
+presentation metadata only, never used for identity or comparison.
+
+**Comprehensive coverage (P0-E2-S3):** 158 currencies, expanded from
+P0-E2-S2's 26-code starter set via
+`supabase/migrations/*_expand_currency_registry.sql`. Derived from a
+reliable maintained source rather than typed from memory: the ECMA-402
+`Intl` API's bundled ICU/CLDR data (`Intl.supportedValuesOf('currency')`
+for the code list, `Intl.DisplayNames`/`Intl.NumberFormat` for display
+name/symbol/decimal precision), with a documented, reproducible exclusion
+list (IMF Special Drawing Rights, a regional clearing unit, and two
+superseded historical codes with real replacements already in the list —
+see the migration file's header for the exact method and reasoning).
+Crypto was never in scope: ISO 4217/ICU's currency list never included it,
+so nothing had to be filtered out for that reason specifically. The
+migration is idempotent (`ON CONFLICT (code) DO UPDATE`), so even the
+original 26 rows now carry the same ICU-sourced metadata as the other 132
+— one consistent source for all 158, not "26 hand-typed + 132 generated."
 
 ## 4. Bucket currency immutability
 
@@ -181,3 +203,43 @@ manual-first, per
 [PRODUCT_DEFINITION.md](../product/PRODUCT_DEFINITION.md)) — Monatriq
 never claims a "live rate" or "current market rate" it doesn't actually
 have.
+
+## 12. Assets: no cross-currency appraisal this phase
+
+`asset_valuations.currency_code` and `asset_basis_events.currency_code`
+must equal their asset's `currency_code` — enforced by a trigger
+(`prepare_asset_valuation`/`prepare_asset_basis_event`), the same pattern
+as `cash_movements` matching its bucket. Unlike Money's `fx_transfer`,
+Assets has no cross-currency conversion path at all this phase: a
+valuation in a different currency than its asset is rejected outright,
+never guessed or auto-converted. If cross-currency appraisal becomes a
+real need (e.g. a USD-native asset gets a professional valuation quoted in
+EUR), that is future work with its own explicit design, not something to
+paper over now.
+
+## 13. Assets reuse the same currency stack — one shared domain, not a second one
+
+Assets does not define its own currency formatting, its own decimal
+precision handling, or its own reporting-conversion function. It imports
+`formatCurrencyAmount()`, the exact-decimal discipline (§6), and
+`convertToReportingCurrency()` from `lib/domain/currency/` — the same
+modules Money uses. `asset_native_currency_totals()` returns the identical
+`{currencyCode, amount}[]` shape `money_currency_totals()` does, so the
+one shared conversion function accepts either's output without
+translation. This is a permanent architectural rule (established
+explicitly in P0-E2-S3): currency definitions, formatting rules, and
+reporting-conversion contracts are shared across every domain that has
+money-shaped values, never duplicated per domain.
+
+## 14. Assets: native totals, never summed, target/quick-sale excluded
+
+`asset_native_currency_totals()` sums only the **latest
+`estimated_current_value`** per asset, grouped by currency, excluding
+archived assets — never `target_value`, never `quick_sale_estimate`, and
+never across currencies (see
+[FINANCIAL_DOMAIN_MODEL.md §20](./FINANCIAL_DOMAIN_MODEL.md#20-net-worth-preparation-assets-p0-e2-s3)
+for why target/quick-sale are excluded from this specific total). A
+missing reporting-currency rate for one of the currencies present means
+`convertToReportingCurrency()` (§10) returns `not_calculated`, exactly as
+it does for Money — Assets never falls back to summing NGN and USD
+figures together just because a rate wasn't available.

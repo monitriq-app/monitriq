@@ -15,7 +15,9 @@
     "db:types": "supabase gen types typescript --local > lib/supabase/database.types.ts",
     "test:rls": "node --env-file-if-exists=.env.local supabase/tests/rls/run.ts",
     "test:money": "node --env-file-if-exists=.env.local supabase/tests/money/run.ts",
-    "test": "npm run test:rls && npm run test:money"
+    "test:currency": "node --env-file-if-exists=.env.local supabase/tests/currency/run.ts",
+    "test:assets": "node --env-file-if-exists=.env.local supabase/tests/assets/run.ts",
+    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

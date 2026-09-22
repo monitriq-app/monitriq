@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
 import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
+import { createClient } from "@/lib/supabase/server";
+import { listCurrencies } from "@/lib/domain/currency/repository";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { OnboardingForm } from "@/components/onboarding/OnboardingForm";
 
@@ -21,6 +23,9 @@ export default async function OnboardingPage() {
     redirect("/home");
   }
 
+  const supabase = await createClient();
+  const currencies = await listCurrencies(supabase);
+
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-8 bg-background px-4 py-12">
       <AuthCard
@@ -28,6 +33,7 @@ export default async function OnboardingPage() {
         description="A few details before you get started."
       >
         <OnboardingForm
+          currencies={currencies}
           initial={{
             first_name: profile?.first_name ?? "",
             preferred_name: profile?.preferred_name ?? "",

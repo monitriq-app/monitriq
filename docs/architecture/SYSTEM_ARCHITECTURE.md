@@ -30,12 +30,16 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E2-S2,
-`lib/supabase/`, `lib/domain/profile/`, `lib/domain/money/`,
-`supabase/migrations/`, and `supabase/tests/{shared,rls,money}/` exist for
-real; `lib/types/` and the rest of `lib/domain/` (Assets, Goals, Decisions,
-Financial Rules) remain future work, created when their owning phase needs
-them:
+This is a target layout to build toward incrementally. As of P0-E2-S3,
+`lib/supabase/`, `lib/domain/{profile,money,assets,currency}/`,
+`supabase/migrations/`, and
+`supabase/tests/{shared,rls,money,currency,assets}/` exist for real.
+`lib/domain/currency/` (types, repository, format, conversion) is the one
+shared currency stack Profile/Money/Assets all import from — never
+duplicated per domain, per
+[MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one).
+`lib/types/` and the rest of `lib/domain/` (Goals, Decisions, Financial
+Rules) remain future work, created when their owning phase needs them:
 
 ```
 app/                    Next.js routes (Home, Money, Quick Add, Assets,
@@ -103,13 +107,15 @@ Home, Money, Assets, Goals, and Decisions all call into this layer rather
 than querying raw tables and recomputing independently. This is a design
 constraint for future implementation phases.
 
-**First concrete instance (P0-E2-S2):** cash position is implemented as
-`money_bucket_balances()`/`money_currency_totals()` (SQL functions,
-`lib/domain/money/repository.ts`'s thin wrapper) — `/money` and any future
-consumer (Home, Decisions) call these, none re-sums `cash_movements`
-independently. Net worth, Safe to Deploy, goal allocation, obligations,
-and recurring income remain future work — no Assets/Goals/Financial Rules
-schema exists yet.
+**Concrete instances so far:** cash position (P0-E2-S2) is
+`money_bucket_balances()`/`money_currency_totals()`; asset value (P0-E2-S3)
+is `asset_summary()`/`asset_native_currency_totals()`/
+`asset_current_basis()` (all SQL functions, `lib/domain/{money,assets}/
+repository.ts`'s thin wrappers) — `/money`, `/assets`, and any future
+consumer (Home, Decisions) call these, none re-sums `cash_movements` or
+`asset_valuations`/`asset_basis_events` independently. Net worth, Safe to
+Deploy, goal allocation, obligations, and recurring income remain future
+work — no Goals/Financial Rules schema exists yet.
 
 ## 5. Financial event / audit layer
 
