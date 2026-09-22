@@ -1,0 +1,66 @@
+/*
+ * Monatriq semantic UI tokens.
+ *
+ * BRAND tokens (the --monatriq-* hex values) live in
+ * docs/reference/brand/brand-tokens.css, imported before this file in
+ * app/globals.css. That file is canonical and is never edited here.
+ *
+ * This file maps brand tokens onto SEMANTIC UI tokens (what a surface or
+ * piece of text IS FOR, not which brand color it happens to use today) via
+ * Tailwind v4's @theme directive, so components consume classes like
+ * `bg-surface` or `text-danger` instead of raw hex values or brand names.
+ * A brand teal is not automatically "positive" everywhere it appears — see
+ * docs/design/VISUAL_CONSTITUTION.md #5 (color semantics).
+ *
+ * Dark is the only implemented mode this phase (V1 is dark-first per the
+ * visual constitution). Token names are semantic rather than dark-specific
+ * so a future `:root[data-theme="light"]` override block can redefine the
+ * same custom properties without touching component code.
+ */
+
+@theme {
+  /* Surfaces, darkest to lightest */
+  --color-background: var(--monatriq-obsidian);
+  --color-surface: var(--monatriq-ink);
+  --color-surface-raised: var(--monatriq-midnight-navy);
+  --color-surface-muted: color-mix(in srgb, var(--monatriq-ink) 65%, var(--monatriq-midnight-navy));
+
+  --color-border: color-mix(in srgb, var(--monatriq-mist-grey) 16%, var(--monatriq-obsidian));
+
+  /* Text */
+  --color-text-primary: var(--monatriq-warm-off-white);
+  --color-text-secondary: var(--monatriq-mist-grey);
+  --color-text-muted: color-mix(in srgb, var(--monatriq-mist-grey) 50%, var(--monatriq-obsidian));
+
+  /* Action / state semantics (docs/design/VISUAL_CONSTITUTION.md #5) */
+  --color-accent-primary: var(--monatriq-electric-teal);
+  --color-positive: var(--monatriq-electric-teal);
+  --color-focus: var(--monatriq-cool-aqua);
+
+  /*
+   * NOT part of the canonical brand pack (docs/reference/brand/BRAND.md
+   * lists no amber or coral/red). The visual constitution requires an
+   * "amber = attention" and "coral/red = danger" semantic that the brand
+   * pack does not define. These two values are a restrained placeholder
+   * chosen to read correctly against the navy/teal palette and MUST be
+   * confirmed against real brand guidance before relying on them beyond
+   * this foundation phase. Documented as an open question in
+   * docs/project/BUILD_STATE.md and the phase report.
+   */
+  --color-attention: #d98e2b;
+  --color-danger: #e5484d;
+
+  /* Typography */
+  --font-sans: var(--font-ibm-plex-sans), ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+@layer base {
+  *:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+}

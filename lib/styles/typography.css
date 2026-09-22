@@ -1,0 +1,9 @@
+/*
+ * Financial figures need lining, tabular numerals so amounts align in lists
+ * and tables (docs/design/VISUAL_CONSTITUTION.md #3). Tailwind's built-in
+ * `tabular-nums` utility only sets tabular-nums; this adds lining-nums too.
+ * Usage: <span className="tabular-figures">₦450,000</span>
+ */
+@utility tabular-figures {
+  font-variant-numeric: tabular-nums lining-nums;
+}
