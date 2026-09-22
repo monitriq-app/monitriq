@@ -1,0 +1,498 @@
+MONATRIQ — PHASE REPORT
+========================
+
+1. PHASE
+--------
+P0-E2-S1 — Supabase Environment, User Profile Foundation & RLS Isolation
+Harness.
+
+2. STATUS
+---------
+Complete. Profile schema exists with RLS enabled and deny-by-default
+policies. User ownership is enforced in database policies and grants.
+Cross-user isolation, anonymous isolation, and ownership-reassignment
+attacks were all tested against a real (local) Supabase database and all
+20 assertions pass. Lint, TypeScript, and production build all pass.
+BUILD_STATE updated. This report written.
+
+Remote/production validation was NOT RUN — no Monatriq Supabase project
+exists (see section 5). Per this phase's completion gate, that absence
+does not block COMPLETE status because local validation against a real
+Postgres instance with RLS actually enforcing was achieved and is the
+explicit fallback the gate allows; it would block COMPLETE if no usable
+Supabase environment (local or remote) had been available at all.
+
+3. OBJECTIVE
+------------
+Establish Monatriq's first production data layer: Supabase dev-environment
+structure, a production-ready Profile domain, the user-ownership
+convention, deny-by-default RLS, migration infrastructure, a repeatable
+RLS/adversarial isolation test harness, authenticated profile read/update
+integration, validation against a live/local environment, and
+documentation — without touching Money/Assets/Goals/Decisions/Financial
+Rules/Home calculations.
+
+4. REPOSITORY STATE BEFORE WORK
+---------------------------------
+`git rev-parse --show-toplevel` resolved to /Users/datamatics/Monatriq
+(correct). `git status` was clean — P0-E1-S2 had been committed by the
+user between sessions (commit fd0ecf1, "chore: establish Monatriq
+application foundation"), 81 tracked files. No unexpected unrelated
+changes were present; nothing was reset or discarded.
+
+5. SUPABASE ENVIRONMENT STATE
+--------------------------------
+Inspected without printing secret values. The Supabase CLI (v2.109.0,
+already installed) is authenticated and lists exactly one project in this
+account: "Nemryn" (ref wyocbivzgrbekuyqdfts), an unrelated client project,
+explicitly not linked to this directory ("linked": false). No
+Monatriq-named project exists anywhere in the account. This project was
+never linked, queried for data, or otherwise touched.
+
+No production infrastructure was provisioned this phase (explicitly out of
+scope without user instruction, per the phase brief's "Environment
+Separation" section).
+
+Docker was available but not running; it was started (`open -a Docker`,
+a reversible, non-destructive action) to enable a genuine local validation
+path rather than leaving RLS testing entirely unexecuted. Once ready,
+`supabase init` + `supabase start` brought up a local Postgres 17 /
+GoTrue / PostgREST stack bound to 127.0.0.1. Local analytics/vector
+containers were disabled in supabase/config.toml (`[analytics] enabled =
+false`) because they require outbound network access to posthog.com,
+unavailable in this environment — a local-dev-only setting with zero
+effect on schema, RLS policy, or any deployed environment; it does not
+affect what gets pushed to a real project.
+
+`.env.local` (gitignored, confirmed via `git check-ignore -v .env.local`,
+never printed to this conversation or the report) was populated from
+`supabase status -o env` with the local stack's URL, anon key, and (test-
+harness-only) service-role key. No real/production Supabase credentials
+exist anywhere in this repository, its history, or this conversation.
+
+6. FILES CREATED
+-----------------
+supabase/config.toml (via `supabase init`)
+supabase/migrations/20260922201924_create_profiles.sql
+supabase/tests/rls/{env.ts, fixtures.ts, assert.ts, run.ts, tsconfig.json,
+  README.md}
+lib/supabase/database.types.ts (generated)
+lib/supabase/get-current-profile.ts
+lib/domain/profile/{types.ts, repository.ts, currencies.ts}
+components/onboarding/OnboardingForm.tsx
+components/ui/Select.tsx
+app/onboarding/page.tsx
+docs/reports/P0-E2-S1-profile-rls-foundation.txt (this file)
+(.env.local — created locally, gitignored, not part of the repository's
+file set for review purposes)
+
+7. FILES MODIFIED
+-------------------
+.env.example — added SUPABASE_SERVICE_ROLE_KEY placeholder, clearly scoped
+  to the test harness only.
+app/(app)/home/page.tsx — reads the real profile instead of the P0-E1-S2
+  user_metadata placeholder.
+app/(app)/layout.tsx — added the onboarding gate (redirect to /onboarding
+  when profiles.onboarding_completed is false).
+docs/architecture/SYSTEM_ARCHITECTURE.md — noted which parts of the
+  proposed repository layout now exist for real.
+docs/design/VISUAL_CONSTITUTION.md — formalized the approved
+  attention/danger semantic colors as explicitly non-brand.
+docs/project/BUILD_STATE.md — this phase's checkpoint (see section 24 for
+  summary; full content is the canonical copy).
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md — added §9 (repository-root
+  resolution), §10 (established profiles pattern), §11 (SECURITY DEFINER
+  rules), §12 (service-role-in-testing rules); updated §6 to require tests
+  actually run, not just exist.
+lib/styles/tokens.css — trimmed the attention/danger comment now that
+  they're approved rather than provisional.
+lib/supabase/client.ts, lib/supabase/server.ts — both Supabase client
+  factories are now typed with the generated Database type.
+package.json — added "type": "module"; added db:start/db:stop/db:reset/
+  db:types/test:rls scripts; typecheck now also checks the test-harness
+  tsconfig.
+tsconfig.json — added allowImportingTsExtensions (permits, does not
+  require, .ts extensions in import specifiers); excluded supabase/tests
+  from the main app's typecheck scope.
+
+8. MIGRATION(S) CREATED
+--------------------------
+supabase/migrations/20260922201924_create_profiles.sql — single migration
+covering: table + constraints, comments, the updated_at/timezone-validation
+trigger, RLS enable + policies + grants, and the auth.users signup trigger.
+Applied cleanly via `supabase db reset` (full schema recreation from
+migration history) repeatedly during this phase, most recently as the last
+step before final validation — confirmed reproducible from a blank
+database every time, not a manually-patched state.
+
+9. PROFILE SCHEMA
+--------------------
+public.profiles:
+  id                    uuid PRIMARY KEY REFERENCES auth.users(id)
+                        ON DELETE CASCADE
+  first_name            text, nullable, 1-100 chars if present
+  preferred_name        text, nullable, 1-100 chars if present
+  preferred_currency    text, nullable, must match ^[A-Z]{3}$ if present
+  timezone              text, nullable, must be a real IANA zone name if
+                        present (validated via Postgres's own tz engine,
+                        not a regex)
+  onboarding_completed  boolean NOT NULL, GENERATED ALWAYS AS
+                        (first_name IS NOT NULL AND preferred_currency IS
+                        NOT NULL AND timezone IS NOT NULL) STORED
+  created_at            timestamptz NOT NULL DEFAULT now()
+  updated_at            timestamptz NOT NULL DEFAULT now(), trigger-
+                        maintained
+
+Deviation from the phase brief's suggested shape, deliberately and
+documented in the migration file: no separate surrogate id + unique
+user_id column. profiles.id IS auth.users.id. This is a genuine 1:1
+extension table, so the identity IS the auth user's id — every RLS policy
+collapses to `auth.uid() = id`, no join, no extra unique index needed.
+
+preferred_currency and timezone are nullable with no default, deliberately
+diverging from the brief's illustrative "NOT NULL" — see section 20
+(assumptions) for why: a row is created at signup, before the user has
+told us anything, and a default would mean fabricating one (explicitly
+forbidden by docs/product/PRODUCT_DEFINITION.md and
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md).
+
+10. PROFILE LIFECYCLE STRATEGY
+-----------------------------------
+Chosen: (B) a SECURITY DEFINER trigger (handle_new_user) on auth.users
+AFTER INSERT, over (A) a server-side post-signup call and (C) a
+client-callable initialization RPC.
+
+Evaluated failure modes:
+  (A) — a dropped client request between "auth user created" and "profile
+        insert call" permanently orphans the user with no profile row,
+        and every future read has to defensively handle that.
+  (C) — same orphaned-user failure mode (still depends on the client
+        actually calling it), and additionally needs its own INSERT
+        policy on profiles — exactly the "insert a profile for another
+        user" attack surface this design wants to close entirely.
+  (B) — runs inside Supabase Auth's own transaction; cannot be skipped by
+        a dropped client request. Idempotency: ON CONFLICT (id) DO
+        NOTHING. Maintainability: one small, fully commented function; no
+        dynamic SQL.
+
+Why SECURITY DEFINER is necessary here and its blast radius: the trigger
+fires as `supabase_auth_admin`, which has no grants on public.profiles —
+without SECURITY DEFINER the insert fails for every signup. search_path is
+pinned (`set search_path = pg_catalog, public`). The function performs
+exactly one fixed-shape INSERT with no dynamic SQL and no client-supplied
+values beyond NEW.id (the just-created auth user's own id, not
+attacker-influenceable beyond signing up as themselves). EXECUTE is
+revoked from public/anon/authenticated — nothing can invoke it directly;
+it only ever fires via the trigger mechanism. Verified structurally: there
+is no INSERT policy AND no INSERT grant to authenticated on profiles at
+all, so "insert a profile for another user" and "insert a forged-id
+profile" are not just policy-rejected, they are not a reachable code path
+for any normal client at all. Confirmed by the isolation suite (section
+13/14, tests 6 and 7).
+
+11. RLS POLICIES
+--------------------
+RLS enabled immediately at table creation. Exactly two policies exist,
+nothing broader:
+
+  profiles_select_own  (SELECT, to authenticated)
+    USING (auth.uid() = id)
+
+  profiles_update_own  (UPDATE, to authenticated)
+    USING (auth.uid() = id) WITH CHECK (auth.uid() = id)
+
+No INSERT policy, no DELETE policy — deny-by-default extends to
+capabilities nobody asked for yet, not just to other users' rows.
+
+Grants (independent of, and necessary alongside, the policies above —
+Postgres RLS restricts which rows, GRANT restricts which operations at
+all):
+  REVOKE ALL on public.profiles FROM anon, authenticated  (explicit,
+    defense in depth — supabase/config.toml's auto_expose_new_tables
+    default already means nothing is auto-granted, but this doesn't rely
+    on that default)
+  GRANT SELECT on public.profiles TO authenticated
+  GRANT UPDATE (first_name, preferred_name, preferred_currency, timezone)
+    on public.profiles TO authenticated  — column-level, deliberately
+    excluding id, created_at, and onboarding_completed. A payload that
+    includes id (an ownership-reassignment attempt) or created_at fails
+    with "permission denied for column" before RLS's WITH CHECK is even
+    evaluated. updated_at is excluded too; it's trigger-maintained.
+  No INSERT or DELETE grant to anyone except via the SECURITY DEFINER
+    trigger (section 10), which doesn't go through GRANT/RLS at all.
+
+12. ISOLATION TEST ARCHITECTURE
+------------------------------------
+supabase/tests/rls/ — a small dependency-free harness (no test framework
+added; not justified at this phase's scope), run via plain `node`
+(Node 24's native TypeScript execution, no build step, no ts-node/tsx
+dependency):
+  env.ts       — loads required env vars; HARD REFUSES to run unless
+                 NEXT_PUBLIC_SUPABASE_URL looks like 127.0.0.1/localhost.
+                 This suite creates and deletes real auth.users rows with
+                 a service-role key, so this guard is a safety-critical
+                 line, not a formality — it is what stands between this
+                 harness and accidentally running fixture create/delete
+                 against a real linked project (e.g. "Nemryn").
+  fixtures.ts  — creates two independent users via the Auth admin API
+                 (service-role client), signs each in through the normal
+                 anon-key + password flow to get a session-bound client
+                 (the actual path the browser SDK uses — this is what
+                 makes the suite prove database enforcement, not just
+                 call the admin API and assume RLS applies), plus a
+                 no-session anonymous client. Purges any leftover
+                 @monatriq.test fixture users from a previous crashed run
+                 before creating new ones (idempotent/repeatable), and
+                 deletes its own fixtures in a `finally` block.
+  assert.ts    — expectSuccess / expectFilteredToEmpty (RLS silently
+                 excluded a row — no error, zero rows, the actual Postgres
+                 RLS behavior for USING-clause exclusion) / expectDenied
+                 (a hard database rejection — missing grant, WITH CHECK
+                 violation, or a raised constraint).
+  run.ts       — the suite itself, 20 assertions (section 13/14).
+
+Everything user-facing goes through the real anon-key + PostgREST path
+(supabase-js against the local REST API), which is the same mechanism a
+browser client uses and the same mechanism a "direct REST request" attack
+would use — this is database enforcement being tested, not application
+code hiding rows.
+
+13. ADVERSARIAL TESTS EXECUTED
+------------------------------------
+Mapped to the phase brief's required list 1-10, all present:
+ 1. User A can read User A's profile.
+ 2. User A cannot read User B's profile.
+ 3. User B cannot read User A's profile.
+ 4. User A can update User A's profile.
+ 5. User A cannot update User B's profile (targeting B's id in a filter).
+ 6. User A cannot insert a profile owned by User B (forged id).
+ 7. User A cannot reassign their own profile's ownership to User B
+    (attempted `UPDATE ... SET id = <B's id>`).
+ 8. Anonymous access cannot read authenticated-user profiles.
+ 9. Anonymous access cannot mutate profiles (tested INSERT, UPDATE, AND
+    DELETE separately).
+10. Direct request for another user's UUID (`.eq("id", userB.id)`, both
+    as a list query and as `.maybeSingle()`) returns nothing, not an
+    error — no existence leak either.
+
+Additional adversarial/structural cases beyond the required 10:
+ - User A cannot insert a second row for themselves either (no INSERT
+   grant exists at all, not even for your own id).
+ - User A cannot delete their own profile, or User B's (no DELETE grant
+   or policy exists for anyone).
+ - Signup creates exactly one profile row with the correct id and
+   onboarding_completed = false (proves the SECURITY DEFINER trigger's
+   privilege boundary — it does exactly one fixed thing, nothing more).
+ - After every attack above, User B's row is confirmed unmutated
+   (first_name still null) — a final integrity check that nothing leaked
+   through silently.
+ - Domain-correctness (not adversarial, but validates the real
+   integration): completing onboarding via the actual updateProfile()
+   repository function flips onboarding_completed to true and persists
+   all fields; an invalid IANA timezone is rejected; a malformed currency
+   code is rejected.
+
+14. TEST RESULTS
+---------------------
+LOCAL VALIDATION: PASSED. 20/20 assertions passed against the local
+Supabase stack, re-confirmed after a full `supabase db reset` (migration
+reapplied from a blank database) immediately beforehand, so the passing
+run reflects the migration file exactly as committed to this report, not
+an incrementally-patched database.
+
+REMOTE VALIDATION: NOT RUN. No Monatriq Supabase project exists (section
+5). Not claimed as passed.
+
+15. APPLICATION INTEGRATION
+--------------------------------
+lib/domain/profile/repository.ts — the sole data-access boundary for
+profiles: getProfile(client) and updateProfile(client, patch). Accepts
+whichever Supabase client the caller already has (browser or server);
+ownership is enforced by RLS, not by anything this module does.
+lib/supabase/get-current-profile.ts — server-only, React-cache-deduped
+reader composing getCurrentUser() + the repository, mirroring the
+existing getCurrentUser() pattern from P0-E1-S2.
+app/(app)/layout.tsx — now a two-stage gate: no session -> /login; session
+but !onboarding_completed -> /onboarding; else render AppShell. Both
+redirects use redirect() (not a conditionally-omitted `children`), per the
+concurrent-rendering lesson documented in P0-E1-S2's report.
+app/onboarding/page.tsx + components/onboarding/OnboardingForm.tsx — the
+minimum interface to prove the domain: first name (required), preferred
+name (optional), preferred currency (curated <select>, required),
+timezone (<select> populated from Intl.supportedValuesOf("timeZone") via
+useSyncExternalStore — not useEffect+setState, which a new
+react-hooks/set-state-in-effect lint rule correctly flagged as a
+cascading-render risk; useSyncExternalStore's getServerSnapshot also
+avoids a hydration mismatch between server and browser Intl data, which a
+plain effect-based fix would not have). No Stitch screens reproduced.
+app/(app)/home/page.tsx — reads the real profile instead of the P0-E1-S2
+user_metadata placeholder.
+Server-first: initial profile reads happen in Server Components
+(app/(app)/layout.tsx, app/(app)/home/page.tsx, app/onboarding/page.tsx);
+the browser client is used only where a form actually needs interactivity
+(OnboardingForm, the existing auth forms from P0-E1-S2).
+
+16. GENERATED DATABASE TYPES
+---------------------------------
+lib/supabase/database.types.ts, generated via
+`supabase gen types typescript --local` (command also available as
+`npm run db:types`), regenerated after the final schema change
+(onboarding_completed made NOT NULL) so the checked-in file matches the
+migration exactly. Both Supabase client factories
+(lib/supabase/client.ts, lib/supabase/server.ts) are now generic over this
+Database type. lib/domain/profile/types.ts derives Profile and
+ProfileUpdate from it rather than hand-declaring a parallel interface.
+
+17. SECURITY REVIEW
+------------------------
+- RLS enabled at table creation; deny-by-default confirmed structurally
+  (no INSERT/DELETE policy or grant exists at all) and behaviorally (20/20
+  isolation tests, section 14).
+- Ownership bound to auth.uid() in both policies; no client-supplied
+  user_id/id is ever trusted — id is excluded from the UPDATE grant
+  entirely, so a forged payload cannot even attempt to change it.
+- No service_role/SUPABASE_SERVICE_ROLE reference anywhere in app/,
+  components/, or lib/ (checked via recursive grep, excluding the test
+  harness — see section 18).
+- No NEXT_PUBLIC_*SERVICE* variable anywhere.
+- No "Capital Compass" reference introduced.
+- No hardcoded prototype personal data: "NGN" appears only as one of ~25
+  entries in the curated currency <select> (no default value, placeholder
+  is "Select a currency"); "Africa/Lagos" appears only in a migration
+  comment (a documented example of what NOT to default to) and as
+  arbitrary test fixture data in the RLS suite — neither is a product
+  default. No "Victor"/"Nigeria" anywhere in application code.
+- .env.local (real, if present) confirmed gitignored via
+  `git check-ignore -v`; never printed to this report or the
+  conversation, per instruction not to output access tokens, database
+  passwords, service-role keys, or refresh tokens. The local stack's
+  well-known, publicly-documented demo credentials (identical on every
+  Supabase CLI install everywhere, bound to 127.0.0.1 only) were not
+  reproduced here either, out of an abundance of caution.
+- Build output was not separately re-scanned for secrets this phase
+  beyond the source search above, since no real credentials exist in the
+  repository to leak into it.
+
+18. SERVICE-ROLE USAGE, IF ANY
+------------------------------------
+Used exactly once, in supabase/tests/rls/{env.ts,fixtures.ts}, to create
+and delete temporary auth fixture users via the Auth admin API. Rules
+followed: never imported by anything under app/ or components/; never
+prefixed NEXT_PUBLIC_; never committed (lives only in the gitignored
+.env.local); the harness hard-refuses to run against a non-local URL
+(section 12), which is the concrete control preventing this credential
+from ever being used against a real project even by mistake. No
+production application code uses or references a service-role client.
+
+19. VALIDATION RESULTS
+---------------------------
+npm install                           — clean, 0 vulnerabilities
+npx eslint .                          — 0 errors, 0 warnings
+npm run typecheck (app + test harness) — 0 errors
+npx next build (with local Supabase configured) — clean; /home and
+  /onboarding correctly dynamic (session-dependent)
+npx next build (with zero Supabase configuration) — clean; /home and
+  /onboarding correctly static (bake in a redirect to /login, since with
+  no config there is provably no session to check) — re-verified this
+  phase didn't regress the P0-E1-S2 "no project assumption" guarantee
+supabase db reset (migration validation) — clean, reproducible from blank
+npm run test:rls (cross-user isolation + anonymous isolation +
+  ownership-reassignment + domain correctness) — 20/20 PASSED, local only
+service-role exposure search            — clean (section 17)
+hardcoded prototype personal info search — clean (section 17)
+git diff / git status                   — reviewed, section 23/24
+
+20. ASSUMPTIONS
+--------------------
+- profiles.id = auth.users.id (no separate surrogate key) — the brief
+  explicitly invited this: "using the profile primary key itself as the
+  auth user ID may be preferable... choose deliberately and document
+  why." Documented in the migration header and
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10.
+- preferred_currency/timezone nullable with no default, diverging from
+  the brief's illustrative NOT NULL — resolved in favor of the brief's
+  own, more specific "Default Profile Values" section, which explicitly
+  forbids a fabricated default.
+- onboarding_completed implemented as a stored generated column rather
+  than a hand-set boolean — not explicitly requested, chosen because it
+  cannot drift from the fields it summarizes and makes "required currency
+  once onboarding is complete" (a constraint the brief names as an
+  example) true by construction.
+- update-password, forgot-password, and the rest of the P0-E1-S2 auth
+  shell were left untouched; only the boundary between "authenticated"
+  and "authenticated + onboarded" was added.
+- Docker Desktop was started (a reversible, non-destructive local action)
+  specifically to obtain real local validation rather than leaving RLS
+  testing unexecuted — judged to serve the phase's explicit preference for
+  local testability over relying on remote/dashboard validation.
+- The curated ~25-entry currency list is a starting set, not a product
+  decision about which currencies V1 ultimately supports.
+
+21. OPEN QUESTIONS
+-----------------------
+1. Exact schema for Money/Assets/Goals/Decisions/Financial
+   Rules/Obligations/Receivables/Liabilities/Businesses/Valuation
+   History/Decision Assumptions/Goal Allocations/financial event log
+   (unchanged from prior phases).
+2. Whether "Businesses" is first-class or folded into Assets/Recurring
+   Income (unchanged).
+3. Exact "Safe to Deploy" formula inputs (unchanged).
+4. Timing of the curated final Stitch/design-reference set (unchanged).
+5. When should an actual Monatriq Supabase project (dev and production,
+   kept separate) be provisioned? Not decided or created this phase.
+6. Account-deletion / data-removal flow is unscoped; profiles currently
+   has no DELETE capability for anyone, including a user deleting their
+   own row.
+
+22. RISKS
+-------------
+1. No production Supabase project exists yet — every future data-layer
+   phase will keep validating locally only until one is provisioned.
+   Nothing about auth providers, email templates, rate limits, or custom
+   domains has been decided or tested.
+2. The onboarding UI was validated at the route/build/repository-function
+   level against a live database, not driven through an actual browser —
+   a real end-to-end click-through has not happened.
+3. The local Supabase stack's analytics/vector containers are disabled in
+   supabase/config.toml for this sandboxed environment (no outbound
+   network access); a developer machine with normal internet access
+   would not need this, and it should be revisited if local log/analytics
+   inspection is ever needed during development.
+
+23. GIT DIFF SUMMARY
+-------------------------
+12 previously-tracked files modified (312 insertions, 156 deletions):
+  .env.example, app/(app)/home/page.tsx, app/(app)/layout.tsx,
+  docs/architecture/SYSTEM_ARCHITECTURE.md,
+  docs/design/VISUAL_CONSTITUTION.md, docs/project/BUILD_STATE.md,
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md, lib/styles/tokens.css,
+  lib/supabase/client.ts, lib/supabase/server.ts, package.json,
+  tsconfig.json
+7 new untracked top-level entries: app/onboarding/, components/onboarding/,
+  components/ui/Select.tsx, lib/domain/, lib/supabase/database.types.ts,
+  lib/supabase/get-current-profile.ts, supabase/ (config.toml,
+  migrations/, tests/rls/ — .branches/ and .temp/ inside it are CLI-local
+  state, gitignored by supabase/.gitignore and the root .gitignore, not
+  part of what would be committed)
+docs/reference/brand/* — unchanged (not touched this phase either).
+
+24. GIT STATUS
+-------------------
+Branch main, on top of commit fd0ecf1. Nothing staged or committed by this
+phase, per instruction. .env.local exists locally (real local-stack
+credentials) and is confirmed gitignored — not shown in git status, not
+part of the diff, never printed anywhere in this report or the
+conversation.
+
+25. RECOMMENDED NEXT PHASE
+-------------------------------
+P0-E2-S2 — Money domain schema & RLS (transactions, cash buckets), built
+directly on the now-proven profiles pattern
+(docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10), with its own
+isolation test suite required before being marked complete. Provisioning
+an actual Monatriq Supabase project (at least a dev environment, kept
+separate from any future production one) is worth deciding explicitly
+before or alongside that phase, since local-only validation cannot
+continue indefinitely as the schema grows.
+
+Do not begin P0-E2-S2 automatically. Awaiting review.

@@ -1,8 +1,9 @@
 # Monatriq — Security & Row Level Security Principles
 
-Status: Canonical. Established P0-E1-S1. This is a constitution for future
-data-layer phases, not an implementation record — no tables or policies
-exist yet.
+Status: Canonical. Established P0-E1-S1. This is a constitution for
+data-layer phases — §10 records the first concrete implementation
+(`profiles`, P0-E2-S1) as a reference pattern for the financial tables that
+follow it.
 
 ## 1. Default posture: deny by default
 
@@ -73,11 +74,13 @@ complete** until all of the following pass:
    another user's records (including attempts to set `user_id` to someone
    else's ID on insert); must fail.
 
-These tests are expected to live alongside the migrations in
-`supabase/tests/` (per the proposed layout in
-[SYSTEM_ARCHITECTURE.md §2](../architecture/SYSTEM_ARCHITECTURE.md#2-repository-layout-proposed-for-future-phases))
-and run before a data-layer phase is marked complete in
-[BUILD_STATE.md](../project/BUILD_STATE.md).
+These tests live alongside the migrations in `supabase/tests/` (see
+`supabase/tests/rls/` for the `profiles` suite and its README) and must
+actually run — against a local Supabase stack at minimum — before a
+data-layer phase is marked complete in
+[BUILD_STATE.md](../project/BUILD_STATE.md). If no usable Supabase
+environment is available to run them, the phase is PARTIAL/BLOCKED, not
+complete.
 
 ## 7. Audit trail as a security property
 
@@ -96,13 +99,69 @@ subject to the same RLS rules as any other financial table.
 - This phase does not create any `.env` files or secrets; that happens when
   the Supabase project is actually provisioned in a later phase.
 
-## 9. Known repository risk (flagged this phase, not fixed)
+## 9. Repository root (resolved P0-E1-S2)
 
-The git repository root for this project was found to be `/Users/datamatics`
-(the user's home directory), not `/Users/datamatics/Monatriq`. See
-[BUILD_STATE.md — Risks](../project/BUILD_STATE.md) and the phase report for
-detail. This is a source-control hygiene risk (a broad `git add`/`commit -a`
-from home could sweep in unrelated files or secrets from other projects) —
-it is not itself an application security defect, but it is recorded here
-because any future `.env`/secrets handling must account for it until
-resolved.
+P0-E1-S1 flagged the git repository root as `/Users/datamatics` (the home
+directory) rather than the project folder. A dedicated repository now
+exists at `/Users/datamatics/Monatriq` — verified at the start of every
+phase since (`git rev-parse --show-toplevel`). No further action needed.
+
+## 10. Established pattern: `profiles` (P0-E2-S1)
+
+The first user-owned table (`supabase/migrations/*_create_profiles.sql`)
+is the reference implementation for every principle above. Future
+user-owned tables (Money, Assets, Goals, Decisions, Financial Rules, …)
+should follow the same pattern unless a specific reason is documented for
+deviating:
+
+- **Ownership column**: for a genuine 1:1-with-user table, the primary key
+  itself is the auth user id (`id uuid primary key references
+  auth.users(id) on delete cascade`) rather than a separate surrogate key
+  plus a unique `user_id` column — simpler policies (`auth.uid() = id`, no
+  join), same guarantee. A table with a different cardinality to the user
+  (many rows per user, e.g. future `transactions`) still uses §2's
+  `user_id uuid not null references auth.users(id)` shape.
+- **Grants, not just policies**: RLS policies restrict which *rows* a
+  role can see; Postgres table/column GRANTs restrict which *operations*
+  it can attempt at all. Both are used together — `authenticated` gets
+  `GRANT SELECT` on the whole table but `GRANT UPDATE` on only the
+  columns users may actually edit (identity/audit columns like `id` and
+  `created_at` are excluded from the grant entirely, not just protected
+  by a policy check). `anon` gets no grants. No `INSERT`/`DELETE` grant
+  exists at all until a phase actually needs one.
+- **Row creation without a client-facing INSERT policy**: rather than
+  grant `authenticated` an INSERT policy (which is exactly the surface
+  "insert a row for another user" attacks target), a `SECURITY DEFINER`
+  trigger on `auth.users` creates the owned row as part of the signup
+  transaction. See §11 for the SECURITY DEFINER rules this follows.
+- **Deny-by-default extends to capabilities nobody asked for yet**: there
+  is no DELETE policy or grant on `profiles` at all — not "delete your
+  own row is allowed", but simply absent, because no delete flow exists
+  yet. Add the grant and policy only when a real delete flow is designed.
+
+## 11. SECURITY DEFINER functions
+
+Avoid `SECURITY DEFINER` unless a normal RLS-scoped operation genuinely
+cannot do the job (as in §10's signup trigger, which must write a row
+before/independent of any client request that could carry a session).
+Every `SECURITY DEFINER` function in this codebase must, at minimum:
+
+- pin `search_path` explicitly (e.g. `set search_path = pg_catalog, public`)
+  so it cannot be redirected by a caller's session-level search_path;
+- do the smallest possible fixed operation — no dynamic SQL, no
+  client-controllable identifiers or filters;
+- have `EXECUTE` revoked from `public`/`anon`/`authenticated` unless a
+  specific reason requires a role to call it directly;
+- be commented in the migration explaining why it needs elevated
+  privilege and what its blast radius is if misused.
+
+## 12. Service-role usage in testing
+
+A service-role credential may be used by a server-side test harness to
+create and delete temporary auth fixture users (see
+`supabase/tests/rls/`). Rules: it is never imported by anything under
+`app/` or `components/`, never prefixed `NEXT_PUBLIC_`, never committed,
+and the harness itself refuses to run against anything other than a local
+Supabase instance (127.0.0.1/localhost) — see
+`supabase/tests/rls/env.ts`. This does not change §5: the *application*
+still never uses the service-role key anywhere.

@@ -69,6 +69,20 @@ Not every control is pill-shaped.
 - Neutral information stays neutral. Not everything positive is green by
   default — color is reserved for the semantics above.
 
+**Approved semantic UI colors** (established P0-E2-S1):
+
+| Token | Hex | Meaning |
+|---|---|---|
+| `--color-attention` | `#D98E2B` | Attention, capital deployment, financial caution |
+| `--color-danger` | `#E5484D` | Losses, serious rule conflicts, overdue items, destructive actions |
+
+These are **application-state colors, not brand colors** — they are not in
+`docs/reference/brand/BRAND.md`'s core palette (§2) and must never be added
+to it or treated as brand identity. They exist only to satisfy the amber/
+coral semantics this section requires, are used only where those meanings
+apply, and live in `lib/styles/tokens.css` alongside (not merged into) the
+brand tokens imported from the canonical brand pack.
+
 Gradients are not the default for buttons, cards, navigation, forms,
 badges, page backgrounds, or text. They belong to the logo mark, app icon,
 and occasional deliberate brand moments only.

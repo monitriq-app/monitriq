@@ -38,14 +38,10 @@
   --color-focus: var(--monatriq-cool-aqua);
 
   /*
-   * NOT part of the canonical brand pack (docs/reference/brand/BRAND.md
-   * lists no amber or coral/red). The visual constitution requires an
-   * "amber = attention" and "coral/red = danger" semantic that the brand
-   * pack does not define. These two values are a restrained placeholder
-   * chosen to read correctly against the navy/teal palette and MUST be
-   * confirmed against real brand guidance before relying on them beyond
-   * this foundation phase. Documented as an open question in
-   * docs/project/BUILD_STATE.md and the phase report.
+   * Approved application-state colors (P0-E2-S1), NOT brand colors: they
+   * are not in docs/reference/brand/BRAND.md's core palette and must
+   * never be added to it. Use only where the attention/danger semantics
+   * in docs/design/VISUAL_CONSTITUTION.md #5 actually apply.
    */
   --color-attention: #d98e2b;
   --color-danger: #e5484d;

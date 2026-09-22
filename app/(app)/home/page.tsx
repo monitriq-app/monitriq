@@ -1,14 +1,15 @@
-import { getCurrentUser } from "@/lib/supabase/get-current-user";
+import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
 
 /**
  * Temporary implementation scaffolding, not the final Home design (see
  * docs/product/PRODUCT_DEFINITION.md #3 — Home is an aggregation layer
- * over Money/Assets/Goals/Decisions, none of which exist yet).
+ * over Money/Assets/Goals/Decisions, none of which exist yet). By the time
+ * a request reaches this page, app/(app)/layout.tsx has already guaranteed
+ * a signed-in, onboarded user with a profile row.
  */
 export default async function HomePage() {
-  const user = await getCurrentUser();
-  const preferredName =
-    (user?.user_metadata?.preferred_name as string | undefined) ?? user?.email ?? "there";
+  const profile = await getCurrentProfile();
+  const preferredName = profile?.preferred_name || profile?.first_name || "there";
 
   return (
     <div className="flex flex-col gap-2">

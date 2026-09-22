@@ -30,8 +30,11 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally — not created in this
-phase:
+This is a target layout to build toward incrementally. As of P0-E2-S1,
+`lib/supabase/`, `lib/domain/profile/`, `supabase/migrations/`, and
+`supabase/tests/rls/` exist for real (the first, `profiles`, domain);
+`lib/types/` and the rest of `lib/domain/` remain future work, created when
+their owning phase needs them:
 
 ```
 app/                    Next.js routes (Home, Money, Quick Add, Assets,

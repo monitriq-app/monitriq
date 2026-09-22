@@ -5,140 +5,199 @@ Do not mark future phases complete ahead of time.
 
 ## Current phase
 
-P0-E1-S2 — Application Foundation, Secure Auth Shell & Brand Integration.
+P0-E2-S1 — Supabase Environment, User Profile Foundation & RLS Isolation
+Harness.
 
 ## Current status
 
-**Complete.** Application infrastructure only — no financial features,
-financial database schema, or final Home dashboard were implemented.
+**Complete.** The first user-owned table (`profiles`) exists with RLS
+enabled and deny-by-default policies, verified against a real local
+Supabase stack with a 20-test cross-user/adversarial/anonymous isolation
+suite (all passing). Remote/production validation was **not run** — no
+Monatriq Supabase project exists yet (see Supabase environment state
+below); this phase's completeness rests entirely on local validation, per
+the phase's own completion gate.
+
+## Supabase environment state
+
+- No Monatriq Supabase project exists. The Supabase CLI on this machine is
+  authenticated and lists exactly one project — **"Nemryn"** — which
+  belongs to an unrelated client and was never linked, queried, or
+  otherwise touched by this phase.
+- No production infrastructure was provisioned (explicitly out of scope
+  without user instruction).
+- Validation instead ran against a **local** Supabase stack
+  (`supabase start`, Docker-based), initialized this phase
+  (`supabase/config.toml`). Local analytics/vector containers were disabled
+  (they require outbound network access to posthog.com, unavailable in
+  this environment) — a local-dev-only setting with no effect on schema,
+  RLS, or any deployed environment.
+- `.env.local` (gitignored, never committed) points the app at this local
+  stack. No real/production credentials exist anywhere in this repository
+  or its history.
 
 ## Completed work
 
-- Verified the git repository root is `/Users/datamatics/Monatriq` (the
-  P0-E1-S1 home-directory-root risk has been resolved outside this phase).
-- Scaffolded a Next.js 16 (App Router) + TypeScript (strict) + Tailwind v4
-  application directly in the repository root, alongside the existing
-  `docs/`.
-- Copied production brand assets (logo, mark, app icons, favicon) from
-  `docs/reference/brand/` into `public/brand/`; canonical originals
-  untouched.
-- Built a two-layer design-token system: brand tokens (imported directly
-  from the canonical `docs/reference/brand/brand-tokens.css`, never
-  duplicated by hand) mapped onto semantic UI tokens
-  (`lib/styles/tokens.css`) via Tailwind v4's `@theme`.
-- Wired IBM Plex Sans via `next/font/google`, plus a `tabular-figures`
-  utility for financial numerals.
-- Built Supabase client architecture: separate browser client
-  (`lib/supabase/client.ts`), server client (`lib/supabase/server.ts`),
-  and a session-refresh helper (`lib/supabase/session.ts`) used by
-  `proxy.ts` (Next.js 16 renamed `middleware.ts` to `proxy.ts`).
-- Built a minimal auth shell: `/login`, `/signup`, `/forgot-password`,
-  `/update-password`, and `/auth/callback` (code-exchange route handler for
-  email verification and password recovery links).
-- Established the authenticated route boundary: `app/(app)/layout.tsx`
-  redirects to `/login` when there is no session, then renders a minimal
-  placeholder `/home` inside `AppShell`. Documented in-code that this is a
-  UX boundary, not the security boundary (RLS is).
-- Base component primitives: `BrandLogo`, `AppShell`, `PageContainer`,
-  `Button`, `Input`, `FormField`, `AuthCard`, `SignOutButton`,
-  `ConfigurationNotice`.
-- PWA foundation: `app/manifest.ts` (dynamic manifest using brand icons),
-  icon/apple-touch-icon metadata in the root layout. No service worker or
-  offline data caching implemented.
-- `.env.example` created (public URL/anon key placeholders only; no
-  service-role placeholder — nothing in this phase uses it).
-- `lib/config/env.ts` reads Supabase env lazily and throws a clear,
-  actionable error only when a caller actually needs a client — so the app
-  builds and the public landing page renders a controlled "Not configured"
-  state even with no Supabase project connected.
-- Full validation passed: `npm install`, `tsc --noEmit`, `eslint .`, and
-  `next build` all clean with zero errors/warnings; smoke-tested every
-  route with `next dev`.
-- `docs/reports/P0-E1-S2-application-foundation-auth-shell.txt` written.
+- Verified the git repository root is `/Users/datamatics/Monatriq` with a
+  clean tree before starting (P0-E1-S2 was committed by the user between
+  sessions).
+- Reviewed `AGENTS.md`/`CLAUDE.md`: framework-generated Next.js 16
+  guidance only, no secrets, no conflict with canonical docs. Left as-is.
+- Recorded the amber/danger semantic colors approved in this phase's
+  brief as **approved application-state colors, explicitly not brand
+  colors** — updated `docs/design/VISUAL_CONSTITUTION.md` §5 and the
+  code comment in `lib/styles/tokens.css` accordingly (resolves the open
+  question from P0-E1-S2).
+- `supabase init` — created `supabase/config.toml`.
+- `supabase/migrations/20260922201924_create_profiles.sql` — the
+  `profiles` table, RLS, grants, triggers (see docs/reports for full
+  schema and rationale).
+- Ran the migration against the local stack (`supabase db reset`),
+  generated TypeScript types (`lib/supabase/database.types.ts`) via
+  `supabase gen types typescript --local`.
+- Built the Profile application layer: `lib/domain/profile/{types,
+  repository,currencies}.ts`, `lib/supabase/get-current-profile.ts`.
+- Built the onboarding flow: `app/onboarding/page.tsx`,
+  `components/onboarding/OnboardingForm.tsx`, `components/ui/Select.tsx`.
+- Extended `app/(app)/layout.tsx` with a second gate:
+  authenticated-but-not-onboarded now redirects to `/onboarding` (was
+  previously just authenticated-vs-not).
+- `app/(app)/home/page.tsx` now reads the real profile
+  (`preferred_name`/`first_name`) instead of the P0-E1-S2
+  `user_metadata` placeholder.
+- Built a 20-assertion RLS/adversarial/domain-correctness suite
+  (`supabase/tests/rls/`) — all passing against the local stack. Full
+  list in the phase report.
+- Added `npm run db:start|db:stop|db:reset|db:types|test:rls` scripts.
+- Full validation passed: `npm install`, `tsc --noEmit` (app +
+  test-harness project), `eslint .`, `next build`, all clean; every route
+  smoke-tested with `next dev` against the real local backend.
 
 ## Architecture changes
 
-- Repository root now contains a live Next.js app (`app/`, `components/`,
-  `lib/`, `public/`) alongside `docs/`, per
-  `docs/architecture/SYSTEM_ARCHITECTURE.md §2`.
-- `lib/domain/`, `types/`, and `supabase/` (migrations/tests) were
-  deliberately **not** created this phase — nothing exists yet to put in
-  them. They're created in the data-layer phase that actually needs them.
-- Package manager: npm (only mainstream package manager available in this
-  environment; documented here since none was previously configured).
-- A bug was found and fixed during this phase's own validation: an early
-  version of `app/(app)/layout.tsx` tried to gate on Supabase configuration
-  by returning alternate JSX instead of calling `redirect()`. Next.js can
-  render a layout and the page segment it wraps concurrently, so the
-  nested page still executed (and threw) even though its output was
-  discarded. Fixed by having `getCurrentUser()` return `null` (instead of
-  throwing) when unconfigured, and moving the "Not configured" state to
-  the public landing page, which has no nested child segment to race
-  against. See the phase report §17 (validation results) for the
-  discovery trace.
+- **`profiles.id` = `auth.users.id`** (no separate surrogate key + unique
+  `user_id`) — the simplest correct shape for a genuine 1:1-with-user
+  table. Documented as the reference pattern in
+  `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10`, alongside when a
+  *different*-cardinality future table (e.g. `transactions`) should
+  instead use the original `user_id uuid references auth.users(id)`
+  shape.
+- **`onboarding_completed` is a stored generated column**
+  (`first_name is not null and preferred_currency is not null and
+  timezone is not null`), not a hand-maintained flag — cannot drift out
+  of sync with the fields it summarizes.
+- **`preferred_currency`/`timezone` are nullable, no default** — a
+  profile row is created at signup, before onboarding; giving these a
+  default would mean fabricating one (see Product Definition's "unknown
+  remains unknown").
+- **Row creation: `SECURITY DEFINER` trigger on `auth.users`, no
+  client-facing INSERT policy at all** on `profiles`. Chosen over (a) a
+  server-side post-signup call (real orphaned-user failure mode on a
+  dropped request) and (b) a client-callable init RPC (same failure mode,
+  plus it would need its own INSERT policy — exactly the attack surface
+  this design closes). Full rationale in the migration file header and
+  `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10-11`.
+- **Column-level GRANT, not just RLS `WITH CHECK`**, blocks ownership
+  reassignment and audit-column tampering: `authenticated` only has
+  `UPDATE` granted on `first_name, preferred_name, preferred_currency,
+  timezone` — `id` and `created_at` are outside the grant entirely, so a
+  forged payload including them fails at the permissions layer before
+  RLS is even evaluated. `updated_at` is trigger-maintained.
+- **Timezone validity is enforced by Postgres's own tz engine**
+  (`perform now() at time zone new.timezone` inside a trigger), not a
+  regex or a hand-maintained list — a CHECK constraint can't run a
+  subquery, so this is the correct DB-layer mechanism available.
+  `preferred_currency` gets a cheap regex format CHECK
+  (`^[A-Z]{3}$`); full ISO 4217 membership validation is an
+  application-layer concern (`lib/domain/profile/currencies.ts`).
+- **`"type": "module"` added to `package.json`** so the Node-executed RLS
+  test harness runs without a CJS/ESM interop warning. Verified this
+  doesn't affect the Next.js build (all config files already use
+  explicit `.mjs`/`.ts` extensions).
+- **`lib/domain/profile/{types,repository}.ts` use relative, `.ts`-
+  extensioned internal imports** instead of the `@/` alias, specifically
+  so they resolve identically under Next's bundler and under plain
+  `node` (the test harness imports `updateProfile` directly, to test the
+  exact function the onboarding form calls — not a reimplementation of
+  it). `allowImportingTsExtensions` was added to the root `tsconfig.json`
+  to permit this; it only *permits* `.ts` extensions project-wide, it
+  doesn't require them anywhere else.
+- `supabase/tests/rls/` has its own `tsconfig.json` (Node/`nodenext`
+  resolution) since it runs outside Next's bundler; excluded from the
+  root tsconfig, typechecked separately via `npm run typecheck`.
 
 ## Known limitations
 
-- No real Supabase project is connected. `.env.local` was not created (no
-  real credentials exist to put in it). The app degrades to a "Not
-  configured" state on the public landing page rather than crashing.
-- No production profile table exists; `/home`'s "Welcome, {name}" reads
-  `user_metadata.preferred_name` off the Supabase Auth user as a temporary
-  placeholder, falling back to email, then "there". This is not the
-  Profile domain and must not be treated as one.
-- `--color-attention` (amber) and `--color-danger` (coral/red) in
-  `lib/styles/tokens.css` are **not** part of the canonical brand pack
-  (`docs/reference/brand/BRAND.md` defines no amber or red). They are a
-  restrained placeholder chosen to read correctly against the existing
-  navy/teal palette and need real brand confirmation — see Open Questions.
-- Light mode is not implemented; tokens are structured so a future
-  `[data-theme="light"]` override block could redefine them later.
-- No automated tests exist yet (none were justified at this phase; no
-  domain logic exists to test).
+- Onboarding UI was validated by: (a) the RLS suite calling the exact
+  `updateProfile()` function the form calls, against a live database, and
+  (b) `next build` + route-level smoke testing with a real backend
+  connected. It was **not** driven through a real browser (no headless
+  browser tooling was added — not justified at this phase's scope).
+- Currency list (`lib/domain/profile/currencies.ts`) is a curated ~25-code
+  subset of ISO 4217, not the full standard — extendable without a
+  migration.
+- `first_name`/`preferred_name`/`preferred_currency`/`timezone` length and
+  format constraints exist at the DB layer; no rate-limiting or abuse
+  controls on profile updates (not in scope this phase).
+- No account-deletion flow exists; `profiles` has no DELETE grant or
+  policy for anyone, including a user deleting their own row.
+- Carried over from P0-E1-S2: amber/danger tokens are approved for use
+  (per this phase's brief) but still not literally in the brand pack —
+  see `docs/design/VISUAL_CONSTITUTION.md §5` for the now-explicit
+  distinction between brand colors and semantic UI colors.
 
 ## Current setup requirements
 
-To actually run the app against a real backend: copy `.env.example` to
-`.env.local`, fill in `NEXT_PUBLIC_SUPABASE_URL` and
-`NEXT_PUBLIC_SUPABASE_ANON_KEY` from a Supabase project, then `npm install`
-(if not already run) and `npm run dev`. No Supabase project has been
-provisioned as part of this phase.
+`npm run db:start` (requires Docker) to bring up the local stack, then
+`supabase status -o env` to get the local URL/anon/service-role values for
+`.env.local` (see `.env.example` for variable names — the app needs the
+first two, the RLS suite additionally needs
+`SUPABASE_SERVICE_ROLE_KEY`). `npm run db:types` regenerates
+`lib/supabase/database.types.ts` after any migration change. `npm run
+test:rls` runs the isolation suite (refuses to run against anything that
+isn't localhost).
 
 ## Open questions
 
-1. Exact Supabase schema/table definitions — still deferred to the
-   data-layer implementation phase (unchanged from P0-E1-S1).
+1. Exact Supabase schema for Money/Assets/Goals/Decisions/Financial
+   Rules/Obligations/Receivables/Liabilities/Businesses/Valuation
+   History/Decision Assumptions/Goal Allocations/financial event log —
+   still deferred (unchanged from prior phases).
 2. Whether "Businesses" is first-class or folded into Assets/Recurring
-   Income (unchanged from P0-E1-S1).
-3. Exact "Safe to Deploy" formula inputs (unchanged from P0-E1-S1).
-4. Timing of the curated final Stitch/design-reference set (unchanged from
-   P0-E1-S1).
-5. Supabase project/environment provisioning has still not happened.
-6. **New:** `--color-attention` and `--color-danger` token values need
-   confirmation against real Monatriq brand guidance — they were invented
-   for this phase, restrained but not brand-approved.
-7. **New:** Should `AGENTS.md`/`CLAUDE.md` (auto-generated by Next.js 16's
-   `next dev` on every run, per its own embedded comment) be committed? They
-   are currently untracked; keeping them tracked avoids repeated diff noise
-   but they contain framework-generated guidance, not project decisions.
+   Income (unchanged).
+3. Exact "Safe to Deploy" formula inputs (unchanged).
+4. Timing of the curated final Stitch/design-reference set (unchanged).
+5. **New:** when should an actual Monatriq Supabase project (dev and
+   production, kept separate) be provisioned? This phase deliberately did
+   not create one without instruction.
+6. **New:** account-deletion / GDPR-style data-removal flow is unscoped —
+   will need its own DELETE policy design when it's prioritized, not
+   before.
+7. **Resolved this phase:** `AGENTS.md`/`CLAUDE.md` — reviewed, contain
+   only generic Next.js 16 framework guidance, no secrets, no conflict
+   with canonical docs. Kept as committed.
+8. **Resolved this phase:** amber/danger token values are approved for
+   application-state use (not brand palette) — see Architecture changes.
 
 ## Risks
 
-1. No RLS/isolation test infrastructure exists yet because no schema
-   exists yet — must be established alongside, not after, the first
-   data-layer phase (per `docs/security/SECURITY_AND_RLS_PRINCIPLES.md`).
-2. The amber/danger color gap (see Known Limitations) could visually ship
-   as "the brand" if not corrected before real UI work begins.
-3. No real Supabase project means the auth flows (`signUp`, `signIn`,
-   password recovery) are implemented but unverified end-to-end against a
-   live backend — only build/render-time correctness was validated this
-   phase.
+1. **No production Supabase project exists.** Every future data-layer
+   phase will keep validating against local stacks only until one is
+   provisioned — fine for correctness, but means zero production
+   configuration (auth providers, email templates, custom domains, rate
+   limits) has been decided or tested yet.
+2. Onboarding's real UI has only been smoke-tested at the route/build
+   level, not driven end-to-end through a browser — see Known
+   Limitations.
+3. The curated currency list will need real product input on which
+   codes V1 actually supports before Money exists.
 
 ## Next approved step
 
 Do not begin automatically. Recommended next phase (pending user review):
-**P0-E2-S1 — Supabase project provisioning & schema/RLS design** for the
-Profile domain first (since Home/AppShell already anticipate profile data),
-followed by Money/Assets, built directly from `FINANCIAL_DOMAIN_MODEL.md`
-and `SECURITY_AND_RLS_PRINCIPLES.md`, including the mandatory isolation
-test suite.
+**P0-E2-S2 — Money domain schema & RLS** (transactions, cash buckets),
+built directly on the now-proven `profiles` pattern
+(`docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10`), including its own
+isolation test suite before being marked complete. Provisioning a real
+Monatriq Supabase project (dev environment at minimum) is a prerequisite
+worth deciding explicitly before or alongside that phase.
