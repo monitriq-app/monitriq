@@ -1,0 +1,235 @@
+MONATRIQ — PHASE REPORT
+========================
+
+1. PHASE
+--------
+P0-E1-S1 — Product Definition, Domain Architecture, Security Rules & Visual
+Constitution.
+
+2. STATUS
+---------
+Complete. Planning and architecture only. No product features, database
+migrations, or application screens were implemented, per phase scope.
+
+3. OBJECTIVE
+------------
+Inspect the repository, establish the canonical production architecture,
+document the financial domain, and prepare the project for hierarchical
+implementation — without building product features, migrations, or screens,
+and without copying any Stitch/mockup HTML into the application.
+
+4. REPOSITORY STATE INSPECTED
+------------------------------
+- Working directory: /Users/datamatics/Monatriq
+- Project structure prior to this phase: docs/reference/brand/ (canonical
+  brand pack: BRAND.md, brand-tokens.css, manifest.json, svg/, png/) and an
+  empty public/ directory. No package.json, no README.md, no app code, no
+  Supabase project, no migrations.
+- No "Capital Compass" or "Stitch" references exist anywhere in the
+  repository (checked via recursive case-insensitive search) — there is
+  nothing to migrate away from the prototype name.
+- Git: the actual git repository root is /Users/datamatics (the user's home
+  directory), not /Users/datamatics/Monatriq — there is no .git directory
+  inside the project folder itself. The repository's only tracked file is
+  README.md (unrelated home-directory content, "# dripped"), committed as
+  "first commit" (fd755c4, 2026-08-18). All Monatriq project files, and
+  every other directory under the home folder (other client projects,
+  system/config directories, caches), are currently untracked. This is
+  recorded as a risk (see section 14) and was not modified in this phase.
+
+5. FILES CREATED
+-----------------
+- docs/product/PRODUCT_DEFINITION.md
+- docs/architecture/FINANCIAL_DOMAIN_MODEL.md
+- docs/architecture/SYSTEM_ARCHITECTURE.md
+- docs/security/SECURITY_AND_RLS_PRINCIPLES.md
+- docs/design/VISUAL_CONSTITUTION.md
+- docs/project/BUILD_STATE.md
+- docs/reports/P0-E1-S1-product-definition-domain-architecture.txt (this
+  file)
+
+6. FILES MODIFIED
+-------------------
+None. No pre-existing files were changed. The brand pack under
+docs/reference/brand/ was read but not modified, per instruction.
+
+7. PRODUCT DECISIONS ESTABLISHED
+----------------------------------
+- Production name is Monatriq; "Capital Compass" is retired as a working
+  name only, with no in-repo references requiring migration.
+- Monatriq is defined as a personal financial position, asset, goal and
+  decision-management application — explicitly not just an expense
+  tracker, budgeting app, net-worth calculator, investment app, or
+  autonomous AI adviser. The user remains the decision-maker.
+- Primary product areas confirmed: Home, Money, Quick Add, Assets,
+  Decisions, Goals, with supporting domains: Profile, Cash Buckets,
+  Liabilities, Financial Rules, Obligations, Businesses, Receivables,
+  Valuation History, Decision Assumptions, Goal Allocations, Audit/
+  Financial Events.
+- Home is confirmed as an aggregation/command-center layer only, never an
+  independent source of financial truth.
+- V1 is manual-first: no live bank connection required.
+- Multi-user from day one; no shared family wallet, no social feed, no
+  leaderboards in V1.
+- Currency and timezone are per-user profile settings, not global
+  hardcoded defaults.
+
+8. ARCHITECTURE DECISIONS ESTABLISHED
+----------------------------------------
+- One shared financial domain calculation layer is mandatory; Money,
+  Assets, Goals, Decisions and Home must all consume it rather than
+  independently computing cash, net worth, or deployable capital.
+- Proposed stack confirmed: Next.js + TypeScript + Supabase (Postgres +
+  Auth) + PWA.
+- Proposed repository layout documented (app/, lib/domain, lib/supabase,
+  supabase/migrations, supabase/tests, docs/, public/) as a target for
+  future phases — not created in this phase.
+- A lightweight, append-only financial event log is the chosen audit
+  mechanism — explicitly not full event sourcing and not a blockchain-style
+  design, per instruction to use the simplest architecture that preserves
+  integrity and traceability.
+- Brand asset production placement (public/ icons, PWA manifest, app shell
+  usage) is planned but deferred to the implementation phase that builds
+  the app shell.
+
+9. FINANCIAL-DOMAIN DECISIONS ESTABLISHED
+---------------------------------------------
+- Asset value concepts kept distinct: Cost Basis, Estimated Current Value,
+  Conservative/Quick-Sale Estimate, Target Value, Potential Liquidity,
+  Actual Sale Price.
+- Worked compound-event examples formalized: receivable recovery, asset
+  purchase, capitalizable resale-vehicle repair vs. non-capitalizable
+  personal maintenance, asset sale (gross proceeds vs. selling costs vs.
+  capital returned vs. realised profit/loss vs. cash received), and debt
+  payment (principal vs. interest/fees).
+- Receivables model defined: Face Amount, Recovered Amount, Outstanding
+  Amount, optional Estimated Recoverable Value, optional Expected Payment
+  Date, optional Last Follow-Up. Full collectibility is never assumed.
+- Goals defined as typed and extensible (Savings/Reserve, Purchase/
+  Property, Debt Payoff, Recurring Income, Business Capital, Relocation/
+  Milestones, Education, Vehicle, Event, Travel, Custom), with a "one
+  naira, one purpose" allocation rule to prevent double counting.
+- Protected goals: protection is user-configured; overriding it always
+  shows impact/conflict, allows cancellation, and records the override —
+  the system never decides autonomously.
+- Decisions are explicitly non-transactional: saving "Proceed" never moves
+  money; decision figures are tagged as Tracked Fact / User Estimate /
+  User Assumption / Derived Calculation, with missing assumptions staying
+  missing.
+- Financial Rules and Safe to Deploy are both defined as "Not configured"/
+  "Not calculated" by default until the user supplies real configuration —
+  no invented thresholds or guessed formulas.
+- Recurring income is restricted to explicitly recurring sources, excluding
+  asset sales, receivable recovery, refunds, transfers, one-off jobs and
+  windfalls by default.
+- Internal transfers between the user's own cash buckets are never counted
+  as income, spending, or net-worth change.
+
+10. SECURITY / RLS DECISIONS ESTABLISHED
+--------------------------------------------
+- Row Level Security is non-negotiable on every user-owned table, default
+  posture deny-by-default, policies keyed on auth.uid() = user_id.
+- Isolation must never rely solely on client-side filtering, frontend route
+  protection, hidden IDs, or application-only checks.
+- No normal UI/admin path may allow one user to view or act on another
+  user's financial records.
+- Supabase service-role credentials must never reach browser/client code;
+  any service-role use must be server-side and explicitly justified.
+- Every future data-layer phase must include RLS review, cross-user
+  isolation tests, adversarial direct-query tests, and mutation isolation
+  tests before being considered complete.
+- The git-repository-root risk (home directory as repo root) was recorded
+  as a source-control hygiene risk relevant to future secrets handling,
+  though it is not itself an application security defect and was not
+  altered without instruction.
+
+11. DESIGN-SYSTEM DECISIONS ESTABLISHED
+-------------------------------------------
+- "Expressive identity, quiet interface" confirmed as the design stance;
+  Stitch/mockups are reference-only, never pasted into production code.
+- Brand pack at docs/reference/brand/ confirmed canonical and untouched;
+  its palette and gradient documented for reference in the visual
+  constitution, with the gradient reserved for the logo/brand moments only
+  (not default UI chrome).
+- Typography direction confirmed: IBM Plex Sans as the single UI family,
+  tabular-nums for financial figures, hierarchy via weight/size/spacing
+  rather than font-switching.
+- Card/surface, color-semantic (teal/amber/coral), motion, and copy-voice
+  rules formalized as documented constraints for future UI phases.
+
+12. ASSUMPTIONS MADE
+----------------------
+- "Businesses" is listed as a supporting domain per the phase instructions
+  but its exact schema shape (first-class table set vs. folded into
+  Assets/Recurring Income) is left as an open question rather than decided
+  unilaterally.
+- No production Supabase project is assumed to exist yet; none was
+  provisioned or referenced in this phase.
+- The brand pack found in docs/reference/brand/ was treated as "the
+  Monatriq brand pack" referenced in the phase instructions, since it
+  matches the described production-oriented logo/color/guidance content
+  and no other candidate brand pack exists in the repository.
+
+13. OPEN QUESTIONS
+---------------------
+1. Exact Supabase schema/table design for each domain — deferred to a
+   dedicated data-layer phase.
+2. Whether Businesses is first-class or folded into Assets/Recurring Income
+   for the first implementation pass.
+3. Exact configurable inputs and precedence for the Safe to Deploy formula.
+4. Timing of the curated final Stitch/design-reference set relative to
+   initial screen scaffolding.
+5. Supabase project/environment provisioning (dev vs. production
+   separation) has not been discussed.
+
+14. RISKS
+-----------
+1. Git repository root is /Users/datamatics (home directory), not the
+   project folder — flagged as a source-control hygiene risk; recommend
+   the user decide whether to initialize a dedicated repository scoped to
+   /Users/datamatics/Monatriq before further commits accumulate. Not fixed
+   in this phase because it is a consequential, user-facing repository
+   change outside this phase's planning-only scope.
+2. No RLS/isolation test infrastructure exists yet because no schema exists
+   yet; this must be established alongside (not after) the first
+   data-layer phase, per the security constitution.
+3. No app scaffold exists; the next phase will need to create it before any
+   screen work can begin.
+
+15. TESTS / VALIDATIONS PERFORMED
+-------------------------------------
+- Recursive case-insensitive search for "capital compass" and "stitch"
+  across the repository: no matches.
+- Verified git repository root via `git rev-parse --show-toplevel` and
+  `--git-dir`: resolved to /Users/datamatics, not the project directory.
+- Inspected tracked files via `git ls-files` (1 file, unrelated to
+  Monatriq) and `git show --stat HEAD`.
+- Enumerated full repository structure (excluding node_modules/.git, which
+  do not exist) to confirm no pre-existing app code, schema, or screens
+  would be overwritten.
+- Read the full brand pack (BRAND.md, manifest.json, brand-tokens.css) to
+  ground the visual constitution in the actual supplied brand direction
+  rather than invented values.
+No automated test suite exists yet (none was expected at this phase — no
+code was written).
+
+16. GIT STATUS
+----------------
+Branch: main (repository root: /Users/datamatics)
+No files were staged or committed by this phase. All newly created
+documentation files remain untracked, consistent with the instruction not
+to commit unless explicitly asked. Untracked content includes the new
+docs/ files from this phase alongside pre-existing unrelated untracked
+content across the home directory (see risk #1, section 14).
+
+17. RECOMMENDED NEXT PHASE
+------------------------------
+P0-E1-S2 — repository/app scaffolding (Next.js + TypeScript project
+initialization, base Supabase client wiring under lib/supabase, brand
+token integration into the design-token layer) — OR, if the user prefers a
+schema-first order, P0-E2-S1 — Supabase schema & RLS policy design for the
+Profile/Money/Assets domains, including the mandatory isolation test suite,
+built directly from FINANCIAL_DOMAIN_MODEL.md and
+SECURITY_AND_RLS_PRINCIPLES.md.
+
+Do not begin P0-E1-S2 automatically. Awaiting review.

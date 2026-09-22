@@ -1,0 +1,26 @@
+{
+  "brand": "Monatriq",
+  "version": "1.0",
+  "files": [
+    "BRAND.md",
+    "brand-tokens.css",
+    "png/apple-touch-icon.png",
+    "png/monatriq-app-icon-192.png",
+    "png/monatriq-app-icon-512.png",
+    "png/monatriq-logo-dark-1800.png",
+    "png/monatriq-logo-stacked-1024.png",
+    "png/monatriq-logo-white-1800.png",
+    "png/monatriq-mark-1024.png",
+    "svg/favicon.svg",
+    "svg/monatriq-app-icon.svg",
+    "svg/monatriq-logo-dark.svg",
+    "svg/monatriq-logo-mono-dark.svg",
+    "svg/monatriq-logo-mono-white.svg",
+    "svg/monatriq-logo-primary.svg",
+    "svg/monatriq-logo-stacked.svg",
+    "svg/monatriq-logo-white.svg",
+    "svg/monatriq-mark-dark.svg",
+    "svg/monatriq-mark-gradient.svg",
+    "svg/monatriq-mark-white.svg"
+  ]
+}
