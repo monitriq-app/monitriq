@@ -11,5 +11,5 @@
     "resolveJsonModule": true,
     "esModuleInterop": true
   },
-  "include": ["./**/*.ts", "../../../lib/supabase/database.types.ts"]
+  "include": ["./**/*.ts", "../../lib/supabase/database.types.ts"]
 }

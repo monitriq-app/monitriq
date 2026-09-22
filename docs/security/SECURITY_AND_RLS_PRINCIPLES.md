@@ -159,9 +159,51 @@ Every `SECURITY DEFINER` function in this codebase must, at minimum:
 
 A service-role credential may be used by a server-side test harness to
 create and delete temporary auth fixture users (see
-`supabase/tests/rls/`). Rules: it is never imported by anything under
+`supabase/tests/shared/`, used by both `supabase/tests/rls/` and
+`supabase/tests/money/`). Rules: it is never imported by anything under
 `app/` or `components/`, never prefixed `NEXT_PUBLIC_`, never committed,
-and the harness itself refuses to run against anything other than a local
-Supabase instance (127.0.0.1/localhost) — see
-`supabase/tests/rls/env.ts`. This does not change §5: the *application*
-still never uses the service-role key anywhere.
+and named `SUPABASE_TEST_SERVICE_ROLE_KEY` (not `SUPABASE_SERVICE_ROLE_KEY`
+— renamed P0-E2-S2 specifically so it reads as obviously test-only at a
+glance). The harness itself refuses to run against anything other than a
+local Supabase instance (127.0.0.1/localhost) — see
+`supabase/tests/shared/env.ts`. This does not change §5: the *application*
+still never uses a service-role key of any name, anywhere.
+
+## 13. Established pattern: Money domain (P0-E2-S2)
+
+`supabase/migrations/*_create_money_domain.sql` extends §10's pattern to a
+domain with foreign-key relationships between user-owned tables
+(`cash_buckets` ← `cash_movements` → `financial_events`), and to functions
+that need to write to more than one table atomically. Two lessons that
+weren't visible with `profiles` alone:
+
+- **Cross-tenant reference protection needs an `EXISTS` check in the
+  policy, not just an ownership column.** A row's own `user_id` matching
+  `auth.uid()` is not enough when the row also references *other*
+  user-owned rows (a movement references a bucket and an event). Every
+  INSERT policy on such a table checks both:
+  `auth.uid() = user_id` **and** `exists (select 1 from
+  <referenced_table> r where r.id = <fk column> and r.user_id =
+  auth.uid())` for every foreign reference. Without the second check, a
+  user could satisfy the first by claiming their own `user_id` while
+  still pointing `bucket_id`/`event_id` at someone else's row.
+- **`SECURITY INVOKER` functions need the same GRANTs a direct query
+  would need — there is no free lunch.** An earlier draft of this
+  migration denied `SELECT` on `cash_movements` entirely, intending to
+  force all reads through text-casting functions (§ on decimal precision
+  in
+  [MULTI_CURRENCY_MODEL.md](../architecture/MULTI_CURRENCY_MODEL.md)).
+  Those functions are `SECURITY INVOKER` (per §11's preference for
+  invoker over definer) — which means they run as the calling user and
+  therefore need exactly the grants a direct query would need. Without
+  `GRANT SELECT`, even the user's own legitimate read failed with
+  "permission denied", caught by actually running the isolation suite
+  (`supabase/tests/money/run.ts`) against a real database, not by
+  reasoning about the design on paper. Fixed by granting `SELECT` (RLS
+  ownership scoping is the real boundary; the precision protection is an
+  application-layer discipline — `lib/domain/money/repository.ts` never
+  queries the raw table — not a database-enforced one). The alternative
+  (making the read functions `SECURITY DEFINER` to bypass the missing
+  grant) was deliberately rejected: that is exactly the "use DEFINER to
+  bypass permissions" pattern §11 warns against, for a problem that a
+  correctly-scoped GRANT already solves without any elevated privilege.

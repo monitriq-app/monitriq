@@ -23,7 +23,7 @@ export interface TestFixtures {
 }
 
 function adminClient(env: TestEnv): SupabaseClient<Database> {
-  return createClient<Database>(env.url, env.serviceRoleKey, {
+  return createClient<Database>(env.url, env.testServiceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 }
@@ -41,9 +41,10 @@ async function purgeStaleFixtures(admin: SupabaseClient<Database>): Promise<void
 async function createSignedInUser(
   env: TestEnv,
   admin: SupabaseClient<Database>,
+  suite: string,
   label: "a" | "b",
 ): Promise<TestUser> {
-  const email = `rls-test-${label}-${randomUUID()}@${FIXTURE_EMAIL_DOMAIN}`;
+  const email = `${suite}-${label}-${randomUUID()}@${FIXTURE_EMAIL_DOMAIN}`;
   const password = randomUUID();
 
   const { data: created, error: createError } = await admin.auth.admin.createUser({
@@ -69,15 +70,17 @@ async function createSignedInUser(
 /**
  * Creates two independent, signed-in test users plus an anonymous client,
  * against the local Supabase stack only (enforced by loadTestEnv). Any
- * fixture users left over from a previous crashed run are purged first, so
- * the suite is safe to re-run.
+ * fixture users left over from a previous crashed run (from any suite) are
+ * purged first, so every suite is safe to re-run independently. `suite` is
+ * just a readable prefix in the fixture emails (e.g. "profile-rls",
+ * "money-rls") to make Studio/logs easy to read when debugging.
  */
-export async function setupFixtures(env: TestEnv): Promise<TestFixtures> {
+export async function setupFixtures(env: TestEnv, suite: string): Promise<TestFixtures> {
   const admin = adminClient(env);
   await purgeStaleFixtures(admin);
 
-  const userA = await createSignedInUser(env, admin, "a");
-  const userB = await createSignedInUser(env, admin, "b");
+  const userA = await createSignedInUser(env, admin, suite, "a");
+  const userB = await createSignedInUser(env, admin, suite, "b");
 
   const anonClient = createClient<Database>(env.url, env.anonKey, {
     auth: { autoRefreshToken: false, persistSession: false },

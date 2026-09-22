@@ -1,0 +1,661 @@
+MONATRIQ — PHASE REPORT
+========================
+
+1. PHASE
+--------
+P0-E2-S2 — Money Domain Foundation, Multi-Currency Cash Engine & RLS.
+
+2. STATUS
+---------
+Complete. Money schema, RLS, and atomic event-creation functions exist
+and were validated against a real local Supabase database: 37/37
+Money-domain assertions pass (cross-user isolation, cross-tenant reference
+attacks, same-currency and cross-currency transfer accounting, currency
+precision, idempotency), and the pre-existing 20/20 Profile suite from
+P0-E2-S1 still passes unmodified — 57/57 total. Lint, TypeScript, and
+production build all pass, both with and without a Supabase project
+configured. BUILD_STATE updated. This report written.
+
+Remote/production validation was NOT RUN — no Monatriq Supabase project
+exists (section 5). Per this phase's own completion gate, that does not
+block COMPLETE status because actual database enforcement WAS executed
+against a usable (local) Supabase environment; it would block COMPLETE
+only if no usable environment, local or remote, had been available at
+all.
+
+3. OBJECTIVE
+------------
+Build Monatriq's foundational Money domain: cash buckets, financial/money
+events, explicit cash movements, Money Received, Money Spent, same- and
+cross-currency transfers, multi-currency architecture, exchange-rate
+recording, shared balance calculations, Money-domain RLS, adversarial
+tenant-isolation tests, atomic financial-event creation, generated
+database types, and documentation — deliberately not Assets, Goals,
+Decisions, liabilities, receivables, businesses, or financial rules,
+except as extension points the Money architecture had to leave room for.
+
+4. REPOSITORY STATE BEFORE WORK
+---------------------------------
+`git rev-parse --show-toplevel` resolved to /Users/datamatics/Monatriq
+(correct). `git status` was clean — P0-E2-S1 had been committed by the
+user between sessions (commit 0fa904b, "feat: establish profile domain
+and RLS isolation foundation"). No unrelated changes were present; nothing
+was reset or discarded.
+
+5. SUPABASE ENVIRONMENT
+---------------------------
+Re-confirmed at the start of this phase (without printing secret values):
+the Supabase CLI still lists exactly one project, "Nemryn" (unrelated
+client), still not linked to this directory. No Monatriq project exists.
+It was not touched. No production infrastructure was provisioned.
+
+Validation ran against the same local Supabase stack (Docker) established
+in P0-E2-S1, still running from that session. `.env.local` needed
+rebuilding: an IDE extension had appended stray/duplicate lines to it when
+the file was opened between phases (visible as a system notification at
+the start of this conversation). Rebuilt cleanly from `supabase status -o
+env`, without printing any value to this conversation, using the renamed
+variable name (section 31). The local stack was reset from migration
+history multiple times this phase (most recently as the final step before
+the validation run recorded in section 32), confirming both migrations
+apply cleanly to a blank database every time.
+
+6. FILES CREATED
+-----------------
+supabase/migrations/20260922210653_create_money_domain.sql
+docs/architecture/MULTI_CURRENCY_MODEL.md
+lib/domain/money/{types.ts, repository.ts, format.ts, conversion.ts,
+  bucket-types.ts}
+app/(app)/money/page.tsx
+components/money/{CreateBucketForm.tsx, RecordMoneyForm.tsx,
+  TransferForm.tsx, CashByCurrency.tsx, BucketList.tsx, ActivityList.tsx}
+supabase/tests/money/run.ts
+supabase/tests/tsconfig.json (replaces the removed
+  supabase/tests/rls/tsconfig.json — see section 7)
+docs/reports/P0-E2-S2-money-multicurrency-rls-foundation.txt (this file)
+
+7. FILES MODIFIED
+-------------------
+.env.example — service-role placeholder renamed
+  SUPABASE_SERVICE_ROLE_KEY -> SUPABASE_TEST_SERVICE_ROLE_KEY, comment
+  updated.
+components/layout/AppShell.tsx — added a Home/Money nav link.
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md — status line, new §17-18
+  documenting the implemented Money architecture and correction/voiding
+  strategy, pointers added to §3 and §16.
+docs/architecture/SYSTEM_ARCHITECTURE.md — §2 (repository layout), §4
+  (domain calculation layer — first concrete instance), §5 (financial
+  event/audit layer — implemented), §6 (multi-currency posture —
+  superseded by implementation, redirected to the new doc).
+docs/project/BUILD_STATE.md — this phase's checkpoint (full content is
+  the canonical copy; see section 5/28-34 here for the equivalent detail).
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md — §9/§12 path and naming
+  fixes, new §13 (Money-domain patterns: cross-tenant EXISTS checks,
+  the SECURITY INVOKER grant lesson).
+lib/supabase/database.types.ts — regenerated (Money tables + functions
+  added).
+package.json / package-lock.json — added decimal.js dependency; added
+  db:types is unchanged, added test:money and a combined test script.
+supabase/tests/rls/README.md — updated for the shared/ relocation and
+  renamed env var.
+supabase/tests/rls/run.ts — imports from ../shared/ instead of local
+  copies; fixture suite label added.
+supabase/tests/shared/assert.ts — added runValue() (for setup steps later
+  tests build on) and describeError() (surfaces real Postgrest error
+  messages instead of "[object Object]" — see section 27).
+supabase/tests/shared/env.ts — renamed field/env var; moved here from
+  supabase/tests/rls/ (git recorded as a rename).
+supabase/tests/shared/fixtures.ts — added a `suite` label parameter so
+  Profile and Money fixture emails stay distinguishable; renamed field;
+  moved here (git recorded as a rename).
+
+8. MIGRATIONS
+-----------------
+supabase/migrations/20260922210653_create_money_domain.sql — one
+migration covering: currency registry + seed data, two category
+registries + seed data, cash_buckets, financial_events, cash_movements,
+fx_rates, five atomic record_* functions, three read functions. Applied
+cleanly via `supabase db reset` (full schema recreation from migration
+history, both this file and P0-E2-S1's profiles migration) repeatedly
+during this phase, most recently immediately before the final validation
+run — confirmed reproducible from a blank database, not a
+manually-patched state. One in-phase revision: the SELECT grant on
+cash_movements was added after the isolation suite caught it missing
+(section 27) — the version applied for final validation includes that
+fix.
+
+9. MONEY-DOMAIN SCHEMA
+---------------------------
+public.currencies (code PK, display_name, symbol, decimal_exponent,
+  created_at) — 26 seeded codes spanning 0/2/3-decimal currencies.
+public.money_received_categories / money_spending_categories (code PK,
+  display_name, cash_flow_class, created_at) — the exact category lists
+  from this phase's brief, seeded.
+public.cash_buckets (id, user_id, name, currency_code, bucket_type,
+  is_archived, created_at, updated_at) — no balance column.
+public.financial_events (id, user_id, event_type, cash_flow_class,
+  received_category_code, spending_category_code, occurred_at,
+  description, idempotency_key, voided_at, created_at, updated_at).
+public.cash_movements (id, event_id, user_id, bucket_id, currency_code,
+  amount numeric(20,6), created_at) — signed amount, immutable.
+public.fx_rates (id, user_id, event_id, base_currency, quote_currency,
+  rate numeric(24,12), rate_as_of, source, created_at).
+Full column-level detail, constraints, and comments are in the migration
+file itself, which is the canonical source.
+
+10. CASH BUCKET MODEL
+--------------------------
+Minimal: id, user_id, name, currency_code, bucket_type (CHECK-constrained
+to bank_account/cash_wallet/savings_account/mobile_wallet/business_cash/
+other), is_archived, timestamps. No manually-editable balance field — see
+section 18. Currency is immutable once the bucket has any cash_movements,
+enforced by a BEFORE UPDATE trigger
+(enforce_bucket_currency_immutable()), not just documented convention;
+tested explicitly. No DELETE grant/policy exists for any bucket, ever —
+archive (is_archived) is the only supported removal-from-view mechanism,
+per the brief's "prefer archive over delete."
+
+11. FINANCIAL-EVENT MODEL
+------------------------------
+event_type in (opening_balance, money_received, money_spent, transfer,
+fx_transfer) — deliberately not extended to asset_purchase/asset_sale/
+receivable_recovery/debt_payment/goal_allocation this phase; the CHECK
+constraint is a simple future ALTER once those domains exist.
+cash_flow_class (income, other_inflow, expense, other_outflow, transfer,
+opening_balance) is computed by a BEFORE INSERT trigger
+(set_financial_event_classification()) from event_type + category — never
+trusted from client input, and excluded from every INSERT/UPDATE column
+grant. Correction is voiding only: enforce_financial_event_void_only()
+makes voided_at a one-way transition and blocks every other column from
+changing on an existing event. No event content is ever editable in
+place; no automatic reversal-event generation exists this phase — both
+are documented as deferred, not silently absent.
+
+12. CASH-MOVEMENT MODEL
+----------------------------
+One signed-amount convention throughout: positive = credit to the bucket,
+negative = debit. No separate direction column that could contradict the
+sign. user_id is denormalized from the parent event for a simple,
+join-free RLS policy, but is never taken from client input —
+prepare_cash_movement() (a BEFORE INSERT trigger) overwrites it from the
+event every time, and separately validates that the movement's
+currency_code matches its bucket's currency_code and that the amount's
+fractional precision doesn't exceed the currency's decimal_exponent.
+Movements are immutable once inserted (no UPDATE grant or policy exists
+for anyone) — a correction means voiding the owning event.
+
+13. MULTI-CURRENCY ARCHITECTURE
+------------------------------------
+Full detail in docs/architecture/MULTI_CURRENCY_MODEL.md. Summary: bucket
+currency, movement currency, and reporting currency (profiles.
+preferred_currency, P0-E2-S1) are three distinct concepts, never
+conflated. A user's buckets do not have to share a currency or match
+their reporting currency. Nothing in the schema assumes NGN or any single
+currency; the currency registry (section 14) is the canonical identifier
+source everywhere.
+
+14. CURRENCY REGISTRY STRATEGY
+------------------------------------
+public.currencies is a real reference table (not a hardcoded enum),
+RLS-enabled with a permissive USING (true) SELECT policy — deliberately
+so, because this is public non-sensitive lookup data, not user data; the
+phase's own "avoid USING (true) as a shortcut" guidance is about
+user-owned tables. code (ISO-4217-shaped, format-checked) is the
+canonical identifier everywhere; symbol is presentation metadata only,
+never used for comparison or identity. decimal_exponent records each
+currency's actual decimal convention. Seeded with 26 codes including
+0-decimal (JPY) and 3-decimal (KWD) examples specifically to exercise the
+"not every currency has 2 decimal places" requirement, not just the
+common 2-decimal case. Extending the registry is a migration that inserts
+a row, not a schema change.
+
+Known, documented duplication: lib/domain/profile/currencies.ts (P0-E2-S1's
+onboarding picker) is a separate hand-maintained list that overlaps with
+this registry. Not reconciled this phase — see Open Questions.
+
+15. FX-RATE MODEL
+----------------------
+Fixed convention, stated once: rate = units of quote_currency received
+for 1 unit of base_currency. For an executed fx_transfer, base_currency
+is always the source bucket's currency, quote_currency the destination
+bucket's currency, rate = destination_amount / source_amount — the
+actual, permanent, historical rate. fx_rates.source is manual or
+transaction_actual (provider/bank/broker are anticipated future values,
+not implemented — no live FX integration this phase, no "live rate"
+language anywhere). A validate_transaction_actual_fx_rate() trigger
+ensures a transaction_actual row can only reference the same user's own
+fx_transfer event (an RLS/FK check alone would not catch a rate pointing
+at the right owner but the wrong event). numeric(24,12) precision —
+deliberately more than cash amounts need, since FX rates can require more
+decimal places than any display value would.
+
+16. CROSS-CURRENCY TRANSFER MODEL
+----------------------------------------
+record_fx_transfer() creates two cash_movements (source debit in source
+currency, destination credit in destination currency) with both original
+amounts stored exactly — neither derived from nor discarding the other —
+plus one fx_rates row (source=transaction_actual) computed from those
+exact amounts. cash_flow_class is always 'transfer', never income or
+expense. FX fees are not automatically bundled into the transfer call:
+a fee is recorded as its own money_spent event (a fee genuinely is
+spending, not part of a neutral transfer) using the existing
+record_money_spent() primitive — no schema change needed to support this
+later as a combined operation if wanted; deliberately kept as two calls
+this phase (documented as an assumption, section 33).
+
+17. MONEY CLASSIFICATION MODEL
+------------------------------------
+cash_flow_class is the single controlled-vocabulary field answering "does
+this event contribute to income/expense/inflow/outflow/transfer" —
+computed by set_financial_event_classification() from event_type +
+category, never guessed from an amount's sign and never a
+client-settable value (excluded from every column grant). money_received
+categories map to income or other_inflow (receivable_recovery, asset_sale,
+refund, and the catch-all "other" -> other_inflow; business_income,
+salary, freelance_contract, investment_income, gift -> income).
+money_spending categories map to expense or other_outflow (debt_payment
+-> other_outflow; everything else, including the catch-all "other" ->
+expense). This directly implements FINANCIAL_DOMAIN_MODEL.md's "cash
+received is not automatically income" / "cash out is not automatically
+spending" principles as an enforced database invariant, not just
+documented intent.
+
+18. BALANCE CALCULATION MODEL
+------------------------------------
+cash_buckets has no stored balance. money_bucket_balances() (per bucket +
+currency) and money_currency_totals() (per currency, across buckets) are
+the sole authoritative calculations — both SECURITY INVOKER SQL
+functions, both excluding voided events, neither ever summing across
+currencies (return shape is always {currency_code, amount}[], never one
+blended number). money_recent_activity() joins events+movements for a
+single "what happened" read. Every amount in all three is cast to text
+(section 19). Home, Money, and any future consumer are expected to call
+these rather than re-deriving balance independently
+(docs/architecture/SYSTEM_ARCHITECTURE.md §4).
+
+19. DECIMAL/PRECISION STRATEGY
+------------------------------------
+No REAL/DOUBLE PRECISION anywhere. Storage: numeric(20,6) for amounts,
+numeric(24,12) for FX rates. Currency-specific precision
+(decimal_exponent) is enforced by a trigger, not just documented, and
+tested explicitly for 0-decimal (JPY) and 3-decimal (KWD) currencies.
+JSON-transport risk: PostgREST serializes numeric as a JSON number by
+default, which risks float64 precision loss for large/precise values once
+a JS client's JSON.parse touches it — the three read functions cast every
+amount to text in their RETURNS TABLE shape specifically to close this,
+so the value arrives in TypeScript as an exact decimal string. On the
+write side, PostgREST extracts JSON body values as text before casting to
+the SQL parameter type, so a JSON string amount is parsed into numeric
+exactly with no float round-trip — every repository function in
+lib/domain/money/repository.ts accepts amount as string, never number,
+and documents (via asNumericParam()) exactly why passing a string against
+a TypeScript-generated number parameter type is correct rather than
+unsafe. decimal.js is the one arbitrary-precision library used anywhere
+in the codebase (chosen for being small, mature, and the most widely used
+option; no second numeric library was introduced) — used for
+lib/domain/money/format.ts's display formatting (per-currency
+decimal_exponent, thousands-grouping via string manipulation, never a
+number round-trip) and conversion.ts's rate multiplication.
+
+20. ATOMIC TRANSACTION STRATEGY
+--------------------------------------
+Every record_* function is a single PL/pgSQL function body — Postgres
+executes the whole body as one transaction, so a raised exception at any
+point rolls back everything the function did (e.g. a transfer's source
+debit is never left without its destination credit). This is why
+sequential client-side inserts, explicitly disallowed by the brief, are
+not equivalent: a dropped request between two separate REST calls cannot
+leave a half-created transfer here, because there is only ever one call.
+All five functions are SECURITY INVOKER (the default, stated explicitly
+throughout the migration for clarity) — no elevated privilege exists
+anywhere in the Money domain. None trusts a caller-supplied owner id:
+every referenced bucket is checked against auth.uid() explicitly, in
+addition to (not instead of) the RLS policies the inserts still go
+through as the invoking user.
+
+21. IDEMPOTENCY STRATEGY
+-----------------------------
+Every record_* function accepts an optional client-generated
+idempotency_key (uuid). A partial unique index on financial_events
+(user_id, idempotency_key) where idempotency_key is not null enforces
+uniqueness. Each function first checks for an existing event with that
+key and returns it directly if found (no new insert); an EXCEPTION WHEN
+unique_violation block also catches the race window between that check
+and the insert, re-querying and returning the existing row instead of
+propagating the error. Tested explicitly: two record_money_received()
+calls with the same idempotency_key produce the same event id and exactly
+one movement, not two. lib/domain/money's RecordMoneyForm/TransferForm
+generate a key once per in-progress submission (React state, rotated only
+after a successful submit) rather than per keystroke, so retries of the
+same click collapse correctly.
+
+22. CORRECTION/VOIDING STRATEGY
+--------------------------------------
+Voiding only, this phase — see FINANCIAL_DOMAIN_MODEL.md §18 and section
+11 above. enforce_financial_event_void_only() makes voided_at a one-way
+transition (cannot be set to null again once set) and rejects any UPDATE
+that changes any other column. cash_movements rows are never editable at
+all — not even by the voiding mechanism, since voiding only touches the
+parent event; a voided event's movements are excluded from balance
+calculations (section 18) but never deleted, preserving the audit trail.
+Editing event contents in place and automatic reversal-event generation
+are both explicitly deferred, not silently absent.
+
+23. RLS POLICIES
+---------------------
+Every Money table has RLS enabled. currencies/money_received_categories/
+money_spending_categories: SELECT-only, permissive (public reference
+data — see section 14). cash_buckets: SELECT/INSERT/UPDATE all scoped to
+auth.uid() = user_id, column-level UPDATE grant excludes user_id itself;
+no DELETE. financial_events: SELECT/INSERT scoped to auth.uid() =
+user_id, UPDATE grant restricted to the voided_at column only (enforced
+further by the trigger in section 11/22); no DELETE. cash_movements:
+SELECT/INSERT both require auth.uid() = user_id, and INSERT additionally
+requires EXISTS checks proving the referenced bucket and event both
+belong to auth.uid() (section 24); no UPDATE, no DELETE, for anyone.
+fx_rates: SELECT allows the caller's own rows or global rows
+(user_id is null — none seeded this phase); INSERT requires auth.uid() =
+user_id, plus a trigger validating transaction_actual rows reference the
+caller's own fx_transfer event; no UPDATE, no DELETE.
+
+24. CROSS-TENANT REFERENCE PROTECTIONS
+--------------------------------------------
+The pattern that differs from Profile (a single-table domain): any table
+that references another user-owned table validates ownership of BOTH the
+row itself and everything it points to. cash_movements' INSERT policy:
+auth.uid() = user_id AND EXISTS(bucket owned by auth.uid()) AND
+EXISTS(event owned by auth.uid()). Without the EXISTS checks, a user
+could satisfy auth.uid() = user_id while still pointing bucket_id/
+event_id at someone else's row. Every record_* function additionally
+re-validates bucket ownership explicitly in PL/pgSQL (independent of, not
+instead of, the RLS the insert still goes through as the invoking user) —
+tested by attempting a transfer/fx_transfer/money_received into or
+referencing another user's bucket or event, and by attempting a raw
+cash_movements insert against another user's real bucket+event pair
+(section 25).
+
+25. ADVERSARIAL TESTS
+--------------------------
+All required scenarios from the phase brief's 35-item matrix are present
+in supabase/tests/money/run.ts, plus several beyond it:
+- Bucket creation/isolation (items 1-10): create own NGN/USD/other
+  buckets, read-only-own, cannot read/update B's bucket by UUID, cannot
+  reassign own bucket's ownership, cannot create a bucket owned by B,
+  anonymous cannot read/mutate buckets.
+- Money received/spent + balance (11-13).
+- Same-currency transfer (14-19): moves both bucket balances without
+  changing the currency total, not income, not expense, fails into B's
+  bucket, fails when referencing B's bucket for a plain money_received
+  event, and a direct cash_movements insert naming B's real bucket+event
+  (with the attacker's own user_id, the realistic attack shape) is denied.
+- Event/movement read isolation (20-21): cannot read B's financial_events,
+  a raw unfiltered SELECT on cash_movements returns only the caller's own
+  rows (not B's — see section 27 for why this test's expectation changed
+  mid-phase), money_recent_activity() never leaks a B-owned row.
+- FX transfer (22-27): both original amounts persist exactly, the applied
+  rate persists exactly, not income, not expense, fails into B's bucket.
+- Validation failures (28-29): currency mismatch in record_transfer
+  fails; a currency code not in the registry fails via FK.
+- Bucket currency immutability (30): fails once movements exist.
+- Missing-rate aggregation (31): convertToReportingCurrency() returns
+  not_calculated with the correct missing-currency list; converts
+  correctly once a rate is supplied.
+- Idempotency (32): a retried call with the same key produces one event,
+  not two.
+- Ownership reassignment (33-34): cannot reassign a financial_event's
+  user_id (raw update, column not grantable); cannot update a
+  cash_movements row at all, for any reason (no UPDATE grant exists).
+- Direct UUID-targeted reads (35): across cash_buckets, financial_events,
+  and fx_rates simultaneously, no User B data is ever returned.
+- Beyond the matrix: anonymous isolation across financial_events,
+  fx_rates, and every Money RPC (not just cash_buckets); an opening
+  balance is its own event, not income; a JPY (0-decimal) bucket rejects
+  a fractional amount and accepts a whole number; a KWD (3-decimal)
+  bucket accepts 3 decimal places and rejects 4.
+
+26. MULTI-CURRENCY TESTS
+-----------------------------
+Covered within the adversarial suite rather than a separate file: same-
+currency vs. cross-currency transfer routing (a mismatched-currency
+record_transfer call fails, directing the caller to record_fx_transfer),
+both FX leg amounts and the applied rate persisting exactly, the
+0/2/3-decimal precision tests (section 25), and the missing-rate
+aggregation test proving unlike currencies are never silently summed.
+
+27. TEST RESULTS
+---------------------
+LOCAL VALIDATION: PASSED. Final run, immediately after a fresh `supabase
+db reset` from migration history:
+  npm run test:rls    -> 20/20 passed
+  npm run test:money  -> 37/37 passed
+  (57/57 combined, via `npm run test`)
+
+REMOTE VALIDATION: NOT RUN. No Monatriq Supabase project exists (section
+5). Not claimed as passed.
+
+Two real defects were found by actually running these suites against a
+live database, not by design review alone:
+1. An early cash_movements grant design (no SELECT for anyone, intending
+   to force all reads through the text-casting functions) broke the
+   functions themselves, since they are SECURITY INVOKER and therefore
+   need the same grants a direct query would. Every balance/activity read
+   failed with "permission denied for table cash_movements" — including
+   for the legitimate owner. Root-caused via the improved error messages
+   in assert.ts (previously "[object Object]" for non-Error thrown
+   values — Supabase/Postgrest errors are plain objects, not Error
+   instances; describeError() was added to surface the real Postgrest
+   message). Fixed by granting SELECT (see section 9/23) rather than
+   making the functions SECURITY DEFINER, which the security doc
+   explicitly warns against using merely to route around a missing grant.
+2. /money/page.tsx fetched Money data unconditionally. Even though
+   app/(app)/layout.tsx correctly redirects an unauthenticated visitor
+   away (documented P0-E1-S2 lesson: Next.js can render a layout and the
+   page it wraps concurrently), the page's own data fetching still ran
+   during that race and threw an uncaught "permission denied for function
+   money_bucket_balances" when called with no session — caught by
+   route-level `next dev` smoke testing (curling /money unauthenticated
+   and reading the server log), not by the build. Fixed the same way
+   /home already handled it: check getCurrentUser() first, return null if
+   absent, before touching the Money repository at all.
+Both are recorded here per instruction not to describe the phase as
+complete without fixing or flagging issues found during its own
+validation.
+
+28. APPLICATION INTEGRATION
+--------------------------------
+/money (app/(app)/money/page.tsx, Server Component): Cash by Currency,
+Cash Buckets (with balances and a create-bucket form), Record Money
+(received/spent, category-driven), Move Money (same-currency and
+cross-currency, auto-detected from the selected buckets' currencies),
+Recent Activity. No fake/seeded data anywhere — a brand-new user sees
+"No cash buckets yet." and "No activity yet.", matching the pattern
+already established for Profile/onboarding. Not the final Stitch design
+— explicitly foundation-level, labeled as such in the page itself.
+lib/domain/money/repository.ts is the sole data-access boundary: every
+multi-row write goes through the matching RPC (record_opening_balance/
+record_money_received/record_money_spent/record_transfer/
+record_fx_transfer), never sequential client-side inserts; voiding is a
+direct, RLS-protected table UPDATE (no RPC needed, mirroring how the
+security model already makes that safe). Server-first: all initial reads
+happen in the page's Server Component; Client Components exist only for
+the three interactive forms (CreateBucketForm, RecordMoneyForm,
+TransferForm), each calling the browser Supabase client only from their
+own submit handlers. AppShell gained a Home/Money nav link.
+
+29. GENERATED DATABASE TYPES
+---------------------------------
+lib/supabase/database.types.ts regenerated via `supabase gen types
+typescript --local` (also `npm run db:types`) after the final schema
+change (the cash_movements SELECT grant fix, section 9). All five Money
+tables, both category tables, the currencies table, and all eight
+functions (five record_*, three read) appear correctly typed, including
+the read functions' text-typed balance/amount return columns confirming
+the precision-safety cast (section 19) is visible in the type system too.
+lib/domain/money/types.ts derives every domain type from this generated
+Database type rather than hand-declaring parallel interfaces.
+
+30. SECURITY REVIEW
+------------------------
+- Recursive search of app/, components/, lib/ for "service_role" /
+  "SUPABASE_SERVICE_ROLE": clean.
+- No NEXT_PUBLIC_*SERVICE* variable anywhere (the two greps that matched
+  "NEXT_PUBLIC" and "SERVICE" on the same line were both prose mentioning
+  the two unrelated variable names side by side, not an actual
+  NEXT_PUBLIC-prefixed service-role variable).
+- Old variable name SUPABASE_SERVICE_ROLE_KEY confirmed gone from every
+  functional location (env.ts, .env.example) — the few remaining
+  mentions are in BUILD_STATE prose and the P0-E2-S1 report, both
+  historical/explanatory, not live configuration.
+- "Capital Compass" search: clean across app/, components/, lib/,
+  supabase/.
+- Hardcoded prototype personal data: no "Victor", no known prototype
+  amounts (840,000 / 108.8M / 240,000) anywhere in application or
+  migration code. "NGN" appears only as one of 26 entries in the
+  currencies registry seed data and the pre-existing onboarding picker —
+  never a default value (the bucket-creation currency <select> has no
+  default, placeholder is "Select"). No hardcoded currency default
+  anywhere in app/ or components/.
+- .env.local confirmed gitignored via `git check-ignore -v`; never
+  printed to this report or the conversation.
+- Route architecture: /money's data fetching is now guarded (section 27,
+  item 2) so an unauthenticated request never reaches a Money RPC call at
+  all, consistent with the layout-level redirect being UX, not the
+  security boundary (RLS is, per docs/security/SECURITY_AND_RLS_
+  PRINCIPLES.md #3).
+
+31. SERVICE-ROLE USAGE
+---------------------------
+Used exactly once, in supabase/tests/shared/{env.ts,fixtures.ts} (shared
+by both the Profile and Money suites), to create and delete temporary
+auth fixture users via the Auth admin API. Renamed this phase from
+SUPABASE_SERVICE_ROLE_KEY to SUPABASE_TEST_SERVICE_ROLE_KEY, per explicit
+instruction, specifically so the variable name itself signals "test-only"
+without needing to read a comment. Rules unchanged and re-verified: never
+imported by anything under app/ or components/, never prefixed
+NEXT_PUBLIC_, never committed, and the harness hard-refuses to run
+against anything other than a local (127.0.0.1/localhost) Supabase
+instance. No production Money code uses or references a service-role
+client of any name.
+
+32. VALIDATION RESULTS
+---------------------------
+1. Fresh `supabase db reset` from migration history — clean, both
+   migrations apply in order.
+2. Money migration applies cleanly — confirmed (same reset).
+3. Full Profile RLS suite still passes — 20/20.
+4. Money RLS/adversarial suite passes — 37/37.
+5. Cross-user reference attacks fail — confirmed (section 24/25).
+6. Multi-currency behavior tests pass — confirmed (section 26).
+7. Same-currency transfer accounting tests pass — confirmed (section 25).
+8. FX transfer accounting tests pass — confirmed (section 25).
+9. Missing-FX aggregation test returns incomplete state — confirmed.
+10. Currency precision tests pass — confirmed (JPY 0-decimal, KWD
+    3-decimal, both directions of each).
+11. `eslint .` — 0 errors, 0 warnings.
+12. `tsc --noEmit` (app + supabase/tests) — 0 errors.
+13. `next build` — clean, both with .env.local present (money/home/
+    onboarding correctly dynamic) and with .env.local removed (they
+    correctly degrade to static redirects — the P0-E1-S2 "no Supabase
+    project assumption" guarantee re-verified, not broken by this phase).
+14. service-role exposure search — clean (section 30).
+15. prototype-data search — clean (section 30).
+16. "Capital Compass" search — clean for production source (section 30).
+17. `git diff` — reviewed, section 34.
+18. `git status` — reviewed, section 35.
+No validation in this list is reported as passing without having actually
+been run this phase.
+
+33. ASSUMPTIONS
+--------------------
+- FX fees are recorded as a separate money_spent event rather than a
+  parameter on record_fx_transfer() — a fee is spending, not a neutral
+  part of the transfer, and this needed no schema change; documented as a
+  deliberate scope decision, not an oversight.
+- Opening balance amounts are required to be positive (a cash reserve, not
+  a starting liability) — the brief's worked example is positive; no
+  requirement was stated either way for a negative opening balance, and
+  cash buckets are modeled as assets, not debt instruments, this phase.
+- The currencies table's 26-code seed list is a starting set (matching
+  the existing onboarding picker plus JPY/KWD for decimal-exponent
+  coverage), not a product decision about which currencies V1 ultimately
+  supports.
+- Bucket type codes (bank_account/cash_wallet/savings_account/
+  mobile_wallet/business_cash/other) match the brief's example list
+  exactly; "Other cash reserve" was shortened to the code `other` with
+  "Other cash reserve" as its UI label.
+- Docker was already running from the P0-E2-S1 session; no new
+  environment-startup action was needed this phase.
+
+34. OPEN QUESTIONS
+-----------------------
+1. Exact schema for Assets/Goals/Decisions/Financial Rules/Obligations/
+   Receivables/Liabilities/Businesses/Valuation History/Decision
+   Assumptions/Goal Allocations — still deferred.
+2. Whether "Businesses" is first-class or folded into Assets/Recurring
+   Income (unchanged).
+3. Exact "Safe to Deploy" formula inputs (unchanged).
+4. Timing of the curated final Stitch/design-reference set (unchanged).
+5. When should an actual Monatriq Supabase project be provisioned?
+   (unchanged from P0-E2-S1).
+6. Account-deletion / data-removal flow (unchanged, now applies to Money
+   data too).
+7. Should lib/domain/profile/currencies.ts be replaced with a read from
+   public.currencies, to remove the duplication noted in section 14?
+8. Should FX transfer fees eventually become one combined RPC call
+   instead of two separate ones (transfer + a manual fee entry)?
+
+35. RISKS
+-------------
+1. No production Supabase project exists yet — every future data-layer
+   phase keeps validating locally only until one is provisioned.
+2. Money UI has only been smoke-tested at the route/build/repository-
+   function level, not driven end-to-end through a real browser.
+3. The currency-list duplication (Open Question 7) could drift silently
+   if one list is updated and the other isn't.
+4. cash_movements now has a SELECT grant to authenticated (section 9,
+   item 1 of section 27) — RLS correctly scopes it to the caller's own
+   rows (proven by the isolation suite), but any future code path that
+   queries this table directly instead of through the text-casting
+   functions would receive raw numeric JSON and needs review for the
+   float-precision risk documented in MULTI_CURRENCY_MODEL.md §6.
+
+36. GIT DIFF SUMMARY
+-------------------------
+15 previously-tracked files modified (883 insertions, 252 deletions):
+  .env.example, components/layout/AppShell.tsx,
+  docs/architecture/FINANCIAL_DOMAIN_MODEL.md,
+  docs/architecture/SYSTEM_ARCHITECTURE.md, docs/project/BUILD_STATE.md,
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md,
+  lib/supabase/database.types.ts, package-lock.json, package.json,
+  supabase/tests/rls/README.md, supabase/tests/rls/run.ts
+Plus 3 files git recorded as renames (moved rls/ -> shared/, edited in
+place): supabase/tests/shared/{assert.ts, env.ts, fixtures.ts}
+Plus 1 deletion: supabase/tests/rls/tsconfig.json (replaced by the new
+  supabase/tests/tsconfig.json, not a rename — its scope changed from
+  "this one folder" to "all of supabase/tests")
+7 new untracked top-level entries: app/(app)/money/, components/money/,
+  docs/architecture/MULTI_CURRENCY_MODEL.md, lib/domain/money/,
+  supabase/migrations/20260922210653_create_money_domain.sql,
+  supabase/tests/money/, supabase/tests/tsconfig.json
+docs/reference/brand/* and everything from P0-E1-S1/S2/P0-E2-S1 not
+listed above — unchanged.
+
+37. GIT STATUS
+-------------------
+Branch main, on top of commit 0fa904b. Nothing staged or committed by
+this phase, per instruction. .env.local exists locally (real local-stack
+credentials, rebuilt this phase after IDE interference) and is confirmed
+gitignored — not shown in git status, not part of the diff, never printed
+anywhere in this report or the conversation.
+
+38. RECOMMENDED NEXT PHASE
+-------------------------------
+P0-E3-S1 — Home aggregation layer: a real (non-placeholder) Home screen
+that consumes money_bucket_balances()/money_currency_totals() — the first
+proof that "one shared domain calculation, multiple consumers" actually
+holds across screens, per docs/architecture/SYSTEM_ARCHITECTURE.md §4.
+Alternatively, if schema breadth is preferred first: Assets domain schema
+& RLS, built on the pattern now proven twice over (profiles, Money) in
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10 and §13.
+
+Do not begin the next phase automatically. Awaiting review.

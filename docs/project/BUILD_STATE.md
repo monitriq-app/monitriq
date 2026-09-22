@@ -5,199 +5,214 @@ Do not mark future phases complete ahead of time.
 
 ## Current phase
 
-P0-E2-S1 — Supabase Environment, User Profile Foundation & RLS Isolation
-Harness.
+P0-E2-S2 — Money Domain Foundation, Multi-Currency Cash Engine & RLS.
 
 ## Current status
 
-**Complete.** The first user-owned table (`profiles`) exists with RLS
-enabled and deny-by-default policies, verified against a real local
-Supabase stack with a 20-test cross-user/adversarial/anonymous isolation
-suite (all passing). Remote/production validation was **not run** — no
-Monatriq Supabase project exists yet (see Supabase environment state
-below); this phase's completeness rests entirely on local validation, per
-the phase's own completion gate.
+**Complete.** The Money domain (`currencies`, `cash_buckets`,
+`financial_events`, `cash_movements`, `fx_rates`, plus five atomic
+`record_*` SQL functions and three read functions) exists with RLS
+enabled and deny-by-default policies/grants throughout, verified against a
+real local Supabase stack with a 37-assertion isolation/adversarial/
+financial-correctness suite (all passing), alongside the still-passing
+20-assertion Profile suite from P0-E2-S1 — 57/57 total. Remote/production
+validation was **not run** — no Monatriq Supabase project exists (see
+Supabase environment state below); this phase's completeness rests
+entirely on local validation, per the phase's own completion gate.
 
 ## Supabase environment state
 
-- No Monatriq Supabase project exists. The Supabase CLI on this machine is
-  authenticated and lists exactly one project — **"Nemryn"** — which
-  belongs to an unrelated client and was never linked, queried, or
-  otherwise touched by this phase.
-- No production infrastructure was provisioned (explicitly out of scope
-  without user instruction).
-- Validation instead ran against a **local** Supabase stack
-  (`supabase start`, Docker-based), initialized this phase
-  (`supabase/config.toml`). Local analytics/vector containers were disabled
-  (they require outbound network access to posthog.com, unavailable in
-  this environment) — a local-dev-only setting with no effect on schema,
-  RLS, or any deployed environment.
-- `.env.local` (gitignored, never committed) points the app at this local
-  stack. No real/production credentials exist anywhere in this repository
-  or its history.
+Unchanged from P0-E2-S1: no Monatriq Supabase project exists. The only
+project in this account, "Nemryn" (unrelated client), was never linked,
+queried, or touched. Validation ran against the same local Supabase stack
+(Docker-based), reset from migration history multiple times this phase to
+confirm reproducibility. `.env.local` (gitignored, never committed, never
+printed) points at it.
 
 ## Completed work
 
-- Verified the git repository root is `/Users/datamatics/Monatriq` with a
-  clean tree before starting (P0-E1-S2 was committed by the user between
-  sessions).
-- Reviewed `AGENTS.md`/`CLAUDE.md`: framework-generated Next.js 16
-  guidance only, no secrets, no conflict with canonical docs. Left as-is.
-- Recorded the amber/danger semantic colors approved in this phase's
-  brief as **approved application-state colors, explicitly not brand
-  colors** — updated `docs/design/VISUAL_CONSTITUTION.md` §5 and the
-  code comment in `lib/styles/tokens.css` accordingly (resolves the open
-  question from P0-E1-S2).
-- `supabase init` — created `supabase/config.toml`.
-- `supabase/migrations/20260922201924_create_profiles.sql` — the
-  `profiles` table, RLS, grants, triggers (see docs/reports for full
-  schema and rationale).
-- Ran the migration against the local stack (`supabase db reset`),
-  generated TypeScript types (`lib/supabase/database.types.ts`) via
-  `supabase gen types typescript --local`.
-- Built the Profile application layer: `lib/domain/profile/{types,
-  repository,currencies}.ts`, `lib/supabase/get-current-profile.ts`.
-- Built the onboarding flow: `app/onboarding/page.tsx`,
-  `components/onboarding/OnboardingForm.tsx`, `components/ui/Select.tsx`.
-- Extended `app/(app)/layout.tsx` with a second gate:
-  authenticated-but-not-onboarded now redirects to `/onboarding` (was
-  previously just authenticated-vs-not).
-- `app/(app)/home/page.tsx` now reads the real profile
-  (`preferred_name`/`first_name`) instead of the P0-E1-S2
-  `user_metadata` placeholder.
-- Built a 20-assertion RLS/adversarial/domain-correctness suite
-  (`supabase/tests/rls/`) — all passing against the local stack. Full
-  list in the phase report.
-- Added `npm run db:start|db:stop|db:reset|db:types|test:rls` scripts.
-- Full validation passed: `npm install`, `tsc --noEmit` (app +
-  test-harness project), `eslint .`, `next build`, all clean; every route
-  smoke-tested with `next dev` against the real local backend.
+- Verified git root and a clean working tree before starting (P0-E2-S1 was
+  committed by the user between sessions).
+- Rebuilt `.env.local` cleanly (an IDE extension had appended stray/
+  duplicate lines when the file was opened) and renamed the test-only
+  service-role variable to `SUPABASE_TEST_SERVICE_ROLE_KEY` throughout
+  (`.env.example`, the shared test harness, docs) — see Architecture
+  changes.
+- `supabase/migrations/*_create_money_domain.sql` — the full schema: see
+  `docs/architecture/MULTI_CURRENCY_MODEL.md` and
+  `docs/architecture/FINANCIAL_DOMAIN_MODEL.md §17-18` for the
+  implementation record, and the phase report for the complete
+  section-by-section detail.
+- Regenerated `lib/supabase/database.types.ts` after the final schema
+  change.
+- Built the Money application layer: `lib/domain/money/{types, repository,
+  format, conversion, bucket-types}.ts`. Currency metadata is read from the
+  new `currencies` DB table via `repository.ts`'s `listCurrencies()`, not
+  a second hardcoded list (bucket types are a small fixed set matching the
+  DB CHECK constraint, so `bucket-types.ts` stays a plain local constant).
+- Added `decimal.js` as the one arbitrary-precision decimal dependency
+  used throughout `lib/domain/money/`.
+- Refactored the P0-E2-S1 test harness: `env.ts`/`fixtures.ts`/`assert.ts`
+  moved to `supabase/tests/shared/` (used by both `rls/` and the new
+  `money/` suite) rather than duplicated; a single
+  `supabase/tests/tsconfig.json` replaces the old per-folder one.
+- Built a 37-assertion Money isolation/adversarial/correctness suite
+  (`supabase/tests/money/run.ts`) — full list in the phase report. Added
+  `npm run test:money` and a combined `npm run test`.
+- Built the foundation-level `/money` route: cash-by-currency, cash
+  buckets (with create form), record money received/spent, move money
+  (same-currency and cross-currency), recent activity. No fake/seeded
+  data — a new user sees "No cash buckets yet." / "No activity yet."
+- Added a Home/Money nav link to `AppShell`.
+- Found and fixed a second instance of the P0-E1-S2 concurrent-rendering
+  lesson: `/money/page.tsx` fetched data unconditionally, so an
+  unauthenticated visitor's concurrently-rendered page (even though the
+  layout correctly redirects them away) threw an uncaught "permission
+  denied" from a Money RPC call. Fixed the same way `/home` already
+  handled it — check `getCurrentUser()` first, return `null` if absent.
+  Caught by route-level `next dev` smoke testing, not by the build.
+- Full validation passed: fresh `supabase db reset` from migration history
+  (both migrations), `npm run typecheck`, `eslint .`, `next build` (both
+  with and without `.env.local` present), `npm run test:rls` (20/20),
+  `npm run test:money` (37/37).
 
 ## Architecture changes
 
-- **`profiles.id` = `auth.users.id`** (no separate surrogate key + unique
-  `user_id`) — the simplest correct shape for a genuine 1:1-with-user
-  table. Documented as the reference pattern in
-  `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10`, alongside when a
-  *different*-cardinality future table (e.g. `transactions`) should
-  instead use the original `user_id uuid references auth.users(id)`
-  shape.
-- **`onboarding_completed` is a stored generated column**
-  (`first_name is not null and preferred_currency is not null and
-  timezone is not null`), not a hand-maintained flag — cannot drift out
-  of sync with the fields it summarizes.
-- **`preferred_currency`/`timezone` are nullable, no default** — a
-  profile row is created at signup, before onboarding; giving these a
-  default would mean fabricating one (see Product Definition's "unknown
-  remains unknown").
-- **Row creation: `SECURITY DEFINER` trigger on `auth.users`, no
-  client-facing INSERT policy at all** on `profiles`. Chosen over (a) a
-  server-side post-signup call (real orphaned-user failure mode on a
-  dropped request) and (b) a client-callable init RPC (same failure mode,
-  plus it would need its own INSERT policy — exactly the attack surface
-  this design closes). Full rationale in the migration file header and
-  `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10-11`.
-- **Column-level GRANT, not just RLS `WITH CHECK`**, blocks ownership
-  reassignment and audit-column tampering: `authenticated` only has
-  `UPDATE` granted on `first_name, preferred_name, preferred_currency,
-  timezone` — `id` and `created_at` are outside the grant entirely, so a
-  forged payload including them fails at the permissions layer before
-  RLS is even evaluated. `updated_at` is trigger-maintained.
-- **Timezone validity is enforced by Postgres's own tz engine**
-  (`perform now() at time zone new.timezone` inside a trigger), not a
-  regex or a hand-maintained list — a CHECK constraint can't run a
-  subquery, so this is the correct DB-layer mechanism available.
-  `preferred_currency` gets a cheap regex format CHECK
-  (`^[A-Z]{3}$`); full ISO 4217 membership validation is an
-  application-layer concern (`lib/domain/profile/currencies.ts`).
-- **`"type": "module"` added to `package.json`** so the Node-executed RLS
-  test harness runs without a CJS/ESM interop warning. Verified this
-  doesn't affect the Next.js build (all config files already use
-  explicit `.mjs`/`.ts` extensions).
-- **`lib/domain/profile/{types,repository}.ts` use relative, `.ts`-
-  extensioned internal imports** instead of the `@/` alias, specifically
-  so they resolve identically under Next's bundler and under plain
-  `node` (the test harness imports `updateProfile` directly, to test the
-  exact function the onboarding form calls — not a reimplementation of
-  it). `allowImportingTsExtensions` was added to the root `tsconfig.json`
-  to permit this; it only *permits* `.ts` extensions project-wide, it
-  doesn't require them anywhere else.
-- `supabase/tests/rls/` has its own `tsconfig.json` (Node/`nodenext`
-  resolution) since it runs outside Next's bundler; excluded from the
-  root tsconfig, typechecked separately via `npm run typecheck`.
+- **`cash_buckets` has no stored balance column.** Balance is always
+  `sum(cash_movements.amount)` for non-voided events, via
+  `money_bucket_balances()`/`money_currency_totals()` — see
+  `docs/architecture/MULTI_CURRENCY_MODEL.md §5, §9`.
+- **One signed-amount convention everywhere**: `cash_movements.amount` is
+  positive (credit) or negative (debit); no separate direction column.
+- **cash_flow_class is a database-derived classification**, not
+  client-trusted — a trigger computes it from `event_type` + category, so
+  `receivable_recovery`/`asset_sale` land as `other_inflow` (not income)
+  and `debt_payment` lands as `other_outflow` (not expense), directly
+  implementing `FINANCIAL_DOMAIN_MODEL.md`'s "cash received ≠ income"
+  principle at the database layer, not just in documentation.
+- **All five `record_*` functions and all three read functions are
+  `SECURITY INVOKER`** — no elevated privilege anywhere in the Money
+  domain (contrast with Profile's necessary `SECURITY DEFINER` signup
+  trigger). Atomicity comes from each being a single PL/pgSQL transaction,
+  not from client-side sequential inserts.
+- **Cross-tenant reference protection needed an `EXISTS` check in the
+  RLS policy, not just an ownership column** — `cash_movements`
+  references both a bucket and an event, so its INSERT policy validates
+  both belong to `auth.uid()`, not just that the movement's own
+  `user_id` does. See `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §13`.
+- **A real design mistake, found by running the tests, not by review**:
+  an early version denied `SELECT` on `cash_movements` entirely, intending
+  to force all reads through text-casting functions. Since those functions
+  are `SECURITY INVOKER`, they run as the calling user and need the same
+  grant a direct query would — without it, even the user's own legitimate
+  balance read failed with "permission denied". Fixed by granting
+  `SELECT` (RLS ownership scoping is the real boundary; the precision
+  protection is an application-layer discipline, not a database-enforced
+  one) rather than switching those functions to `SECURITY DEFINER`, which
+  would have been exactly the "use DEFINER to bypass permissions" pattern
+  this project's security doc warns against. Full account in
+  `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §13`.
+- **Decimal precision, end to end**: `numeric(20,6)` for amounts,
+  `numeric(24,12)` for FX rates, a trigger rejecting any amount with more
+  fractional precision than its currency's `decimal_exponent` allows
+  (tested explicitly for JPY/0-decimal and KWD/3-decimal), read functions
+  casting to `text` to avoid PostgREST's JSON-number serialization of
+  `numeric`, and `decimal.js` for any arithmetic in TypeScript. Full
+  account in `docs/architecture/MULTI_CURRENCY_MODEL.md §6`.
+- **Idempotency**: every `record_*` function accepts an optional
+  client-generated `idempotency_key`; a retried call with the same key
+  returns the original event (partial unique index on `(user_id,
+  idempotency_key)`, plus a `unique_violation` exception handler for the
+  race window between check and insert).
+- **Correction = voiding only**, enforced as a one-way transition by a
+  trigger (`enforce_financial_event_void_only`) — no editing, no
+  automatic reversal events, this phase. `cash_movements` rows are never
+  editable at all.
+- **Test-only service-role variable renamed** `SUPABASE_SERVICE_ROLE_KEY`
+  → `SUPABASE_TEST_SERVICE_ROLE_KEY` throughout, per this phase's explicit
+  instruction — makes it visually obvious at a glance (in `.env.example`,
+  in a diff) that it's not a production/application credential.
+- **Test harness reshuffled into `supabase/tests/shared/`** so the Money
+  suite doesn't duplicate the Profile suite's env-loading/fixture/
+  assertion code — one place to get the local-only safety guard right,
+  not two.
 
 ## Known limitations
 
-- Onboarding UI was validated by: (a) the RLS suite calling the exact
-  `updateProfile()` function the form calls, against a live database, and
+- Money UI was validated by: (a) the isolation suite calling the exact
+  repository functions the UI calls, against a live database (37/37), and
   (b) `next build` + route-level smoke testing with a real backend
-  connected. It was **not** driven through a real browser (no headless
-  browser tooling was added — not justified at this phase's scope).
-- Currency list (`lib/domain/profile/currencies.ts`) is a curated ~25-code
-  subset of ISO 4217, not the full standard — extendable without a
-  migration.
-- `first_name`/`preferred_name`/`preferred_currency`/`timezone` length and
-  format constraints exist at the DB layer; no rate-limiting or abuse
-  controls on profile updates (not in scope this phase).
-- No account-deletion flow exists; `profiles` has no DELETE grant or
-  policy for anyone, including a user deleting their own row.
-- Carried over from P0-E1-S2: amber/danger tokens are approved for use
-  (per this phase's brief) but still not literally in the brand pack —
-  see `docs/design/VISUAL_CONSTITUTION.md §5` for the now-explicit
-  distinction between brand colors and semantic UI colors.
+  connected. Not driven through a real browser — same documented scope
+  boundary as P0-E2-S1's onboarding UI.
+- FX transfer fees are not automatically bundled into
+  `record_fx_transfer()` — a fee is recorded as its own `money_spent`
+  event (a fee is genuinely spending, not part of a neutral transfer),
+  not automated into one call yet. No schema change needed to support
+  this later.
+- `lib/domain/profile/currencies.ts` (the onboarding picker) and the new
+  `public.currencies` table are two separate, overlapping lists —
+  duplication not yet reconciled (see Open Questions).
+- Reporting-currency conversion (`convertToReportingCurrency()`) is built
+  and tested but not wired into any UI — no rate source is presented to
+  the user yet, so `/money` only ever shows per-currency totals.
+- No account-deletion flow for Money data any more than for Profile (no
+  DELETE grant/policy exists on any Money table for anyone).
 
 ## Current setup requirements
 
-`npm run db:start` (requires Docker) to bring up the local stack, then
-`supabase status -o env` to get the local URL/anon/service-role values for
-`.env.local` (see `.env.example` for variable names — the app needs the
-first two, the RLS suite additionally needs
-`SUPABASE_SERVICE_ROLE_KEY`). `npm run db:types` regenerates
-`lib/supabase/database.types.ts` after any migration change. `npm run
-test:rls` runs the isolation suite (refuses to run against anything that
-isn't localhost).
+Unchanged from P0-E2-S1: `npm run db:start` (Docker), populate
+`.env.local` from `supabase status -o env` (note the service-role value
+now goes under `SUPABASE_TEST_SERVICE_ROLE_KEY`, not
+`SUPABASE_SERVICE_ROLE_KEY`), `npm run db:types` after any migration
+change. `npm run test:rls` / `npm run test:money` / `npm run test` (both)
+run the isolation suites.
 
 ## Open questions
 
-1. Exact Supabase schema for Money/Assets/Goals/Decisions/Financial
-   Rules/Obligations/Receivables/Liabilities/Businesses/Valuation
-   History/Decision Assumptions/Goal Allocations/financial event log —
-   still deferred (unchanged from prior phases).
+1. Exact schema for Assets/Goals/Decisions/Financial Rules/Obligations/
+   Receivables/Liabilities/Businesses/Valuation History/Decision
+   Assumptions/Goal Allocations — still deferred.
 2. Whether "Businesses" is first-class or folded into Assets/Recurring
    Income (unchanged).
 3. Exact "Safe to Deploy" formula inputs (unchanged).
 4. Timing of the curated final Stitch/design-reference set (unchanged).
-5. **New:** when should an actual Monatriq Supabase project (dev and
-   production, kept separate) be provisioned? This phase deliberately did
-   not create one without instruction.
-6. **New:** account-deletion / GDPR-style data-removal flow is unscoped —
-   will need its own DELETE policy design when it's prioritized, not
-   before.
-7. **Resolved this phase:** `AGENTS.md`/`CLAUDE.md` — reviewed, contain
-   only generic Next.js 16 framework guidance, no secrets, no conflict
-   with canonical docs. Kept as committed.
-8. **Resolved this phase:** amber/danger token values are approved for
-   application-state use (not brand palette) — see Architecture changes.
+5. When should an actual Monatriq Supabase project be provisioned?
+   (unchanged from P0-E2-S1).
+6. Account-deletion / data-removal flow (unchanged from P0-E2-S1, now
+   applies to Money data too).
+7. **New:** reconcile `lib/domain/profile/currencies.ts` with
+   `public.currencies` — should onboarding read the DB table instead of
+   maintaining a parallel list?
+8. **New:** should FX transfer fees eventually be a single combined RPC
+   call instead of two separate ones (transfer + a manual fee entry)?
+   Left as two deliberately this phase; worth revisiting once real
+   product usage shows whether that's annoying.
 
 ## Risks
 
-1. **No production Supabase project exists.** Every future data-layer
-   phase will keep validating against local stacks only until one is
-   provisioned — fine for correctness, but means zero production
-   configuration (auth providers, email templates, custom domains, rate
-   limits) has been decided or tested yet.
-2. Onboarding's real UI has only been smoke-tested at the route/build
-   level, not driven end-to-end through a browser — see Known
-   Limitations.
-3. The curated currency list will need real product input on which
-   codes V1 actually supports before Money exists.
+1. No production Supabase project exists yet — unchanged risk from
+   P0-E2-S1, now applies to a larger schema.
+2. Money UI has only been smoke-tested at the route/build/repository-
+   function level, not driven end-to-end through a browser.
+3. The currency-list duplication (Open Question 7) could drift silently
+   if one list is updated and the other isn't — currently both are small
+   and were kept in sync by hand this phase, but that doesn't scale.
+4. `cash_movements` now has a `SELECT` grant to `authenticated` (see
+   Architecture changes) — RLS correctly scopes it to the caller's own
+   rows (proven by the isolation suite), but any future code that queries
+   this table directly (instead of through the text-casting functions)
+   would receive raw `numeric` JSON and needs to be reviewed for the
+   float-precision risk documented in
+   `docs/architecture/MULTI_CURRENCY_MODEL.md §6`.
 
 ## Next approved step
 
 Do not begin automatically. Recommended next phase (pending user review):
-**P0-E2-S2 — Money domain schema & RLS** (transactions, cash buckets),
-built directly on the now-proven `profiles` pattern
-(`docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10`), including its own
-isolation test suite before being marked complete. Provisioning a real
-Monatriq Supabase project (dev environment at minimum) is a prerequisite
-worth deciding explicitly before or alongside that phase.
+**P0-E3-S1 — Home aggregation layer** (a real, non-placeholder Home
+screen consuming `money_bucket_balances()`/`money_currency_totals()` —
+the first proof that "one shared domain calculation, multiple consumers"
+actually works across screens, per
+`docs/architecture/SYSTEM_ARCHITECTURE.md §4`) *or*, if schema breadth is
+preferred first, **Assets domain schema & RLS**, built on the now-proven
+pattern from both `profiles` and Money
+(`docs/security/SECURITY_AND_RLS_PRINCIPLES.md §10, §13`).

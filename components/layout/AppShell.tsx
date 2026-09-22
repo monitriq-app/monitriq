@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { BrandLogo } from "@/components/brand/BrandLogo";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { SignOutButton } from "@/components/auth/SignOutButton";
@@ -21,7 +22,17 @@ export async function AppShell({ children }: AppShellProps) {
     <div className="flex min-h-dvh flex-col bg-background text-text-primary">
       <header className="border-b border-border">
         <PageContainer className="flex items-center justify-between py-4">
-          <BrandLogo variant="wordmark" className="h-6 w-auto" />
+          <div className="flex items-center gap-6">
+            <BrandLogo variant="wordmark" className="h-6 w-auto" />
+            <nav className="flex items-center gap-4 text-sm text-text-secondary">
+              <Link href="/home" className="hover:text-text-primary">
+                Home
+              </Link>
+              <Link href="/money" className="hover:text-text-primary">
+                Money
+              </Link>
+            </nav>
+          </div>
           <div className="flex items-center gap-4 text-sm text-text-secondary">
             {user?.email ? <span>{user.email}</span> : null}
             <SignOutButton />

@@ -8,15 +8,22 @@ export class TestRunner {
   private results: TestResult[] = [];
 
   async run(name: string, fn: () => Promise<void>): Promise<void> {
+    await this.runValue(name, fn);
+  }
+
+  /** Same as run(), but returns the value fn resolved to (or undefined if it threw) — for setup steps later tests build on. */
+  async runValue<T>(name: string, fn: () => Promise<T> | T): Promise<T | undefined> {
     try {
-      await fn();
+      const value = await fn();
       this.results.push({ name, passed: true });
       console.log(`  ✓ ${name}`);
+      return value;
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = describeError(err);
       this.results.push({ name, passed: false, error: message });
       console.log(`  ✗ ${name}`);
       console.log(`    ${message}`);
+      return undefined;
     }
   }
 
@@ -35,6 +42,13 @@ export function assert(condition: boolean, message: string): asserts condition {
   if (!condition) {
     throw new Error(message);
   }
+}
+
+/** Supabase/Postgrest throws plain error objects, not Error instances — surface their real message instead of "[object Object]". */
+export function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === "object" && "message" in err) return String((err as { message: unknown }).message);
+  return String(err);
 }
 
 interface PostgrestLikeResult<T> {

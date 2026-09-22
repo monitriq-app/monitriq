@@ -1,0 +1,183 @@
+# Monatriq — Multi-Currency Model
+
+Status: Canonical. Established P0-E2-S2, alongside the Money domain
+(`supabase/migrations/*_create_money_domain.sql`). This document is the
+implementation record for currency, precision, and FX — the pieces of
+[FINANCIAL_DOMAIN_MODEL.md](./FINANCIAL_DOMAIN_MODEL.md) that needed more
+room than a section there.
+
+## 1. Three currency concepts, never confused
+
+- **Bucket currency** — the currency a `cash_buckets` row actually holds
+  (`cash_buckets.currency_code`). Fixed once the bucket has any
+  `cash_movements` — see §4.
+- **Movement currency** — the currency of one specific `cash_movements`
+  row. Always equal to its bucket's currency (enforced by a trigger, not
+  just convention — see §4).
+- **Reporting currency** — the user's preferred currency for consolidated
+  views (`profiles.preferred_currency`, established P0-E2-S1). A user's
+  reporting currency does not constrain which currencies their buckets can
+  hold — see §2.
+
+Monatriq is multi-currency from day one: NGN is one supported currency
+among many, never assumed.
+
+## 2. A user's buckets do not have to share a currency
+
+A user with `preferred_currency = NGN` can hold a NGN bank account, a USD
+savings bucket, and a GBP cash wallet simultaneously. Nothing about the
+schema or RLS policies constrains a user to one currency.
+
+## 3. Currency registry
+
+`public.currencies` (code, display_name, symbol, decimal_exponent) is the
+canonical identifier list — not user-owned, RLS enabled with a permissive
+read policy (public reference data, not a security boundary; see
+[SECURITY_AND_RLS_PRINCIPLES.md §10](../security/SECURITY_AND_RLS_PRINCIPLES.md#10-established-pattern-profiles-p0-e2-s1)
+for when `USING (true)` is correct rather than a shortcut). `code` (e.g.
+`USD`) is the canonical identifier everywhere in the schema; `symbol`
+(e.g. `$`) is presentation metadata only, never used for identity or
+comparison. Seeded with ~26 real ISO-4217-shaped codes spanning 0-decimal
+(JPY), 2-decimal (most), and 3-decimal (KWD) currencies — deliberately not
+a short Nigeria-centric list. Extending it is a migration that inserts a
+row, not a schema change.
+
+`lib/domain/profile/currencies.ts` (P0-E2-S1's onboarding currency picker)
+is a separate, hand-maintained list that happens to overlap with this
+registry. **Known duplication, not yet reconciled** — see Open Questions
+in the phase report. A future pass should have onboarding read from
+`public.currencies` instead.
+
+## 4. Bucket currency immutability
+
+Once a bucket has any `cash_movements`, its `currency_code` cannot change
+— enforced by `enforce_bucket_currency_immutable()` (a `BEFORE UPDATE`
+trigger), not merely documented convention. Changing a bucket from USD to
+NGN after it has history would silently reinterpret every past movement's
+meaning. A user who needs a different currency creates another bucket.
+
+## 5. No stored balance
+
+`cash_buckets` has no `balance` column. The authoritative balance is
+always `sum(cash_movements.amount)` for that bucket's non-voided events —
+see §9. This is intentional: a mutable cached balance is a second source
+of truth that can drift from the movement history; the movements are the
+ledger.
+
+## 6. Decimal precision — no floating point, anywhere
+
+- **Database**: `cash_movements.amount` is `numeric(20, 6)` — never
+  `real`/`double precision`. `fx_rates.rate` is `numeric(24, 12)` — more
+  precision than cash amounts, since a rate like 1610.234567891234 needs
+  more decimal places than any realistic cash amount does.
+- **Not every currency has 2 decimal places.** `currencies.decimal_exponent`
+  records each currency's actual convention (0 for JPY, 2 for most
+  currencies in the registry, 3 for KWD). A trigger
+  (`prepare_cash_movement()`) rejects any amount with more fractional
+  precision than its currency allows — e.g. inserting JPY 1000.50 or KWD
+  1.2345 fails at the database layer, not just in a form validator. Tested
+  explicitly in `supabase/tests/money/run.ts`.
+- **JSON transport**: PostgREST serializes a SQL `numeric` column as a
+  JSON *number* by default, which risks float64 precision loss for
+  large/precise values once a JS client's `JSON.parse` touches it. The
+  read functions in §9 (`money_bucket_balances`, `money_currency_totals`,
+  `money_recent_activity`) cast every amount to `text` in their `RETURNS
+  TABLE` shape specifically to avoid this — the value arrives in
+  TypeScript as an exact decimal string, never a parsed float. Direct
+  `SELECT` on `cash_movements` is still possible (see §10) and would not
+  get this protection; the application (`lib/domain/money/repository.ts`)
+  never does that.
+- **TypeScript**: `decimal.js` is the one arbitrary-precision decimal
+  library used throughout `lib/domain/money/` (chosen for being small,
+  mature, and the most widely used option in this space — no other
+  numeric library is used anywhere in the codebase). Every repository
+  function accepts amounts as `string`, never `number`. Writing to the
+  database goes through PostgREST's RPC call, which extracts JSON body
+  values as text before casting to the SQL parameter type — so a JSON
+  *string* amount is parsed into `numeric` exactly, with no JS float
+  round-trip, even though the generated TypeScript RPC-argument types
+  describe the parameter as `number` (a limitation of how `supabase gen
+  types` maps SQL `numeric`, not a statement about what's actually safe to
+  send — see the comment on `asNumericParam()` in `repository.ts`).
+- **Display**: `lib/domain/money/format.ts` formats using each currency's
+  own `decimal_exponent` and groups thousands via string manipulation
+  (never round-tripping through a JS `number`), always prefixed with the
+  currency code (`NGN 2,300,000`, never a bare `₦` or `$` — see
+  [VISUAL_CONSTITUTION.md §8](../design/VISUAL_CONSTITUTION.md)).
+
+## 7. FX rate convention (fixed, one direction, documented once)
+
+**rate = units of quote_currency received for 1 unit of base_currency.**
+
+Example: `base_currency = USD`, `quote_currency = NGN`, `rate = 1610`
+means 1 USD = 1610 NGN.
+
+For an executed `fx_transfer` event, `base_currency` is always the
+**source** bucket's currency and `quote_currency` is always the
+**destination** bucket's currency; `rate = destination_amount /
+source_amount` — the actual rate the user experienced, computed once,
+stored permanently.
+
+## 8. Cross-currency transfers preserve both original amounts
+
+`record_fx_transfer()` stores the exact source amount and exact
+destination amount as two separate `cash_movements` rows (one debit in the
+source currency, one credit in the destination currency) — neither is
+derived from the other after the fact, and neither is ever discarded. The
+applied rate is stored in `fx_rates` with `source = 'transaction_actual'`
+and is never overwritten by a later market rate — see §11.
+
+FX fees are not automatically bundled into a transfer this phase: if a
+bank charges a fee, it is recorded as its own `money_spent` event (the fee
+*is* spending, not part of a neutral transfer) using the existing
+`record_money_spent()` primitive — no schema change needed to support
+this, it just isn't automated into one RPC call yet.
+
+An `fx_transfer` event's `cash_flow_class` is always `transfer` — moving
+value between two currencies the same user owns is neither income nor
+spending merely because the reporting-currency-equivalent amounts differ.
+FX gain/loss accounting (revaluing an existing balance because market
+rates moved) is explicitly not implemented — out of scope until genuinely
+needed.
+
+## 9. One shared balance calculation, never re-derived per screen
+
+`money_bucket_balances()` (per bucket + currency) and
+`money_currency_totals()` (per currency, across buckets) are the only
+authoritative balance calculations. Both are `SECURITY INVOKER` SQL
+functions — Home, Money, and any future consumer call these, none
+independently sums `cash_movements`. Both exclude voided events
+(`e.voided_at is null`) and never sum across currencies — the return shape
+is always `{currency_code, amount}[]`, never a single blended number.
+
+## 10. Reporting-currency conversion: an explicit, unwired boundary
+
+`lib/domain/money/conversion.ts`'s `convertToReportingCurrency()` is the
+domain boundary for turning a set of per-currency balances into one
+reporting-currency total — but only when the caller supplies an explicit
+rate for every non-reporting currency present. Missing even one rate
+returns `{status: "not_calculated", missingRates: [...]}` rather than a
+partial or guessed total. It never calls an external FX API and never
+fabricates a rate.
+
+**Not wired into any UI this phase.** `/money` shows only `Cash by
+Currency` (§9's per-currency totals) — no consolidated single-number
+total is displayed anywhere, because no rate source (manual entry or
+otherwise) is presented to the user yet. This function exists, and is
+tested (`supabase/tests/money/run.ts`), specifically so that boundary is
+real rather than a documented-but-unenforced intention.
+
+## 11. Historical vs. current FX — never rewritten
+
+An executed `fx_transfer`'s applied rate (`fx_rates.source =
+'transaction_actual'`) is permanent. Nothing in this system ever replaces
+it with a later market rate. `fx_rates.source = 'manual'` rows are a
+separate, standalone concept: a user's own note about a rate they know
+about, not tied to any transaction (`event_id is null`), useful later for
+planning or reporting conversion (§10) — never conflated with an actually-
+applied transaction rate. Provider/bank/broker-sourced rates are an
+anticipated future `source` value; none are integrated this phase (V1 is
+manual-first, per
+[PRODUCT_DEFINITION.md](../product/PRODUCT_DEFINITION.md)) — Monatriq
+never claims a "live rate" or "current market rate" it doesn't actually
+have.

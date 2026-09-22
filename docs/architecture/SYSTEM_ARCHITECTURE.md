@@ -30,11 +30,12 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E2-S1,
-`lib/supabase/`, `lib/domain/profile/`, `supabase/migrations/`, and
-`supabase/tests/rls/` exist for real (the first, `profiles`, domain);
-`lib/types/` and the rest of `lib/domain/` remain future work, created when
-their owning phase needs them:
+This is a target layout to build toward incrementally. As of P0-E2-S2,
+`lib/supabase/`, `lib/domain/profile/`, `lib/domain/money/`,
+`supabase/migrations/`, and `supabase/tests/{shared,rls,money}/` exist for
+real; `lib/types/` and the rest of `lib/domain/` (Assets, Goals, Decisions,
+Financial Rules) remain future work, created when their owning phase needs
+them:
 
 ```
 app/                    Next.js routes (Home, Money, Quick Add, Assets,
@@ -100,8 +101,15 @@ data-loading functions backed by them) for at least:
 
 Home, Money, Assets, Goals, and Decisions all call into this layer rather
 than querying raw tables and recomputing independently. This is a design
-constraint for future implementation phases, not code delivered in this
-phase.
+constraint for future implementation phases.
+
+**First concrete instance (P0-E2-S2):** cash position is implemented as
+`money_bucket_balances()`/`money_currency_totals()` (SQL functions,
+`lib/domain/money/repository.ts`'s thin wrapper) — `/money` and any future
+consumer (Home, Decisions) call these, none re-sums `cash_movements`
+independently. Net worth, Safe to Deploy, goal allocation, obligations,
+and recurring income remain future work — no Assets/Goals/Financial Rules
+schema exists yet.
 
 ## 5. Financial event / audit layer
 
@@ -114,15 +122,24 @@ blockchain-style structure. State is always read from normal tables; the
 event log exists for traceability and later expected-vs-actual comparisons
 in Decisions.
 
+**Implemented for Money (P0-E2-S2)** as `financial_events` +
+`cash_movements`, created atomically by `SECURITY INVOKER` SQL functions
+(a real PostgreSQL transaction boundary, not sequential client-side
+inserts) — see
+[FINANCIAL_DOMAIN_MODEL.md §17](./FINANCIAL_DOMAIN_MODEL.md#17-money-domain-implementation-summary-p0-e2-s2).
+
 ## 6. Multi-currency posture
 
-Currency is a per-user profile field (see
-[PRODUCT_DEFINITION.md §6](../product/PRODUCT_DEFINITION.md#6-currency-and-time)).
-V1 reports in one currency per user. The schema should store a currency
-code alongside monetary values (rather than assuming a single global
-currency implicitly) so that future cross-currency support does not require
-a breaking migration — without building conversion/FX logic that V1 does
-not need.
+**Superseded by implementation (P0-E2-S2)** — full detail in
+[MULTI_CURRENCY_MODEL.md](./MULTI_CURRENCY_MODEL.md). This section
+originally (P0-E1-S1) planned for currency support to be added later
+without a breaking migration; Money was instead built multi-currency from
+the start, per explicit product direction — a user can hold NGN, USD, GBP,
+and other buckets simultaneously, with real cross-currency transfers and
+FX rate recording (manual-first: no live provider this phase). A user's
+`profiles.preferred_currency` (P0-E2-S1) remains their *reporting*
+currency default — a separate concept from which currencies their buckets
+actually hold (see MULTI_CURRENCY_MODEL.md §1-2).
 
 ## 7. Brand asset placement
 

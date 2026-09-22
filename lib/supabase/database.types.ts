@@ -38,6 +38,283 @@ export type Database = {
   }
   public: {
     Tables: {
+      cash_buckets: {
+        Row: {
+          bucket_type: string
+          created_at: string
+          currency_code: string
+          id: string
+          is_archived: boolean
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bucket_type: string
+          created_at?: string
+          currency_code: string
+          id?: string
+          is_archived?: boolean
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bucket_type?: string
+          created_at?: string
+          currency_code?: string
+          id?: string
+          is_archived?: boolean
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_buckets_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      cash_movements: {
+        Row: {
+          amount: number
+          bucket_id: string
+          created_at: string
+          currency_code: string
+          event_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          bucket_id: string
+          created_at?: string
+          currency_code: string
+          event_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          bucket_id?: string
+          created_at?: string
+          currency_code?: string
+          event_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_movements_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "cash_buckets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "cash_movements_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "financial_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      currencies: {
+        Row: {
+          code: string
+          created_at: string
+          decimal_exponent: number
+          display_name: string
+          symbol: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          decimal_exponent: number
+          display_name: string
+          symbol: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          decimal_exponent?: number
+          display_name?: string
+          symbol?: string
+        }
+        Relationships: []
+      }
+      financial_events: {
+        Row: {
+          cash_flow_class: string
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          received_category_code: string | null
+          spending_category_code: string | null
+          updated_at: string
+          user_id: string
+          voided_at: string | null
+        }
+        Insert: {
+          cash_flow_class: string
+          created_at?: string
+          description?: string | null
+          event_type: string
+          id?: string
+          idempotency_key?: string | null
+          occurred_at: string
+          received_category_code?: string | null
+          spending_category_code?: string | null
+          updated_at?: string
+          user_id: string
+          voided_at?: string | null
+        }
+        Update: {
+          cash_flow_class?: string
+          created_at?: string
+          description?: string | null
+          event_type?: string
+          id?: string
+          idempotency_key?: string | null
+          occurred_at?: string
+          received_category_code?: string | null
+          spending_category_code?: string | null
+          updated_at?: string
+          user_id?: string
+          voided_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_events_received_category_code_fkey"
+            columns: ["received_category_code"]
+            isOneToOne: false
+            referencedRelation: "money_received_categories"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "financial_events_spending_category_code_fkey"
+            columns: ["spending_category_code"]
+            isOneToOne: false
+            referencedRelation: "money_spending_categories"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      fx_rates: {
+        Row: {
+          base_currency: string
+          created_at: string
+          event_id: string | null
+          id: string
+          quote_currency: string
+          rate: number
+          rate_as_of: string
+          source: string
+          user_id: string | null
+        }
+        Insert: {
+          base_currency: string
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          quote_currency: string
+          rate: number
+          rate_as_of: string
+          source: string
+          user_id?: string | null
+        }
+        Update: {
+          base_currency?: string
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          quote_currency?: string
+          rate?: number
+          rate_as_of?: string
+          source?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fx_rates_base_currency_fkey"
+            columns: ["base_currency"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "fx_rates_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "financial_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fx_rates_quote_currency_fkey"
+            columns: ["quote_currency"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      money_received_categories: {
+        Row: {
+          cash_flow_class: string
+          code: string
+          created_at: string
+          display_name: string
+        }
+        Insert: {
+          cash_flow_class: string
+          code: string
+          created_at?: string
+          display_name: string
+        }
+        Update: {
+          cash_flow_class?: string
+          code?: string
+          created_at?: string
+          display_name?: string
+        }
+        Relationships: []
+      }
+      money_spending_categories: {
+        Row: {
+          cash_flow_class: string
+          code: string
+          created_at: string
+          display_name: string
+        }
+        Insert: {
+          cash_flow_class: string
+          code: string
+          created_at?: string
+          display_name: string
+        }
+        Update: {
+          cash_flow_class?: string
+          code?: string
+          created_at?: string
+          display_name?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -76,7 +353,188 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      money_bucket_balances: {
+        Args: never
+        Returns: {
+          balance: string
+          bucket_id: string
+          currency_code: string
+        }[]
+      }
+      money_currency_totals: {
+        Args: never
+        Returns: {
+          balance: string
+          currency_code: string
+        }[]
+      }
+      money_recent_activity: {
+        Args: { p_limit?: number }
+        Returns: {
+          amount: string
+          bucket_id: string
+          cash_flow_class: string
+          currency_code: string
+          description: string
+          event_id: string
+          event_type: string
+          movement_id: string
+          occurred_at: string
+          received_category_code: string
+          spending_category_code: string
+          voided_at: string
+        }[]
+      }
+      record_fx_transfer: {
+        Args: {
+          p_description?: string
+          p_destination_amount: number
+          p_destination_bucket_id: string
+          p_idempotency_key?: string
+          p_occurred_at?: string
+          p_source_amount: number
+          p_source_bucket_id: string
+        }
+        Returns: {
+          cash_flow_class: string
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          received_category_code: string | null
+          spending_category_code: string | null
+          updated_at: string
+          user_id: string
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_money_received: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_category_code: string
+          p_description?: string
+          p_idempotency_key?: string
+          p_occurred_at?: string
+        }
+        Returns: {
+          cash_flow_class: string
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          received_category_code: string | null
+          spending_category_code: string | null
+          updated_at: string
+          user_id: string
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_money_spent: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_category_code: string
+          p_description?: string
+          p_idempotency_key?: string
+          p_occurred_at?: string
+        }
+        Returns: {
+          cash_flow_class: string
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          received_category_code: string | null
+          spending_category_code: string | null
+          updated_at: string
+          user_id: string
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_opening_balance: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_description?: string
+          p_idempotency_key?: string
+          p_occurred_at?: string
+        }
+        Returns: {
+          cash_flow_class: string
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          received_category_code: string | null
+          spending_category_code: string | null
+          updated_at: string
+          user_id: string
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_transfer: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_destination_bucket_id: string
+          p_idempotency_key?: string
+          p_occurred_at?: string
+          p_source_bucket_id: string
+        }
+        Returns: {
+          cash_flow_class: string
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          received_category_code: string | null
+          spending_category_code: string | null
+          updated_at: string
+          user_id: string
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never

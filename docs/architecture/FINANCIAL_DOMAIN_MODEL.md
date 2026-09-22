@@ -1,7 +1,11 @@
 # Monatriq — Financial Domain Model
 
-Status: Canonical. Established P0-E1-S1. Conceptual model only — no schema
-or migrations are implemented in this phase.
+Status: Canonical. Established P0-E1-S1. The Money domain (§3, §16, §17,
+§18) is now implemented — see
+`supabase/migrations/*_create_money_domain.sql` and
+[MULTI_CURRENCY_MODEL.md](./MULTI_CURRENCY_MODEL.md) for the full
+implementation record. Everything else in this document (Assets, Goals,
+Decisions, Financial Rules) remains conceptual — no schema exists yet.
 
 ## 1. Core rule: one financial domain model
 
@@ -47,6 +51,13 @@ An event is not a full event-sourced ledger (we do not replay events to
 derive state) — state lives in normal relational tables. The event log is a
 secondary, append-only record of what changed and why, used for audit,
 explainability, and the future expected-vs-actual comparison in Decisions.
+
+**Implemented for Money (P0-E2-S2)** as `public.financial_events` +
+`public.cash_movements`: one event, one or more signed-amount movements,
+created atomically by a `SECURITY INVOKER` SQL function per event type
+(`record_opening_balance`, `record_money_received`, `record_money_spent`,
+`record_transfer`, `record_fx_transfer` — see §17). Correction is voiding
+(`voided_at`), not editing or deletion — see §18.
 
 ## 4. Asset value concepts (must not collapse)
 
@@ -237,4 +248,54 @@ long as traceability and integrity hold.
 
 A transfer between the user's own cash buckets is never counted as income,
 spending, or a net-worth change. It only moves the location of the same
-cash.
+cash. This holds for same-currency transfers and cross-currency (FX)
+transfers alike — see §17 and
+[MULTI_CURRENCY_MODEL.md](./MULTI_CURRENCY_MODEL.md).
+
+## 17. Money domain implementation summary (P0-E2-S2)
+
+Full detail lives in `supabase/migrations/*_create_money_domain.sql` and
+[MULTI_CURRENCY_MODEL.md](./MULTI_CURRENCY_MODEL.md). Summary:
+
+- **Cash buckets** (`cash_buckets`) hold no stored balance — the
+  authoritative balance is always derived from movements (§5 of this
+  document's general principle, applied concretely). Currency is fixed
+  once a bucket has history.
+- **Classification is database-derived, not client-trusted.** Every
+  `financial_events` row gets a `cash_flow_class` (`income`,
+  `other_inflow`, `expense`, `other_outflow`, `transfer`,
+  `opening_balance`) computed by a trigger from `event_type` + category —
+  never guessed from an amount's sign, and never something the client can
+  set directly. `money_received`/`money_spent` events carry a category
+  (`money_received_categories`/`money_spending_categories` — the exact
+  lists from this phase's brief); a category's `cash_flow_class` is what
+  actually determines the event's classification, which is how
+  `receivable_recovery` and `asset_sale` land as `other_inflow` (not
+  `income`) and `debt_payment` lands as `other_outflow` (not `expense`) —
+  directly implementing §5's "cash received ≠ income" and "cash out ≠
+  spending" principle.
+- **Same-currency transfers and cross-currency (FX) transfers** are both
+  `cash_flow_class = 'transfer'` — never income or expense regardless of
+  how the reporting-currency-equivalent amounts compare (§16).
+- **Idempotency**: every `record_*` function accepts an optional client-
+  generated `idempotency_key`; a retried call with the same key returns
+  the original event rather than creating a duplicate (partial unique
+  index on `(user_id, idempotency_key)`).
+- Every `record_*` function is `SECURITY INVOKER` — none of the Money
+  domain uses elevated privilege. See
+  [SECURITY_AND_RLS_PRINCIPLES.md §10-11](../security/SECURITY_AND_RLS_PRINCIPLES.md).
+
+## 18. Correction / voiding strategy (Money, P0-E2-S2)
+
+For this phase, the only supported correction to a recorded financial
+event is **voiding** it (`financial_events.voided_at`), enforced as a
+one-way transition by `enforce_financial_event_void_only()`: a voided
+event cannot be un-voided, and no column except `voided_at` can change on
+an existing event. A voided event's movements are excluded from every
+balance calculation but are never deleted — the record that something was
+entered and later voided is itself part of the audit trail (§15).
+Editing event contents in place and generating an automatic reversal event
+are both explicitly deferred, not built this phase — voiding is the
+minimum viable correction mechanism, not the final one. `cash_movements`
+rows are never editable at all; the only way to change what an event
+recorded is to void it.

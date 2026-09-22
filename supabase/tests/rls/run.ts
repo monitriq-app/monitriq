@@ -9,14 +9,14 @@
  * Usage: npm run db:start   (once)
  *        npm run test:rls
  */
-import { loadTestEnv } from "./env.ts";
-import { setupFixtures } from "./fixtures.ts";
-import { TestRunner, assert, expectSuccess, expectFilteredToEmpty, expectDenied } from "./assert.ts";
+import { loadTestEnv } from "../shared/env.ts";
+import { setupFixtures } from "../shared/fixtures.ts";
+import { TestRunner, assert, expectSuccess, expectFilteredToEmpty, expectDenied } from "../shared/assert.ts";
 import { updateProfile } from "../../../lib/domain/profile/repository.ts";
 
 async function main() {
   const env = loadTestEnv();
-  const fixtures = await setupFixtures(env);
+  const fixtures = await setupFixtures(env, "profile-rls");
   const { userA, userB, anonClient } = fixtures;
   const runner = new TestRunner();
 
