@@ -367,3 +367,22 @@ obligation's currency must exactly equal its funding goal's currency
 server-side from the bucket at override time, never client-supplied.
 Neither table defines its own currency logic; both import from
 `lib/domain/currency/` exclusively.
+
+## 22. Decisions and cross-currency scenarios
+
+`decision_scenarios.currency_code` is fixed at creation; `source_bucket_
+id`/`destination_bucket_id`, when set, must match it exactly
+(trigger-enforced) — the same same-currency-only discipline as every
+prior domain, never an implicit conversion. A Decision's scenarios may
+individually be denominated in different currencies (one scenario in
+USD, another in NGN, under the same Decision), and each is evaluated
+entirely in its own native currency — never blended.
+
+A consolidated reporting-currency figure for one scenario's net
+immediate cash delta (`convertScenarioNetDeltaToReportingCurrency()` in
+`lib/domain/decisions/aggregate.ts`) is available only when an explicit
+rate is supplied for its native currency (or it already is the reporting
+currency) — reusing `convertToReportingCurrency()` (§10), the same
+function Rules' own reporting-currency aggregation (§20) uses. Missing
+the required rate returns `not_calculated`, never a guessed conversion.
+No live FX integration exists, and none is added this phase.

@@ -463,3 +463,46 @@ worked-case tests, fixed by wrapping the division in `round(..., 6)`.
 (or the currency's actual decimal places, where known) — unlike
 multiplication, addition, or subtraction, division does not preserve the
 operands' scale.**
+
+## 19. Established pattern: Decisions engine (P0-E2-S7)
+
+`supabase/migrations/*_create_decisions_domain.sql` reuses every
+established pattern from §10-18 across a seventh domain, and surfaces
+one new plpgsql lesson:
+
+- **A plpgsql `RECORD` variable that no `SELECT INTO` has ever touched
+  has no defined row structure at all — referencing any of its fields
+  raises "record is not assigned yet," a different failure mode from a
+  query that ran but matched zero rows (which correctly leaves every
+  field NULL while the record itself stays valid and readable).**
+  `evaluate_decision_scenario()` conditionally populated `v_asset`/
+  `v_hyp` only inside `if <condition> is not null then select ... into
+  v_asset/v_hyp ... end if` blocks — when the condition was false (no
+  linked asset, no bucket to evaluate), the variable was never assigned
+  at all, and the function's own `RETURN QUERY SELECT` (which
+  unconditionally reads `v_asset.cost_basis`, `v_hyp.minimum_cash_floor_
+  status`, etc.) failed outright. Caught by the new test suite's cases
+  with no linked asset/no bucket (four failures, all "record ... is not
+  assigned yet"), fixed two different ways depending on whether the
+  underlying call can safely run unconditionally: `v_asset` comes from
+  `asset_summary()`, which never raises for a filter that matches zero
+  rows, so removing its `if` guard entirely and letting `where asset_id
+  = <possibly null>` naturally return no rows was sufficient. `v_hyp`
+  comes from `evaluate_hypothetical_bucket_liquidity()`, which DOES
+  raise an exception for a bucket it can't find (by design — see §12's
+  ownership-check discipline), so it cannot be called unconditionally
+  with a possibly-null id; its `else` branch instead assigns `v_hyp` an
+  explicit all-null row via `SELECT null::uuid AS bucket_id, null::text
+  AS currency_code, ... INTO v_hyp` — critically, WITH explicit column
+  aliases matching the real function's output names exactly, since a
+  record populated from unaliased literals has no named fields at all
+  and every `v_hyp.<field>` reference would still fail, just with a
+  different error ("record has no field ..."), caught by a second round
+  of the same tests. **Rule going forward: any plpgsql `RECORD` variable
+  that is only conditionally populated must have an unconditional
+  fallback assignment (either by removing the guard when the source
+  query is safe to run empty, or via an explicitly-column-aliased
+  literal `SELECT ... INTO`) before any of its fields are referenced
+  outside the block that populated it — a bare `IF ... THEN SELECT ...
+  INTO v_x; END IF;` with no `ELSE` is never safe if `v_x` is read
+  later unconditionally.**

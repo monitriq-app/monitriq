@@ -1,0 +1,602 @@
+MONATRIQ — PHASE REPORT
+P0-E2-S7 — DECISIONS ENGINE, SCENARIO EVALUATION & DECISION JOURNAL
+========================================================================
+
+1. PHASE
+------------------------------------------------------------------------
+P0-E2-S7 — Decisions Engine, Scenario Evaluation & Decision Journal.
+
+2. STATUS
+------------------------------------------------------------------------
+COMPLETE. All 67 test-matrix items plus the dedicated advisory-language
+check are covered by the 70 assertions in the new Decisions suite; all
+nine domain suites pass after a fresh `supabase db reset` (360/360
+total). Lint, typecheck (app and test harness), and both production-
+build modes pass. The migration was deployed to the real remote
+"Monatriq Dev" project and its sync was verified. No code was committed
+or pushed — the working tree is fully unstaged, as instructed.
+
+3. OBJECTIVE
+------------------------------------------------------------------------
+Build Monatriq's Decisions domain so it can answer "what happens
+financially if I do this?" without deciding for the user, ranking
+choices, creating financial advice, fabricating assumptions, or
+executing anything merely because the user chose "Proceed." Every
+established domain function (cash balances, asset values, liability
+balances, goal progress, protected allocations, obligation coverage,
+Safe to Deploy, FX conversion) is treated as canonical and reused
+directly — none is independently recreated inside Decisions.
+
+4. REPOSITORY STATE
+------------------------------------------------------------------------
+Branch: main. Working tree: 8 modified files, 5 new
+directories/files (untracked), all unstaged, nothing committed. This
+builds on top of P0-E2-S4 through S6A's still-uncommitted changes, per
+the standing "do not commit, stop for review" instruction across recent
+phases. Git identity: user "maaklin" <maaklinapp@gmail.com> (unchanged;
+not used this phase since nothing was committed).
+
+5. SUPABASE ENVIRONMENT
+------------------------------------------------------------------------
+Local: Docker-based Supabase stack (`npm run db:start`), reset three
+times this phase via `supabase db reset`, applying all 9 migrations from
+a clean state each time.
+
+Remote: "monatriq's Project" (ref mvnwrkfcszazqqccmmxq), already linked
+at the start of this phase (confirmed in P0-E2-S3, carried forward
+through every subsequent phase — no new confirmation was required or
+sought this phase). Treated throughout as DEVELOPMENT, never production.
+`supabase db reset` was never run against it.
+
+6. FILES CREATED
+------------------------------------------------------------------------
+supabase/migrations/20260924100000_create_decisions_domain.sql
+lib/domain/decisions/types.ts
+lib/domain/decisions/repository.ts
+lib/domain/decisions/aggregate.ts
+app/(app)/decisions/page.tsx
+app/(app)/decisions/[decisionId]/page.tsx
+components/decisions/DecisionList.tsx
+components/decisions/CreateDecisionForm.tsx
+components/decisions/CreateScenarioForm.tsx
+components/decisions/ScenarioEvaluationPanel.tsx
+components/decisions/DecisionJournal.tsx
+supabase/tests/decisions/run.ts
+docs/reports/P0-E2-S7-decisions-engine-foundation.txt (this file)
+
+7. FILES MODIFIED
+------------------------------------------------------------------------
+components/layout/AppShell.tsx           (+3: Decisions nav link)
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md   (+234: §10 pointers, new §34-40)
+docs/architecture/MULTI_CURRENCY_MODEL.md     (+19: new §22)
+docs/architecture/SYSTEM_ARCHITECTURE.md      (+43: repository layout, §4, §5)
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md  (+43: new §19)
+docs/project/BUILD_STATE.md                   (rewritten for this phase)
+lib/supabase/database.types.ts                (regenerated, +494)
+package.json                                  (test:decisions script)
+
+8. MIGRATIONS
+------------------------------------------------------------------------
+One new migration:
+supabase/migrations/20260924100000_create_decisions_domain.sql. Five new
+tables (decision_types, decisions, decision_scenarios, decision_choices,
+decision_scenario_evaluations), one new shared function
+(evaluate_hypothetical_bucket_liquidity()), evaluate_proposed_cash_use()
+recreated via CREATE OR REPLACE (unchanged signature, refactored body),
+and the Decisions creation/evaluation/journal RPCs and read models.
+Applied cleanly at the schema level on all three resets this phase; two
+real logic bugs were found and fixed in evaluate_decision_scenario()'s
+plpgsql body between resets (see §39/Validation).
+
+9. DECISION SCHEMA
+------------------------------------------------------------------------
+`decisions` (id, user_id, decision_type_code, name, description,
+linked_asset_id, linked_liability_id, status, timestamps). `status`
+(active/closed/archived) is lifecycle only; the user's actual conclusion
+lives entirely separately in `decision_choices` — the two are never
+collapsed into one field. `linked_asset_id`/`linked_liability_id`
+identify the Decision's subject "where applicable," shared by every
+scenario under it, cross-tenant-validated via both RLS policy EXISTS
+checks and the create_decision() RPC's own explicit lookups. Neither
+link is type-enforced by a CHECK constraint — deliberately, so "Other"
+stays flexible and the link is a UI/product concern, not a database
+invariant.
+
+10. DECISION-TYPE STRATEGY
+------------------------------------------------------------------------
+`decision_types` is a public, extensible registry (buy_asset,
+sell_asset, repair_improve_asset, business_investment,
+large_personal_purchase, use_savings, take_debt, pay_down_debt,
+start_new_venture, other) — purely descriptive labels, the same
+"registry vs. math" decoupling already established for
+goal_types/liability_types. The registry never drives calculation logic
+directly; `evaluate_decision_scenario()` branches on `decision_type_code`
+only for a small number of type-specific derived figures (projected
+profit/loss for sell_asset, basis-after-improvement for
+repair_improve_asset, hypothetical outstanding for pay_down_debt).
+
+11. SCENARIO ARCHITECTURE
+------------------------------------------------------------------------
+`decision_scenarios` (one or more per Decision, user-named, one scenario
+is a fully valid decision on its own) carries its own `currency_code`
+(fixed at creation) and optional `source_bucket_id`/`destination_
+bucket_id` (must match the scenario's currency exactly, trigger-
+enforced, cross-tenant-validated). Scenario comparison is presented by
+evaluating each scenario under one Decision independently and showing
+them side by side — no SQL-level "compare" function, no ranking.
+
+12. INPUT/ASSUMPTION ARCHITECTURE
+------------------------------------------------------------------------
+Neither of the two anti-patterns the phase brief warned against: not a
+giant per-decision-type column explosion, not a JSONB/EAV bag of
+authoritative numbers. `decision_scenarios` has a moderate set of
+strongly-typed numeric(20,6) columns, each with ONE clear economic role
+reused BY NAME across every decision type that needs it:
+  cash_required           -- buy_asset (purchase price), repair_improve_
+                              asset (repair cost), business_investment/
+                              start_new_venture (investment amount),
+                              large_personal_purchase/use_savings (amount)
+  acquisition_costs       -- buy_asset only
+  gross_proceeds/proceeds_costs -- sell_asset (sale price/selling costs),
+                              take_debt (proposed principal/fees deducted)
+  debt_principal_payment/debt_interest_payment/debt_fee_payment
+                          -- pay_down_debt only, mirroring Liabilities'
+                              own three-component vocabulary exactly
+  interest_rate/term_months/monthly_payment_assumption/collateral_note
+                          -- take_debt only, recorded not computed from
+  expected_value_assumption      -- buy_asset, repair_improve_asset,
+                                     business_investment, start_new_venture
+  expected_future_sale_value/capitalization_classification
+                          -- repair_improve_asset only
+  sale_date_assumption    -- sell_asset only
+  holding_period_months   -- generic timing assumption
+`total_cash_required`/`net_proceeds` are DERIVED at evaluation time,
+never stored — a scenario simply populates whichever columns apply;
+unused columns stay null and contribute nothing. JSONB is used ONLY for
+the immutable evaluation-snapshot audit trail, never as an authoritative
+arithmetic source.
+
+13. FACTS VS ASSUMPTIONS VS DERIVED VALUES
+------------------------------------------------------------------------
+Kept structurally distinct at both the SQL return shape and the
+TypeScript type level, with explicit section comments in both. Facts
+(linked_asset_cost_basis, linked_asset_latest_value, linked_liability_
+outstanding_principal, source/destination_bucket_balance) are read LIVE
+from asset_summary()/liability_outstanding_principal()/cash_movements on
+every call — never copied into a scenario's own columns. Assumptions
+(cash_required, gross_proceeds, expected_value_assumption, ...) are
+echoed back exactly as entered — never auto-substituted; verified
+explicitly that a sell-asset scenario with no gross_proceeds entered
+reports net_proceeds=null rather than silently using the asset's
+target_value or quick_sale_estimate. Derived values (total_cash_
+required, net_proceeds, net_immediate_cash_delta, projected_gross_
+profit_loss, hypothetical_liability_outstanding_after, basis_after_
+capitalized_improvement, the whole Safe-to-Deploy before/after block)
+are computed fresh every evaluation, never stored, and null (never a
+fabricated zero) whenever a required input is missing.
+
+14. CASH-IMPACT MODEL
+------------------------------------------------------------------------
+A scenario may describe an outflow, an inflow, or neither — never
+assumed. `evaluate_decision_scenario()` determines ONE effective bucket
+and signed delta per evaluation: source-bucket-only scenarios use a
+negative delta (cash_required, possibly netted against proceeds if
+source and destination are the same bucket); destination-bucket-only
+scenarios use a positive delta (net_proceeds); a scenario naming both a
+genuinely different source and destination bucket has its source
+bucket's outflow evaluated as the primary concern, with the destination
+bucket's own balance still shown as a fact (documented scope limitation,
+see §39).
+
+15. SAFE-TO-DEPLOY INTEGRATION
+------------------------------------------------------------------------
+The central architectural move this phase: P0-E2-S6A's evaluate_
+proposed_cash_use() only ever modeled a SPEND (a positive amount,
+subtracted). Decisions needed to model an INFLOW too, and the brief
+explicitly forbade forking the formula. The fix: the shared rule-
+relationship logic was extracted into a new sign-agnostic function,
+evaluate_hypothetical_bucket_liquidity(bucket_id, delta), which accepts
+any sign and internally calls safe_to_deploy_by_currency() twice (real
+state, then with the delta applied) — exactly S6A's "one calculation
+model" discipline, extended one layer up. evaluate_proposed_cash_use()
+became a thin wrapper over it (negating a positive spend before
+calling), with its public signature and return shape completely
+unchanged — verified by the full, unmodified P0-E2-S6/S6A test suite
+(155 assertions) continuing to pass against the refactor.
+evaluate_decision_scenario() calls the same shared function directly for
+every liquidity/rule-conflict figure it returns.
+
+16. ASSET-DECISION BEHAVIOR
+------------------------------------------------------------------------
+Sell asset: facts from asset_summary() (cost basis, latest value, quick-
+sale estimate, target value); net_proceeds and projected_gross_profit_
+loss = net_proceeds - cost_basis are derived from the user's OWN gross_
+proceeds/proceeds_costs assumptions, never auto-filled from target_value
+or quick_sale_estimate (verified explicitly). The asset itself is never
+archived, sold, or basis-adjusted by evaluating or saving a scenario
+(verified explicitly, including a direct cost-basis re-check after
+saving). Buy asset: no Asset row is ever created (verified explicitly).
+Repair/improve asset: capitalization_classification is an explicit,
+user-chosen field — Monatriq never decides automatically whether a
+repair capitalizes; basis_after_capitalized_improvement is a projected
+preview only, computed exclusively when classification='capital_
+improvement', and the real asset basis is never mutated (verified
+explicitly, including a paired 'expense'-classified scenario confirming
+no projection is shown).
+
+17. LIABILITY-DECISION BEHAVIOR
+------------------------------------------------------------------------
+Take debt: no Liability row is ever created by evaluating or saving a
+take-debt scenario (verified explicitly); interest_rate/term_months/
+monthly_payment_assumption are recorded assumptions only, no
+amortization schedule is computed. Pay down debt: linked_liability_
+outstanding_principal comes live from liability_outstanding_principal()
+— the exact function Liabilities' own read models use; hypothetical_
+liability_outstanding_after = outstanding - debt_principal_payment is a
+pure projection; evaluating or saving a scenario never calls
+record_debt_payment() or otherwise changes the liability's real
+outstanding principal (verified explicitly: the liability's real balance
+is re-read after saving and confirmed unchanged).
+
+18. GENERIC/BUSINESS DECISION BEHAVIOR
+------------------------------------------------------------------------
+Business investment / start new venture: since no dedicated Businesses
+domain exists yet, neither type fabricates a business valuation or
+entity — only the proposed cash outflow and its liquidity/rule effects
+are evaluated like any other outflow scenario, with expected_value_
+assumption shown plainly as a user assumption, never claimed as a
+resulting market value (verified explicitly: creating and evaluating a
+business_investment scenario creates no new table row beyond the
+scenario itself, and moves no real cash). Large personal purchase / use
+savings: evaluated purely as a cash requirement against Safe to Deploy
+and protected-fund rules, with zero moral framing. Other: a restrained
+generic scenario using the same typed columns as every other type — not
+an arbitrary untyped escape hatch.
+
+19. MULTI-CURRENCY BEHAVIOR
+------------------------------------------------------------------------
+Each scenario's currency_code is fixed at creation; linked buckets must
+match it exactly (trigger-enforced, same discipline as every prior
+domain). Different scenarios under one Decision may be denominated in
+different currencies and are evaluated entirely independently — never
+blended. A reporting-currency conversion of one scenario's net
+immediate cash delta (convertScenarioNetDeltaToReportingCurrency() in
+lib/domain/decisions/aggregate.ts) requires an explicit rate, reusing
+convertToReportingCurrency() — the same function Rules' own reporting
+aggregation uses — and returns not_calculated when a rate is missing.
+JPY (0-decimal) and KWD (3-decimal) precision are both enforced via the
+same BEFORE INSERT/UPDATE trigger pattern established throughout.
+
+20. SCENARIO-COMPARISON MODEL
+------------------------------------------------------------------------
+Multiple scenarios under one Decision are evaluated independently and
+presented side by side by the application layer — there is no SQL-level
+"compare" function and no ranking anywhere. Verified explicitly with two
+structurally distinct repair-vs-sell scenarios: their factual cash
+requirements differ (comparable), and neither evaluation result object
+contains a rank/score/winner/recommendation/isBest/isRecommended field
+at any layer — checked via `Object.keys()` on the actual returned
+object, not merely by inspecting values.
+
+21. EVALUATION-SNAPSHOT MODEL
+------------------------------------------------------------------------
+evaluate_decision_scenario() is a pure, un-persisted read. save_
+decision_scenario_evaluation() calls that same read and freezes the
+complete result (to_jsonb() of the record) into decision_scenario_
+evaluations — append-only, no UPDATE/DELETE grant exists on the table at
+all (verified: a direct update is rejected by grant absence, not merely
+a policy). The snapshot preserves the facts/assumptions/derived
+distinction and every rule-relationship field (verified by inspecting
+the saved JSON's own keys).
+
+22. RE-EVALUATION/HISTORY MODEL
+------------------------------------------------------------------------
+Re-evaluating and saving again APPENDS a new snapshot rather than
+overwriting the prior one — verified explicitly: two saves on the same
+scenario produce two distinct, both independently readable rows, with
+the history function returning the most recent first. "Current
+evaluation" is always the latest by evaluated_at — no is_current flag,
+the same derive-don't-duplicate discipline every prior domain follows.
+
+23. USER-CHOICE MODEL
+------------------------------------------------------------------------
+decision_choices is append-only: proceed/wait/decline/keep_reviewing,
+current choice always the latest row by created_at. Recording a Wait
+choice after an earlier Proceed preserves BOTH in history (verified
+explicitly, with decision_summary() correctly reporting the latest as
+current). Choice is deliberately separate from decisions.status
+(lifecycle) — never overloaded into one field.
+
+24. PROCEED-DOES-NOT-EXECUTE PROOF
+------------------------------------------------------------------------
+record_decision_choice() inserts exactly one row into decision_choices
+and touches nothing else — there is no code path in it capable of
+writing to another table. Verified explicitly across all four choices
+(proceed, wait, decline, keep_reviewing): bucket balances, Asset
+summaries, and Liability summaries are all confirmed byte-identical
+before and after each choice is recorded, with the proceed case
+additionally checked against all three simultaneously.
+
+25. DECISION-JOURNAL MODEL
+------------------------------------------------------------------------
+decision_choices (§23) and decision_scenario_evaluations (§21-22)
+together let the application reconstruct what was considered, what
+assumptions were used, what each evaluation showed at the time, and how
+the user's own conclusion evolved — without a second, duplicate
+transaction system. An archived Decision remains fully readable,
+including its complete choice history (verified explicitly). Actual-
+outcome (expected vs. actual) comparison is an explicit, clean extension
+point, not implemented this phase — no fake actual results exist
+anywhere.
+
+26. MISSING-INFORMATION BEHAVIOR
+------------------------------------------------------------------------
+evaluate_decision_scenario() tracks a missing_information text array
+(no_bucket_linked, no_amount_specified, no_asset_linked, no_liability_
+linked) built incrementally, never filling a genuinely missing value
+with a fabricated 0. Verified explicitly: a scenario with no bucket and
+no amount entered reports total_cash_required=null, net_proceeds=null,
+both missing-information flags present, and overall_status=
+'insufficient_information'.
+
+27. EXACT-DECIMAL STRATEGY
+------------------------------------------------------------------------
+All scenario amount columns are numeric(20,6) (interest_rate is
+numeric(7,4), the same plain-metadata treatment Liabilities established).
+No real/double precision anywhere. decision_scenarios' BEFORE INSERT/
+UPDATE trigger enforces every non-null amount's precision against the
+scenario's currency decimal_exponent — a fractional JPY cash_required
+and a 4-decimal KWD update were both tested explicitly and rejected; a
+3-decimal KWD amount was tested and accepted. All read functions cast
+monetary amounts to ::text. Exact-decimal correctness was verified with
+non-round EUR inputs (6123.45/123.45) producing an exact 6000.00 net
+proceeds and 1000.00 projected profit — no float drift.
+
+28. RLS POLICIES
+------------------------------------------------------------------------
+Every new table (decision_types, decisions, decision_scenarios,
+decision_choices, decision_scenario_evaluations) has RLS enabled
+immediately, deny-by-default, no policy granting anonymous access. All
+use auth.uid() = user_id ownership policies plus EXISTS-based cross-
+tenant checks wherever a row references another table.
+
+29. CROSS-DOMAIN REFERENCE PROTECTION
+------------------------------------------------------------------------
+decisions -> assets/liabilities (EXISTS check on both INSERT and UPDATE
+policies, plus the create_decision() RPC's own explicit lookups).
+decision_scenarios -> decisions/cash_buckets (EXISTS checks on both
+source and destination bucket references simultaneously — the same
+two-reference pattern established for goal_allocation_events).
+decision_choices -> decisions (EXISTS check). decision_scenario_
+evaluations -> decision_scenarios (EXISTS check). Every evaluation/
+choice-recording RPC re-verifies ownership of every referenced row
+inside the function body, never trusting RLS alone.
+
+30. ADVERSARIAL TESTS
+------------------------------------------------------------------------
+Cross-user read/mutate isolation on decisions, forged ownership
+rejection, anonymous access rejection, cross-tenant scenario-creation
+rejection (both via the RPC and via a raw forged insert), cross-tenant
+bucket-reference rejection, cross-tenant asset/liability-link rejection
+(at the decision level, where the reference actually lives), cross-
+tenant choice-recording rejection, cross-tenant journal/evaluation-
+reading rejection. All pass.
+
+31. FINANCIAL-INVARIANCE TESTS
+------------------------------------------------------------------------
+Creating a decision, creating a scenario, evaluating a scenario, saving
+an evaluation, and recording every one of the four choices are all
+verified to cause zero change to cash bucket balances, zero change to
+Asset row count, and zero change to Liability row count, via direct
+before/after comparison against real database state — not inferred from
+the absence of an error.
+
+32. SCENARIO FINANCIAL-CORRECTNESS TESTS
+------------------------------------------------------------------------
+Multi-bucket protected-goal effect and protected-obligation coverage
+reproduced correctly through the Decisions evaluation path (mirroring
+P0-E2-S6A's own worked case, now proven one layer up); cash-inflow
+scenario's post-bucket hypothetical state verified exact while
+confirming zero real cash was created; exact net-proceeds and profit/
+loss arithmetic; exact hypothetical liability outstanding after a
+partial principal payment; exact total-cash-required aggregation across
+the three debt-payment components. All pass with exact string-decimal
+assertions, no float tolerance.
+
+33. ADVISORY-LANGUAGE SAFEGUARDS
+------------------------------------------------------------------------
+A dedicated blocklist check (recommended, best option, winner, approved,
+rejected, good decision, bad decision, score, strong buy, "do this",
+"don't do this") is run against every string-valued field
+evaluate_decision_scenario() returns — verified to contain none.
+overall_status is verified to be strictly one of the five established
+neutral values (aligned/attention/conflict/not_configured/insufficient_
+information). A separate structural check confirms no rank/score/
+winner-style field exists in the evaluation object at all (§20). A grep-
+based search across all Decisions product/runtime source files (app,
+components, lib/domain/decisions, and the migration's own SQL) for the
+same blocklist found matches only inside code comments explicitly
+documenting the prohibition (e.g. "Never 'AI Analysis'") — never in
+runtime-reachable strings.
+
+34. REGRESSION TESTS
+------------------------------------------------------------------------
+All eight prior suites re-run against the same fresh database this
+phase: Profile/RLS 20/20, Money 37/37, Currency 11/11, Assets 28/28,
+Receivables 27/27, Liabilities 25/25, Goals 56/56, Rules/Obligations
+86/86 (including all 17 P0-E2-S6A hardening tests, unmodified) — all
+still pass, confirming the evaluate_proposed_cash_use() refactor and the
+new migration did not regress any existing domain.
+
+35. APPLICATION INTEGRATION
+------------------------------------------------------------------------
+Minimal, temporary /decisions (Active Decisions list + Create Decision
+form) and /decisions/[decisionId] (Decision Detail: Scenarios/Compare
+Scenarios, Add Scenario, Decision Journal with Record Choice) routes,
+following the established getCurrentUser() guard-first Server Component
+pattern. ScenarioEvaluationPanel renders exactly the brief's specified
+vocabulary — Facts, Your Assumptions, What This Changes, Rules, Missing
+Information — never "AI Analysis"/"Recommendation"/"Best Option"/
+"Decision Score"/"Confidence Score"/"Optimal Choice". CreateScenarioForm
+adapts its visible fields to the decision type, mirroring the pattern
+established for CreateGoalForm. No CRM/final-Stitch features. New users
+see "No decisions yet." — no seeded or demo amounts (no car/house/
+business-investment prototype decisions) anywhere in the UI or its data
+path.
+
+36. GENERATED TYPES
+------------------------------------------------------------------------
+lib/supabase/database.types.ts regenerated via `supabase gen types
+typescript --local` after the final migration state (following a fresh
+db reset). The AUTO-GENERATED header comment is present. No stray CLI
+output lines in the file.
+
+37. SECURITY REVIEW
+------------------------------------------------------------------------
+All new RPCs are SECURITY INVOKER. No new SECURITY DEFINER function was
+introduced this phase. Every RPC derives ownership from auth.uid()
+exclusively — no function trusts a caller-supplied user id. Service-role
+key usage is unchanged: still confined to supabase/tests/shared/, still
+named SUPABASE_TEST_SERVICE_ROLE_KEY, still guarded by the localhost-
+only refusal in supabase/tests/shared/env.ts (untouched this phase).
+grep across app/components/lib for service-role/service_role strings:
+zero matches outside the test harness.
+
+38. REMOTE MIGRATION STATUS
+------------------------------------------------------------------------
+supabase db push --linked --dry-run reviewed (confirmed exactly one new
+migration pending — this phase's), then supabase db push --linked
+--yes. supabase migration list --linked confirms all 9 local migration
+timestamps match remote exactly. The same benign pg-delta catalog-
+caching warning seen in every prior remote push (missing certificate
+file inside the CLI's own sandbox) appeared again and did not affect
+schema application. No supabase db reset was ever run against remote.
+
+39. VALIDATION RESULTS
+------------------------------------------------------------------------
+- Fresh supabase db reset (x3 this phase): succeeded, all 9 migrations
+  applied cleanly at the schema level every time.
+- Full test suite (9 suites): 360/360 assertions passed (Profile 20,
+  Money 37, Currency 11, Assets 28, Receivables 27, Liabilities 25,
+  Goals 56, Rules/Obligations 86, Decisions 70).
+- Two real bugs were found and fixed via the FIRST test run against the
+  new migration (before it was considered final), both confirmed absent
+  on every subsequent run: (1) evaluate_decision_scenario()'s v_asset/
+  v_hyp plpgsql RECORD variables were only conditionally assigned inside
+  `IF ... THEN SELECT INTO ... END IF` blocks with no ELSE branch —
+  referencing their fields later, when the condition was false (no
+  linked asset / no bucket to evaluate), raised "record is not assigned
+  yet"; (2) after adding an unconditional fallback for v_hyp via a
+  literal-NULL SELECT INTO, the fallback's columns lacked explicit
+  aliases, causing "record has no field ..." on the same field
+  references. Both documented as a standing rule in
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md §19.
+- The evaluate_proposed_cash_use() refactor was verified non-breaking:
+  the full, completely unmodified P0-E2-S6/S6A test suite (86
+  assertions) passed against the refactored function on every run.
+- Cross-tenant tests: decisions, scenarios (bucket references), asset/
+  liability links, choices, and journal/evaluation reads all verified
+  rejected.
+- Financial-invariance tests: all nine listed operations (create
+  decision/scenario, add assumption implicitly via scenario creation,
+  evaluate, save evaluation, four choice types, archive) verified zero
+  effect on cash/assets/liabilities.
+- Scenario financial-correctness tests: multi-bucket protected-goal and
+  obligation-coverage effects, cash-inflow hypothetical state, exact
+  net-proceeds/profit-loss/liability-outstanding arithmetic all
+  verified exact.
+- Advisory-language tests: dedicated blocklist check passed; no rank/
+  score/winner field exists in the evaluation object.
+- `npm run lint`: clean, zero warnings.
+- `npx tsc --noEmit` (app) and `npx tsc --noEmit -p
+  supabase/tests/tsconfig.json` (test harness): clean, zero errors.
+- `npm run build`: succeeds with real Supabase config — /decisions and
+  /decisions/[decisionId] both render as dynamic (ƒ) routes.
+- `npm run build` with .env.local removed: succeeds — /decisions
+  degrades to static (○); /decisions/[decisionId] remains dynamic (ƒ)
+  because it is a dynamic path segment with no generateStaticParams (an
+  inherent Next.js characteristic of dynamic routes, unrelated to
+  Supabase configuration — the page itself still correctly returns null
+  for an unauthenticated/unconfigured user without crashing).
+- Service-role exposure search (app/components/lib): zero matches.
+- Hardcoded prototype-data search (decisions app code): zero matches.
+- Advisory-language search (decisions product/runtime source, including
+  the migration SQL): matches found only inside comments explicitly
+  documenting the prohibition, never in runtime-reachable strings.
+- Capital Compass production-source search: zero matches in code files.
+- Remote migration dry-run: reviewed before push, confirmed additive and
+  safe (exactly one new migration).
+- Final git status: clean, fully unstaged, nothing committed.
+
+40. ASSUMPTIONS
+------------------------------------------------------------------------
+- linked_asset_id/linked_liability_id belong on decisions, not decision_
+  scenarios — a deliberate, documented architectural choice (the subject
+  of consideration is shared by every scenario under one Decision), not
+  a literal reading of the brief's "scenario -> asset" reference-
+  protection wording; cross-tenant protection is tested at the layer the
+  reference actually exists (§29).
+- A scenario naming two genuinely different buckets (source and
+  destination) has only its source bucket's outflow modeled through the
+  hypothetical Safe-to-Deploy chain this phase — a deliberate,
+  documented scope limitation rather than an attempt to extend the
+  shared formula to a second simultaneous override, since none of the
+  ten canonical decision types require it.
+- The remote "Monatriq Dev" project identity (confirmed in P0-E2-S3)
+  remains valid and did not need re-confirmation this phase.
+
+41. OPEN QUESTIONS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Open questions" (12 items) — most
+relevant new ones this phase:
+  - Should the two-different-buckets scope limitation be resolved with a
+    second hypothetical-override parameter, the same way P0-E2-S6A
+    resolved the multi-bucket-goal limitation?
+  - What does "actual outcome" linkage look like when eventually built?
+  - Should CreateScenarioForm's field-visibility-by-type logic move
+    server-side into decision_types metadata?
+
+42. RISKS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Risks" (5 items) — most notable: the
+documented two-different-buckets scope limitation means a scenario's
+destination-bucket inflow is shown as a fact but not combined into the
+same hypothetical Safe-to-Deploy view as the source-bucket outflow when
+they differ — a coarse, honest, but incomplete signal for that narrow
+case. Remote schema is deployed but genuinely untested there, unchanged
+posture from every prior phase.
+
+43. GIT DIFF SUMMARY
+------------------------------------------------------------------------
+8 files changed, 1011 insertions(+), 185 deletions(-):
+  components/layout/AppShell.tsx               |   3 +
+  docs/architecture/FINANCIAL_DOMAIN_MODEL.md  | 234 +++++++++
+  docs/architecture/MULTI_CURRENCY_MODEL.md    |  19 ++
+  docs/architecture/SYSTEM_ARCHITECTURE.md     |  43 ++-
+  docs/project/BUILD_STATE.md                  | 357 +++++++-------
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md |  43 +++
+  lib/supabase/database.types.ts               | 494 +++++++++++++++++++
+  package.json                                 |   3 +-
+Plus 5 new untracked paths (migration, one domain lib dir, two app
+routes, two component dirs — one test suite dir) and this report. This
+diff is layered on top of P0-E2-S4 through S6A's still-uncommitted
+changes, per the standing "do not commit" instruction across recent
+phases.
+
+44. GIT STATUS
+------------------------------------------------------------------------
+Branch: main. Nothing staged. Nothing committed. Nothing pushed. Working
+tree exactly as listed in §43 plus the untracked additions in §6 (and
+prior phases' carried-forward uncommitted changes) — no accidental
+staging occurred.
+
+45. RECOMMENDED NEXT PHASE
+------------------------------------------------------------------------
+P0-E3-S1 — Home aggregation layer, now with seven real domains (Money,
+Assets, Receivables, Liabilities, Goals, Rules/Obligations/Safe-to-
+Deploy, Decisions) to aggregate — Home can finally show a genuinely
+complete financial position, including upcoming obligations and active
+decisions, without inventing a new calculation of its own.
+Alternatively, Financial Rules could grow additional rule types now that
+Decisions proves the rule-relationship vocabulary generalizes beyond
+Rules' own UI.

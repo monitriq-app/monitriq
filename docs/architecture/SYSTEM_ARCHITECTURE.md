@@ -30,20 +30,20 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E2-S6,
+This is a target layout to build toward incrementally. As of P0-E2-S7,
 `lib/supabase/`, `lib/domain/{profile,money,assets,currency,receivables,
-liabilities,goals,rules,obligations}/`, `supabase/migrations/`, and
-`supabase/tests/{shared,rls,money,currency,assets,receivables,liabilities,
-goals,rules}/` exist for real. `lib/domain/currency/` (types, repository,
-format, conversion) is the one shared currency stack every domain imports
-from — never duplicated per domain, per
+liabilities,goals,rules,obligations,decisions}/`, `supabase/migrations/`,
+and `supabase/tests/{shared,rls,money,currency,assets,receivables,
+liabilities,goals,rules,decisions}/` exist for real. `lib/domain/currency/`
+(types, repository, format, conversion) is the one shared currency stack
+every domain imports from — never duplicated per domain, per
 [MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one),
 [§16](./MULTI_CURRENCY_MODEL.md#16-receivables-and-liabilities-reuse-the-same-currency-stack),
 [§18](./MULTI_CURRENCY_MODEL.md#18-goals-same-currency-allocation-and-the-shared-currency-stack),
+[§21](./MULTI_CURRENCY_MODEL.md#21-obligations-and-overrides-currency-handling-reuses-the-same-stack),
 and
-[§21](./MULTI_CURRENCY_MODEL.md#21-obligations-and-overrides-currency-handling-reuses-the-same-stack).
-`lib/types/` and the rest of `lib/domain/` (Decisions) remain future work,
-created when their owning phase needs them:
+[§22](./MULTI_CURRENCY_MODEL.md#22-decisions-and-cross-currency-scenarios).
+`lib/types/` remains future work, created when its owning phase needs it:
 
 ```
 app/                    Next.js routes (Home, Money, Quick Add, Assets,
@@ -141,6 +141,21 @@ hypothetical bucket-balance override applied) rather than duplicating the
 formula, eliminating the risk of the two ever drifting apart. See
 FINANCIAL_DOMAIN_MODEL.md §33A.
 
+**Extended again (P0-E2-S7).** The hypothetical-liquidity logic S6A
+extracted was itself refactored one layer deeper into a new shared,
+sign-agnostic function, `evaluate_hypothetical_bucket_liquidity()`, so
+Decisions could model a cash INFLOW (S6A's evaluator only ever modeled a
+spend) through the identical rule-relationship calculation rather than a
+third formula. `evaluate_proposed_cash_use()` is now a thin wrapper over
+it, with its own public signature and behavior fully preserved (verified
+by the complete, unmodified P0-E2-S6/S6A suite continuing to pass).
+`evaluate_decision_scenario()` — the Decisions evaluation boundary — is
+itself a further consumer: it reads live facts from `asset_summary()`/
+`liability_outstanding_principal()`, calls `evaluate_hypothetical_
+bucket_liquidity()` for every liquidity/rule figure, and re-derives
+nothing that any prior domain already owns. See
+FINANCIAL_DOMAIN_MODEL.md §37.
+
 ## 5. Financial event / audit layer
 
 Per [FINANCIAL_DOMAIN_MODEL §3](../architecture/FINANCIAL_DOMAIN_MODEL.md#3-financial-event-architecture)
@@ -183,6 +198,16 @@ of financial events. Even `cash_use_overrides` (an audit record) never
 writes here: it records that the user acknowledged a conflict, not that
 money moved. See
 [FINANCIAL_DOMAIN_MODEL.md §33](./FINANCIAL_DOMAIN_MODEL.md#33-override-audit-p0-e2-s6).
+
+**Also NOT extended for Decisions (P0-E2-S7)** — the most consequential
+non-extension yet, since it is this domain's entire reason for existing.
+Creating a Decision, creating a scenario, evaluating a scenario, saving
+an evaluation snapshot, and recording ANY user choice (including
+`'proceed'`) all leave `financial_events`/`cash_movements` — and every
+other domain's tables — completely untouched. A Decision is a plan, not
+a transaction; actual financial state changes only when a real operation
+is separately recorded through Money/Assets/Liabilities. See
+[FINANCIAL_DOMAIN_MODEL.md §34](./FINANCIAL_DOMAIN_MODEL.md#34-decisions-domain-implementation-summary-p0-e2-s7).
 
 ## 6. Multi-currency posture
 

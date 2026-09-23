@@ -227,6 +227,13 @@ The system never autonomously decides on the user's behalf.
 
 ## 10. Decisions domain
 
+**Implemented (P0-E2-S7)** — see §34-42. A Decision is a plan/scenario/
+intention/question, never a transaction, enforced architecturally: no
+function anywhere in the Decisions migration writes to
+`financial_events`/`cash_movements`/`assets`/`liabilities`/`goals`/
+`obligations`. Every liquidity/rule-conflict figure reuses P0-E2-S6/S6A's
+Safe-to-Deploy chain directly — no second formula exists.
+
 A Decision answers "what could change if I do this?" — never "what should I
 do?". A Decision is a plan, scenario, evaluation, or intent. It is **not**
 an executed financial transaction. Saving a decision as "Proceed" does not
@@ -243,12 +250,24 @@ as one of:
 - Derived Calculation
 Missing assumptions stay missing — never silently manufactured.
 
+**Implemented (P0-E2-S7)** as three structurally distinct groups in
+`evaluate_decision_scenario()`'s return shape (see §36) — Facts, echoed
+Assumptions, and Derived values are never merged into one ambiguous
+field set, at both the SQL and TypeScript layers.
+
 ### 10.2 Decision journal
 Stored per decision: what was considered, date, tracked financial context
 at the time, assumptions, rule effects, scenario comparisons, the user's
 choice, a review date, and (later) the actual outcome for expected-vs-actual
 comparison. The journal is a record of what happened, not a mechanism for
 judging the user — no shaming language, no fabricated history.
+
+**Implemented (P0-E2-S7)** — see §41. `decision_choices` (append-only
+choice history) and `decision_scenario_evaluations` (append-only,
+immutable evaluation snapshots) together let the application reconstruct
+the full journal. Actual-outcome comparison remains an explicit, clean
+extension point — not implemented this phase; a Decision without a linked
+real transaction reads "Actual outcome: Not recorded."
 
 ## 11. Financial rules
 
@@ -950,3 +969,218 @@ Money, and still gets evaluated fresh against whatever the state looks
 like at that later moment (Safe to Deploy is a read model, not a
 reservation system — see the phase brief's explicit instruction not to
 turn this phase into one).
+
+## 34. Decisions domain implementation summary (P0-E2-S7)
+
+Full detail in `supabase/migrations/*_create_decisions_domain.sql`. Core
+principle, enforced architecturally not just documented: **a Decision is
+a plan, never a transaction.** No function in the Decisions migration
+writes to `financial_events`/`cash_movements`/`assets`/`liabilities`/
+`goals`/`obligations` — not on scenario creation, not on evaluation, not
+on saving an evaluation snapshot, and critically, not on recording ANY
+user choice including `'proceed'`. Summary:
+
+- **`decisions`** (id, user_id, decision_type_code, name, description,
+  linked_asset_id, linked_liability_id, status, timestamps) is the
+  Decision's identity. `status` (active/closed/archived) is lifecycle
+  only; the user's actual conclusion lives entirely separately in
+  `decision_choices` (§40) — the two are deliberately never collapsed
+  into one overloaded field.
+- **`decision_types`** is a public, extensible registry (buy_asset,
+  sell_asset, repair_improve_asset, business_investment,
+  large_personal_purchase, use_savings, take_debt, pay_down_debt,
+  start_new_venture, other) — purely descriptive, the same "registry vs.
+  math" decoupling established for `goal_types`/`liability_types`.
+- **`linked_asset_id`/`linked_liability_id` live on the Decision, not on
+  each scenario** — multiple scenarios under one Decision (e.g. "Sell
+  As-Is" vs. "Repair Then Sell") are about the SAME asset, so the subject
+  of consideration belongs at the Decision level. Neither link is
+  type-enforced (no CHECK constraint ties `decision_type_code` to
+  requiring a specific link) — deliberately, since which types benefit
+  from a link is a UI/product concern, and `other` must remain genuinely
+  flexible, not a rigid escape hatch.
+
+## 35. Scenario architecture and input/assumption design (P0-E2-S7)
+
+`decision_scenarios` deliberately avoids both anti-patterns the phase
+brief warned against: a giant per-decision-type column explosion, and a
+JSONB/EAV bag of authoritative numbers. Instead, it uses a moderate set
+of strongly-typed `numeric(20,6)` columns, each with ONE clear economic
+role **reused by name** across every decision type that needs it:
+
+| Column | Reused by |
+|---|---|
+| `cash_required` | buy_asset (purchase price), repair_improve_asset (repair cost), business_investment/start_new_venture (investment amount), large_personal_purchase/use_savings (amount) |
+| `acquisition_costs` | buy_asset only |
+| `gross_proceeds` / `proceeds_costs` | sell_asset (sale price / selling costs), take_debt (proposed principal / fees deducted) |
+| `debt_principal_payment`/`debt_interest_payment`/`debt_fee_payment` | pay_down_debt only — mirrors Liabilities' own three-component vocabulary exactly |
+| `interest_rate`/`term_months`/`monthly_payment_assumption`/`collateral_note` | take_debt only — recorded, never used for an amortization calculation |
+| `expected_value_assumption` | buy_asset, repair_improve_asset, business_investment, start_new_venture |
+| `expected_future_sale_value`/`capitalization_classification` | repair_improve_asset only |
+| `sale_date_assumption` | sell_asset only |
+| `holding_period_months` | generic timing assumption |
+
+A scenario simply populates whichever columns are relevant to it; unused
+columns stay null and contribute nothing to the derived totals
+(`total_cash_required`/`net_proceeds`, computed at evaluation time,
+never stored). JSONB is used ONLY for the immutable evaluation-snapshot
+audit trail (§39) — never as a source for arithmetic, per the phase
+brief's explicit instruction.
+
+`source_bucket_id`/`destination_bucket_id`, when set, must match the
+scenario's own `currency_code` exactly (trigger-enforced) — the same
+same-currency-only discipline established for Goals/Receivables/
+Liabilities. A scenario naming both a source and a genuinely different
+destination bucket has its source bucket's outflow evaluated as the
+primary liquidity concern; a combined simultaneous view across two
+different buckets is not modeled this phase — every one of the ten
+canonical decision types only ever needs one bucket, so this is a
+narrow, documented scope limitation (realistic only for a generic
+`other` scenario), not a fabricated result.
+
+## 36. Facts vs assumptions vs derived values (P0-E2-S7)
+
+`evaluate_decision_scenario()`'s return shape keeps these three
+structurally separate, never merged:
+
+- **Facts** are read LIVE from their owning domain on every call —
+  `asset_summary()` for `linked_asset_cost_basis`/`linked_asset_latest_
+  value`/`linked_asset_quick_sale_estimate`/`linked_asset_target_value`,
+  `liability_outstanding_principal()` for `linked_liability_outstanding_
+  principal`, and a direct `cash_movements` sum for `source_bucket_
+  balance`/`destination_bucket_balance`. None of these are ever copied
+  into a scenario's own columns — a Decision's facts can never go stale
+  relative to the domain they came from, because they are never stored
+  independently at all.
+- **Assumptions** are echoed back exactly as the user entered them
+  (`cash_required`, `gross_proceeds`, `expected_value_assumption`, ...) —
+  never silently reinterpreted as a fact. A sell-asset scenario's
+  expected sale price is always the user's own number; the asset's
+  `target_value`/`quick_sale_estimate` are shown alongside as facts but
+  are NEVER auto-substituted as the assumption, even when the user
+  leaves the assumption blank (verified explicitly: an evaluation with
+  no `gross_proceeds` entered reports `net_proceeds: null`, never the
+  asset's target value).
+- **Derived** values (`total_cash_required`, `net_proceeds`,
+  `net_immediate_cash_delta`, `projected_gross_profit_loss`,
+  `hypothetical_liability_outstanding_after`, `basis_after_capitalized_
+  improvement`, and the whole Safe-to-Deploy before/after block) are
+  computed from facts + assumptions inside the evaluation function
+  itself — never stored, always recomputed live, and always null (never
+  a fabricated zero) when a required input is missing (tracked via the
+  `missing_information` array).
+
+## 37. Cash-impact model and Safe-to-Deploy reuse (P0-E2-S7)
+
+A scenario may describe an outflow, an inflow, or (rarely) neither — the
+architecture never assumes every Decision is a spend. The critical
+architectural move this phase: P0-E2-S6A's `evaluate_proposed_cash_use()`
+only ever modeled a SPEND (a positive amount, always subtracted).
+Decisions also needed to model an INFLOW (asset-sale proceeds, loan
+proceeds) through the exact same rule-relationship logic, and the phase
+brief explicitly forbade forking that logic into a second copy.
+
+The fix: that logic was extracted into a new, sign-agnostic shared
+function, `evaluate_hypothetical_bucket_liquidity(bucket_id, delta)`,
+which accepts ANY sign of delta and internally calls
+`safe_to_deploy_by_currency()` twice (real state, then with the
+hypothetical delta applied) — exactly the same "one calculation model"
+discipline P0-E2-S6A established for Safe-to-Deploy itself, now extended
+one layer up. `evaluate_proposed_cash_use()` became a thin wrapper over
+this shared function (negating a positive spend amount before calling
+it); its own public signature and return shape are completely
+unchanged — verified by the full, unmodified P0-E2-S6/S6A test suite
+(155 assertions) continuing to pass against the refactor.
+`evaluate_decision_scenario()` calls the SAME shared function directly,
+with a positive delta for a pure inflow scenario or a negative delta for
+a pure outflow scenario — there is exactly one hypothetical-liquidity
+calculation in the entire codebase, consumed by three different callers
+(the Rules evaluator, Decisions, and indirectly the override-recording
+flow). A hypothetical asset-sale amount or proposed loan never increases
+real cash, never creates a `financial_events` row, and never marks an
+asset sold or creates a liability — verified explicitly.
+
+## 38. Asset and liability decision behavior (P0-E2-S7)
+
+**Sell asset**: facts come from `asset_summary()` (cost basis, latest
+value, quick-sale estimate, target value); the user's own `gross_
+proceeds`/`proceeds_costs` assumptions drive `net_proceeds` and
+`projected_gross_profit_loss = net_proceeds - cost_basis` — labeled
+Projected/Scenario throughout, never realized profit, and the asset
+itself is never archived, sold, or basis-adjusted by evaluating or
+saving a scenario (verified explicitly).
+
+**Repair/improve asset**: `capitalization_classification`
+(`capital_improvement`/`expense`) is an explicit, required-where-
+relevant user choice — Monatriq never decides automatically whether
+repair spending capitalizes. Only when a scenario is explicitly
+classified `capital_improvement` does `basis_after_capitalized_
+improvement = cost_basis + cash_required` get computed, and even then
+only as a projected, unmutated preview — the real asset's basis is
+never touched (verified explicitly, including a paired `expense`-
+classified scenario confirming no basis projection is shown at all).
+
+**Buy asset**: no Asset row is ever created by evaluating or saving a
+buy-asset scenario (verified explicitly) — purchase price and
+acquisition costs are pure assumptions feeding the same shared cash-
+impact/Safe-to-Deploy calculation every outflow scenario uses.
+
+**Business investment / start new venture**: since no dedicated
+Businesses domain exists yet, neither type fabricates a business
+valuation or entity — only the proposed cash use and its liquidity/rule
+effects are evaluated, exactly like any other outflow scenario, with an
+optional `expected_value_assumption` shown plainly as a user assumption,
+never claimed as a resulting market value.
+
+**Take debt**: no Liability row is ever created by evaluating or saving
+a take-debt scenario (verified explicitly). `interest_rate`/
+`term_months`/`monthly_payment_assumption`/`collateral_note` are
+recorded assumptions only — no amortization schedule is computed from
+them.
+
+**Pay down debt**: facts come live from `liability_outstanding_
+principal()` — the exact function Liabilities' own read models use, not
+a duplicated balance. `hypothetical_liability_outstanding_after =
+outstanding - debt_principal_payment` is a pure projection; evaluating
+or saving a scenario never calls `record_debt_payment()` or otherwise
+reduces the liability's real outstanding principal (verified explicitly:
+the liability's real balance is re-read after saving and confirmed
+unchanged).
+
+## 39. Evaluation snapshots, re-evaluation, and scenario comparison (P0-E2-S7)
+
+`evaluate_decision_scenario()` is a pure, un-persisted read — evaluating
+a scenario on screen writes nothing. `save_decision_scenario_evaluation()`
+calls that same read and freezes its complete result (`to_jsonb()` of
+the evaluation record) into an append-only, immutable row in `decision_
+scenario_evaluations` — no `UPDATE`/`DELETE` grant exists on that table
+at all (verified: a direct update attempt is rejected by grant absence).
+Re-evaluating and saving again APPENDS a new snapshot rather than
+overwriting the prior one (verified explicitly: two saves produce two
+distinct, both-readable rows) — "current evaluation" is always the
+latest by `evaluated_at`, the same derive-don't-duplicate discipline
+every prior domain follows.
+
+When a Decision has multiple scenarios, the application evaluates each
+independently and presents them side by side (`GoalList`-style
+iteration, not a SQL-level "compare" function) — the evaluation result
+type carries no `rank`/`score`/`winner` field at any layer, verified by
+an explicit structural test asserting those keys are absent from the
+returned object, not merely that their values happen to be neutral.
+
+## 40. User choice and the decision journal (P0-E2-S7)
+
+`decision_choices` is append-only: `proceed`/`wait`/`decline`/
+`keep_reviewing`, with the current choice always the latest row by
+`created_at` — no `is_current` flag, no overwriting a changed mind.
+`record_decision_choice()` inserts exactly one row and touches nothing
+else — there is no code path in it that could write to another table
+even if it wanted to, which is the entire mechanism by which "Proceed
+does not execute" is enforced, verified explicitly across all four
+choices (zero change to bucket balances, Assets, and Liabilities after
+each). Together with `decision_scenario_evaluations` (§39), the journal
+lets the application reconstruct what was considered, what assumptions
+were used, what the evaluation showed at the time, and how the user's
+own conclusion evolved — without a second, duplicate transaction system.
+Actual-outcome (expected vs. actual) comparison remains an explicit,
+clean extension point, not implemented this phase.

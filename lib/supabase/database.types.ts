@@ -389,6 +389,274 @@ export type Database = {
         }
         Relationships: []
       }
+      decision_choices: {
+        Row: {
+          choice: string
+          created_at: string
+          decision_id: string
+          id: string
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          choice: string
+          created_at?: string
+          decision_id: string
+          id?: string
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          choice?: string
+          created_at?: string
+          decision_id?: string
+          id?: string
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decision_choices_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "decisions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      decision_scenario_evaluations: {
+        Row: {
+          created_at: string
+          evaluated_at: string
+          id: string
+          scenario_id: string
+          snapshot: Json
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          evaluated_at?: string
+          id?: string
+          scenario_id: string
+          snapshot: Json
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          evaluated_at?: string
+          id?: string
+          scenario_id?: string
+          snapshot?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decision_scenario_evaluations_scenario_id_fkey"
+            columns: ["scenario_id"]
+            isOneToOne: false
+            referencedRelation: "decision_scenarios"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      decision_scenarios: {
+        Row: {
+          acquisition_costs: number | null
+          capitalization_classification: string | null
+          cash_required: number | null
+          collateral_note: string | null
+          created_at: string
+          currency_code: string
+          debt_fee_payment: number | null
+          debt_interest_payment: number | null
+          debt_principal_payment: number | null
+          decision_id: string
+          destination_bucket_id: string | null
+          expected_future_sale_value: number | null
+          expected_value_assumption: number | null
+          gross_proceeds: number | null
+          holding_period_months: number | null
+          id: string
+          interest_rate: number | null
+          monthly_payment_assumption: number | null
+          name: string
+          note: string | null
+          proceeds_costs: number | null
+          sale_date_assumption: string | null
+          source_bucket_id: string | null
+          term_months: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          acquisition_costs?: number | null
+          capitalization_classification?: string | null
+          cash_required?: number | null
+          collateral_note?: string | null
+          created_at?: string
+          currency_code: string
+          debt_fee_payment?: number | null
+          debt_interest_payment?: number | null
+          debt_principal_payment?: number | null
+          decision_id: string
+          destination_bucket_id?: string | null
+          expected_future_sale_value?: number | null
+          expected_value_assumption?: number | null
+          gross_proceeds?: number | null
+          holding_period_months?: number | null
+          id?: string
+          interest_rate?: number | null
+          monthly_payment_assumption?: number | null
+          name: string
+          note?: string | null
+          proceeds_costs?: number | null
+          sale_date_assumption?: string | null
+          source_bucket_id?: string | null
+          term_months?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          acquisition_costs?: number | null
+          capitalization_classification?: string | null
+          cash_required?: number | null
+          collateral_note?: string | null
+          created_at?: string
+          currency_code?: string
+          debt_fee_payment?: number | null
+          debt_interest_payment?: number | null
+          debt_principal_payment?: number | null
+          decision_id?: string
+          destination_bucket_id?: string | null
+          expected_future_sale_value?: number | null
+          expected_value_assumption?: number | null
+          gross_proceeds?: number | null
+          holding_period_months?: number | null
+          id?: string
+          interest_rate?: number | null
+          monthly_payment_assumption?: number | null
+          name?: string
+          note?: string | null
+          proceeds_costs?: number | null
+          sale_date_assumption?: string | null
+          source_bucket_id?: string | null
+          term_months?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decision_scenarios_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "decision_scenarios_decision_id_fkey"
+            columns: ["decision_id"]
+            isOneToOne: false
+            referencedRelation: "decisions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_scenarios_destination_bucket_id_fkey"
+            columns: ["destination_bucket_id"]
+            isOneToOne: false
+            referencedRelation: "cash_buckets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decision_scenarios_source_bucket_id_fkey"
+            columns: ["source_bucket_id"]
+            isOneToOne: false
+            referencedRelation: "cash_buckets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      decision_types: {
+        Row: {
+          code: string
+          created_at: string
+          display_name: string
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          display_name: string
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          display_name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      decisions: {
+        Row: {
+          created_at: string
+          decision_type_code: string
+          description: string | null
+          id: string
+          linked_asset_id: string | null
+          linked_liability_id: string | null
+          name: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          decision_type_code: string
+          description?: string | null
+          id?: string
+          linked_asset_id?: string | null
+          linked_liability_id?: string | null
+          name: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          decision_type_code?: string
+          description?: string | null
+          id?: string
+          linked_asset_id?: string | null
+          linked_liability_id?: string | null
+          name?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "decisions_decision_type_code_fkey"
+            columns: ["decision_type_code"]
+            isOneToOne: false
+            referencedRelation: "decision_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "decisions_linked_asset_id_fkey"
+            columns: ["linked_asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "decisions_linked_liability_id_fkey"
+            columns: ["linked_liability_id"]
+            isOneToOne: false
+            referencedRelation: "liabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       financial_events: {
         Row: {
           cash_flow_class: string
@@ -1386,6 +1654,93 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_decision: {
+        Args: {
+          p_decision_type_code: string
+          p_description?: string
+          p_linked_asset_id?: string
+          p_linked_liability_id?: string
+          p_name: string
+        }
+        Returns: {
+          created_at: string
+          decision_type_code: string
+          description: string | null
+          id: string
+          linked_asset_id: string | null
+          linked_liability_id: string | null
+          name: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "decisions"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_decision_scenario: {
+        Args: {
+          p_acquisition_costs?: number
+          p_capitalization_classification?: string
+          p_cash_required?: number
+          p_collateral_note?: string
+          p_currency_code: string
+          p_debt_fee_payment?: number
+          p_debt_interest_payment?: number
+          p_debt_principal_payment?: number
+          p_decision_id: string
+          p_destination_bucket_id?: string
+          p_expected_future_sale_value?: number
+          p_expected_value_assumption?: number
+          p_gross_proceeds?: number
+          p_holding_period_months?: number
+          p_interest_rate?: number
+          p_monthly_payment_assumption?: number
+          p_name: string
+          p_note?: string
+          p_proceeds_costs?: number
+          p_sale_date_assumption?: string
+          p_source_bucket_id?: string
+          p_term_months?: number
+        }
+        Returns: {
+          acquisition_costs: number | null
+          capitalization_classification: string | null
+          cash_required: number | null
+          collateral_note: string | null
+          created_at: string
+          currency_code: string
+          debt_fee_payment: number | null
+          debt_interest_payment: number | null
+          debt_principal_payment: number | null
+          decision_id: string
+          destination_bucket_id: string | null
+          expected_future_sale_value: number | null
+          expected_value_assumption: number | null
+          gross_proceeds: number | null
+          holding_period_months: number | null
+          id: string
+          interest_rate: number | null
+          monthly_payment_assumption: number | null
+          name: string
+          note: string | null
+          proceeds_costs: number | null
+          sale_date_assumption: string | null
+          source_bucket_id: string | null
+          term_months: number | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "decision_scenarios"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_financial_rule: {
         Args: {
           p_currency_code: string
@@ -1537,6 +1892,111 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      decision_choice_history: {
+        Args: { p_decision_id: string; p_limit?: number }
+        Returns: {
+          choice: string
+          created_at: string
+          id: string
+          note: string
+        }[]
+      }
+      decision_scenario_evaluation_history: {
+        Args: { p_limit?: number; p_scenario_id: string }
+        Returns: {
+          created_at: string
+          evaluated_at: string
+          id: string
+          snapshot: Json
+        }[]
+      }
+      decision_summary: {
+        Args: never
+        Returns: {
+          created_at: string
+          current_choice: string
+          current_choice_at: string
+          decision_id: string
+          decision_type_code: string
+          decision_type_label: string
+          description: string
+          linked_asset_id: string
+          linked_asset_name: string
+          linked_liability_id: string
+          linked_liability_name: string
+          name: string
+          scenario_count: number
+          status: string
+        }[]
+      }
+      evaluate_decision_scenario: {
+        Args: { p_scenario_id: string }
+        Returns: {
+          acquisition_costs: string
+          basis_after_capitalized_improvement: string
+          bucket_balance_after: string
+          bucket_balance_before: string
+          cash_required: string
+          currency_code: string
+          currency_safe_to_deploy_after: string
+          currency_safe_to_deploy_before: string
+          debt_fee_payment: string
+          debt_interest_payment: string
+          debt_principal_payment: string
+          decision_id: string
+          decision_type_code: string
+          destination_bucket_balance: string
+          expected_future_sale_value: string
+          expected_value_assumption: string
+          gross_proceeds: string
+          hypothetical_bucket_id: string
+          hypothetical_liability_outstanding_after: string
+          linked_asset_cost_basis: string
+          linked_asset_id: string
+          linked_asset_latest_value: string
+          linked_asset_quick_sale_estimate: string
+          linked_asset_target_value: string
+          linked_liability_id: string
+          linked_liability_outstanding_principal: string
+          minimum_cash_floor_status: string
+          missing_information: string[]
+          net_immediate_cash_delta: string
+          net_proceeds: string
+          overall_status: string
+          proceeds_costs: string
+          projected_gross_profit_loss: string
+          protected_goal_status: string
+          protected_obligation_status: string
+          retained_deficit_after: string
+          retained_deficit_before: string
+          scenario_id: string
+          source_bucket_balance: string
+          total_cash_required: string
+        }[]
+      }
+      evaluate_hypothetical_bucket_liquidity: {
+        Args: { p_bucket_id: string; p_delta: number }
+        Returns: {
+          bucket_id: string
+          currency_code: string
+          currency_safe_to_deploy_after: string
+          currency_safe_to_deploy_before: string
+          current_allocation_shortfall: string
+          current_balance: string
+          current_protected_allocation: string
+          hypothetical_delta: string
+          minimum_cash_floor_status: string
+          post_use_allocation_shortfall: string
+          post_use_balance: string
+          protected_commitments_after: string
+          protected_goal_cash_after: string
+          protected_goal_status: string
+          protected_obligation_status: string
+          retained_deficit_after: string
+          retained_deficit_before: string
+          uncovered_protected_obligations_after: string
+        }[]
       }
       evaluate_proposed_cash_use: {
         Args: { p_amount: number; p_bucket_id: string }
@@ -1925,6 +2385,23 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "financial_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_decision_choice: {
+        Args: { p_choice: string; p_decision_id: string; p_note?: string }
+        Returns: {
+          choice: string
+          created_at: string
+          decision_id: string
+          id: string
+          note: string | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "decision_choices"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2399,6 +2876,23 @@ export type Database = {
           status: string
           uncovered_protected_obligations: string
         }[]
+      }
+      save_decision_scenario_evaluation: {
+        Args: { p_scenario_id: string }
+        Returns: {
+          created_at: string
+          evaluated_at: string
+          id: string
+          scenario_id: string
+          snapshot: Json
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "decision_scenario_evaluations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_focus_goal: { Args: { p_goal_id?: string }; Returns: undefined }
       upcoming_obligations: {
