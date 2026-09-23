@@ -65,6 +65,17 @@ export interface ProposedCashUseEvaluation {
   postUseAllocationShortfall: string;
   currencySafeToDeployBefore: string | null;
   currencySafeToDeployAfter: string | null;
+  /**
+   * The full recomputed hypothetical state (P0-E2-S6A) — not just folded
+   * into the neutral labels below. Computed by the SAME
+   * safe_to_deploy_by_currency() formula real-state reads use, with this
+   * bucket's proposed spend applied as a hypothetical override, so a
+   * goal funded from multiple buckets and obligations linked to it are
+   * fully and correctly recomputed — never a locally-patched estimate.
+   */
+  protectedGoalCashAfter: string;
+  uncoveredProtectedObligationsAfter: string;
+  protectedCommitmentsAfter: string;
   minimumCashFloorStatus: RuleConflictStatus;
   protectedGoalStatus: RuleConflictStatus;
   protectedObligationStatus: RuleConflictStatus;

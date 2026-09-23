@@ -670,6 +670,204 @@ async function main() {
         "marking a protected obligation paid should reduce (or leave at zero) its contribution to uncovered protected obligations",
       );
     });
+    // ============================================================================
+    // P0-E2-S6A: Safe-to-Deploy evaluator consistency hardening
+    // ============================================================================
+    // These tests prove the previously-documented second-order limitation
+    // (a goal funded from multiple buckets was not fully recomputed by the
+    // evaluator) is genuinely resolved -- not just relabeled. Each worked
+    // case below traces to the phase brief's own numbers exactly.
+
+    const nokBucketA = await runner.runValue("S6A Setup: User A funds NOK Bucket A (5000)", () =>
+      createBucket(userA.client, { name: "NOK Bucket A", currencyCode: "NOK", bucketType: "bank_account" }).then(async (b) => {
+        await recordMoneyReceived(userA.client, { bucketId: b.id, amount: "5000", categoryCode: "salary" });
+        return b;
+      }),
+    );
+    const nokBucketB = await runner.runValue("S6A Setup: User A funds NOK Bucket B (5000)", () =>
+      createBucket(userA.client, { name: "NOK Bucket B", currencyCode: "NOK", bucketType: "savings_account" }).then(async (b) => {
+        await recordMoneyReceived(userA.client, { bucketId: b.id, amount: "5000", categoryCode: "salary" });
+        return b;
+      }),
+    );
+    if (!nokBucketA || !nokBucketB) throw new Error("NOK bucket setup failed");
+
+    const goalNok = await runner.runValue(
+      "S6A Setup: Protected NOK goal funded from BOTH buckets (4000 + 4000 = 8000 backed)",
+      async () => {
+        const goal = await createGoal(userA.client, { goalTypeCode: "custom", measurementType: "cash_target", name: "Multi-Bucket NOK Goal", currencyCode: "NOK", isProtected: true });
+        await recordGoalAllocation(userA.client, { goalId: goal.id, bucketId: nokBucketA.id, amount: "4000" });
+        await recordGoalAllocation(userA.client, { goalId: goal.id, bucketId: nokBucketB.id, amount: "4000" });
+        return goal;
+      },
+    );
+    if (!goalNok) throw new Error("goalNok setup failed");
+
+    const obligationNok = await runner.runValue(
+      "S6A Setup: Protected NOK obligation (7000) linked to the multi-bucket goal, floor 3000",
+      async () => {
+        const obligation = await createObligation(userA.client, { name: "Multi-Bucket Obligation", currencyCode: "NOK", amount: "7000", isProtected: true, fundingGoalId: goalNok.id });
+        await createFinancialRule(userA.client, { ruleType: "minimum_cash_floor", currencyCode: "NOK", thresholdValue: "3000" });
+        return obligation;
+      },
+    );
+    if (!obligationNok) throw new Error("obligationNok setup failed");
+
+    await runner.run("Real (non-hypothetical) state before any evaluation: fully backed, fully covered", async () => {
+      const results = await getSafeToDeployByCurrency(userA.client);
+      const nok = results.find((r) => r.currencyCode === "NOK");
+      assert(nok?.protectedGoalCash === "8000.000000", `expected 8000 backed, got ${nok?.protectedGoalCash}`);
+      assert(nok?.uncoveredProtectedObligations === "0.000000", `expected 0 uncovered, got ${nok?.uncoveredProtectedObligations}`);
+    });
+
+    // --- Worked Case 1: spend impairs multi-bucket backing below the obligation ---
+    await runner.run(
+      "Multi-bucket protected goal funding is fully recomputed on a hypothetical spend (Worked Case 1: 3000 from Bucket A -> backing 8000->6000, uncovered 0->1000)",
+      async () => {
+        const evaluation = await evaluateProposedCashUse(userA.client, nokBucketA.id, "3000");
+        assert(evaluation.currentBalance === "5000.000000", `expected current balance 5000, got ${evaluation.currentBalance}`);
+        assert(evaluation.postUseBalance === "2000.000000", `expected post-use balance 2000, got ${evaluation.postUseBalance}`);
+        // Bucket A alone can only back 2000 of its own 4000 protected
+        // allocation post-spend; Bucket B (untouched) still backs its
+        // full 4000 -- total 6000, not the imaginary 8000.
+        assert(evaluation.protectedGoalCashAfter === "6000.000000", `expected backing 6000 (2000 from A + 4000 from B), got ${evaluation.protectedGoalCashAfter}`);
+        assert(evaluation.uncoveredProtectedObligationsAfter === "1000.000000", `expected uncovered 7000-6000=1000, got ${evaluation.uncoveredProtectedObligationsAfter}`);
+        assert(evaluation.protectedCommitmentsAfter === "7000.000000", `expected commitments 6000+1000=7000, got ${evaluation.protectedCommitmentsAfter}`);
+        assert(evaluation.protectedObligationStatus === "conflict", `expected conflict (uncovered obligation newly created), got ${evaluation.protectedObligationStatus}`);
+        // MAX(floor=3000, commitments=7000)=7000; liquid after = 10000-3000=7000.
+        // A SUM-based (floor+commitments=10000) implementation would show a
+        // 3000 deficit here instead of 0 -- this assertion is the MAX-not-SUM proof.
+        assert(evaluation.currencySafeToDeployAfter === "0.000000", `expected safe-to-deploy 0 under MAX, got ${evaluation.currencySafeToDeployAfter}`);
+        assert(evaluation.retainedDeficitAfter === "0.000000", `expected deficit 0 under MAX (would be 3000 under an incorrect SUM), got ${evaluation.retainedDeficitAfter}`);
+      },
+    );
+
+    // --- Worked Case 2: backing is reduced but stays above the obligation ---
+    await runner.run(
+      "Obligation remains fully covered when post-use backing is still sufficient (Worked Case 2: 1500 from Bucket A -> backing 8000->7500, uncovered stays 0)",
+      async () => {
+        const evaluation = await evaluateProposedCashUse(userA.client, nokBucketA.id, "1500");
+        assert(evaluation.protectedGoalCashAfter === "7500.000000", `expected backing 7500, got ${evaluation.protectedGoalCashAfter}`);
+        assert(evaluation.uncoveredProtectedObligationsAfter === "0.000000", `expected uncovered to stay 0, got ${evaluation.uncoveredProtectedObligationsAfter}`);
+        // Protected liquidity genuinely decreased (8000 -> 7500) without a
+        // coverage failure -- attention, not conflict.
+        assert(evaluation.protectedObligationStatus === "attention", `expected attention (liquidity reduced, no coverage failure), got ${evaluation.protectedObligationStatus}`);
+        assert(evaluation.currencySafeToDeployAfter === "1000.000000", `expected safe-to-deploy 1000, got ${evaluation.currencySafeToDeployAfter}`);
+        assert(evaluation.retainedDeficitAfter === "0.000000", `expected no deficit, got ${evaluation.retainedDeficitAfter}`);
+      },
+    );
+
+    await runner.run(
+      "Evaluation remains read-only: real Safe-to-Deploy state is unchanged after both hypothetical evaluations above",
+      async () => {
+        const results = await getSafeToDeployByCurrency(userA.client);
+        const nok = results.find((r) => r.currencyCode === "NOK");
+        assert(nok?.protectedGoalCash === "8000.000000", `real backing must remain 8000 after pure reads, got ${nok?.protectedGoalCash}`);
+        assert(nok?.uncoveredProtectedObligations === "0.000000", `real uncovered must remain 0 after pure reads, got ${nok?.uncoveredProtectedObligations}`);
+      },
+    );
+
+    // --- Worked Case 4: multiple obligations sharing one goal remain aggregated ---
+    const obligationNok2 = await runner.runValue(
+      "S6A Setup: A second protected obligation (2000) links to the same multi-bucket goal",
+      () => createObligation(userA.client, { name: "Second Multi-Bucket Obligation", currencyCode: "NOK", amount: "2000", isProtected: true, fundingGoalId: goalNok.id }),
+    );
+    if (!obligationNok2) throw new Error("obligationNok2 setup failed");
+
+    await runner.run(
+      "Multiple obligations sharing one goal are aggregated before hypothetical coverage, not claimed independently (Worked Case 4)",
+      async () => {
+        // Combined linked obligations: 7000 + 2000 = 9000 (real backing 8000
+        // unaffected so far -- real uncovered is now 1000, verified below).
+        const before = await getSafeToDeployByCurrency(userA.client);
+        const nokBefore = before.find((r) => r.currencyCode === "NOK");
+        assert(nokBefore?.uncoveredProtectedObligations === "1000.000000", `expected real uncovered 9000-8000=1000 after adding the second obligation, got ${nokBefore?.uncoveredProtectedObligations}`);
+
+        // Now evaluate a spend from Bucket B: post-balance 3000 < its own
+        // 4000 protected allocation -> Bucket B backs only 3000; Bucket A
+        // (untouched) still backs 4000. Total backing 7000.
+        const evaluation = await evaluateProposedCashUse(userA.client, nokBucketB.id, "2000");
+        assert(evaluation.protectedGoalCashAfter === "7000.000000", `expected backing 4000(A)+3000(B)=7000, got ${evaluation.protectedGoalCashAfter}`);
+        // If the two obligations wrongly claimed the 7000 backing
+        // independently (7000 vs each obligation alone), both would show
+        // as covered (uncovered=0). Aggregated correctly (9000 combined
+        // vs 7000 backing), uncovered must be exactly 2000.
+        assert(evaluation.uncoveredProtectedObligationsAfter === "2000.000000", `expected aggregated uncovered 9000-7000=2000, got ${evaluation.uncoveredProtectedObligationsAfter}`);
+      },
+    );
+
+    // --- Worked Case 5: one bucket funds two protected goals, both funded elsewhere too ---
+    const aedShared = await runner.runValue("S6A Setup: AED bucket shared by two protected goals (10000)", async () => {
+      const bucket = await createBucket(userA.client, { name: "AED Shared", currencyCode: "AED", bucketType: "bank_account" });
+      await recordMoneyReceived(userA.client, { bucketId: bucket.id, amount: "10000", categoryCode: "salary" });
+      return bucket;
+    });
+    const aedM = await runner.runValue("S6A Setup: AED bucket funding only Goal M (3000)", async () => {
+      const bucket = await createBucket(userA.client, { name: "AED Goal M Only", currencyCode: "AED", bucketType: "savings_account" });
+      await recordMoneyReceived(userA.client, { bucketId: bucket.id, amount: "3000", categoryCode: "salary" });
+      return bucket;
+    });
+    const aedN = await runner.runValue("S6A Setup: AED bucket funding only Goal N (3000)", async () => {
+      const bucket = await createBucket(userA.client, { name: "AED Goal N Only", currencyCode: "AED", bucketType: "savings_account" });
+      await recordMoneyReceived(userA.client, { bucketId: bucket.id, amount: "3000", categoryCode: "salary" });
+      return bucket;
+    });
+    if (!aedShared || !aedM || !aedN) throw new Error("AED bucket setup failed");
+
+    await runner.run(
+      "A bucket funding two protected goals recalculates both goals' backing correctly (Worked Case 5)",
+      async () => {
+        const goalM = await createGoal(userA.client, { goalTypeCode: "custom", measurementType: "cash_target", name: "Goal M", currencyCode: "AED", isProtected: true });
+        const goalN = await createGoal(userA.client, { goalTypeCode: "custom", measurementType: "cash_target", name: "Goal N", currencyCode: "AED", isProtected: true });
+        await recordGoalAllocation(userA.client, { goalId: goalM.id, bucketId: aedShared.id, amount: "4000" });
+        await recordGoalAllocation(userA.client, { goalId: goalN.id, bucketId: aedShared.id, amount: "4000" });
+        await recordGoalAllocation(userA.client, { goalId: goalM.id, bucketId: aedM.id, amount: "3000" });
+        await recordGoalAllocation(userA.client, { goalId: goalN.id, bucketId: aedN.id, amount: "3000" });
+
+        const before = await getSafeToDeployByCurrency(userA.client);
+        const aedBefore = before.find((r) => r.currencyCode === "AED");
+        // Goal M: 4000(shared)+3000(M)=7000; Goal N: 4000(shared)+3000(N)=7000; combined 14000.
+        assert(aedBefore?.protectedGoalCash === "14000.000000", `expected combined backing 14000, got ${aedBefore?.protectedGoalCash}`);
+
+        // Hypothetically spend 6000 from the SHARED bucket: post-balance
+        // 4000 < its own 8000 total protected allocation (4000 to each
+        // goal) -> pro-rata: each goal's share from this bucket drops from
+        // 4000 to 4000*(4000/8000)=2000. Each goal's OTHER, untouched
+        // bucket (3000 each) is unaffected. New totals: Goal M
+        // 2000+3000=5000; Goal N 2000+3000=5000; combined 10000.
+        const evaluation = await evaluateProposedCashUse(userA.client, aedShared.id, "6000");
+        assert(evaluation.protectedGoalCashAfter === "10000.000000", `expected both goals recalculated: 5000+5000=10000, got ${evaluation.protectedGoalCashAfter}`);
+      },
+    );
+
+    // --- Security: cross-tenant / anonymous evaluator access still fails --------------
+    await runner.run("A cannot evaluate B's bucket by UUID (still enforced after the refactor)", async () => {
+      let threw = false;
+      try {
+        await evaluateProposedCashUse(userA.client, bucketB.id, "100");
+      } catch {
+        threw = true;
+      }
+      assert(threw, "evaluating another user's bucket should still be rejected");
+    });
+
+    await runner.run("Anonymous cannot invoke the hypothetical-aware evaluator (still enforced after the refactor)", async () => {
+      const result = await anonClient.rpc("evaluate_proposed_cash_use", { p_bucket_id: nokBucketA.id, p_amount: 100 });
+      expectDenied(result, "anonymous call to evaluate_proposed_cash_use");
+    });
+
+    // --- Override snapshot automatically consumes the corrected evaluation -----------
+    await runner.run(
+      "Override snapshot captures the corrected multi-bucket hypothetical state -- no separate override formula",
+      async () => {
+        const override = await recordCashUseOverride(userA.client, { bucketId: nokBucketA.id, amount: "3000", note: "S6A regression check" });
+        const snapshot = override.conflicts_snapshot as Record<string, unknown>;
+        // This is exactly Worked Case 1's scenario -- under the pre-S6A
+        // evaluator this would have incorrectly shown 'aligned', since
+        // uncovered_protected_obligations was never recomputed.
+        assert(snapshot.protected_obligation_status === "conflict", `expected the override snapshot to capture the corrected 'conflict' state, got ${snapshot.protected_obligation_status}`);
+      },
+    );
   } finally {
     await fixtures.cleanup();
   }

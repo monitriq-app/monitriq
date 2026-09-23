@@ -134,6 +134,13 @@ own recurring-income measurement type deliberately returns "not
 calculated" rather than fabricating a Recurring Income summary (see
 FINANCIAL_DOMAIN_MODEL.md §27).
 
+**Hardened (P0-E2-S6A).** `evaluate_proposed_cash_use()` no longer
+contains any independent calculation — it consumes
+`safe_to_deploy_by_currency()` twice (real state, then with a
+hypothetical bucket-balance override applied) rather than duplicating the
+formula, eliminating the risk of the two ever drifting apart. See
+FINANCIAL_DOMAIN_MODEL.md §33A.
+
 ## 5. Financial event / audit layer
 
 Per [FINANCIAL_DOMAIN_MODEL §3](../architecture/FINANCIAL_DOMAIN_MODEL.md#3-financial-event-architecture)

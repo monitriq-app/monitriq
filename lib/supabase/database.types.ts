@@ -1552,9 +1552,12 @@ export type Database = {
           post_use_allocation_shortfall: string
           post_use_balance: string
           proposed_amount: string
+          protected_commitments_after: string
+          protected_goal_cash_after: string
           protected_goal_status: string
           protected_obligation_status: string
           retained_deficit_after: string
+          uncovered_protected_obligations_after: string
         }[]
       }
       financial_rule_history: {
@@ -1591,7 +1594,11 @@ export type Database = {
         }[]
       }
       goal_backed_protected_allocation: {
-        Args: { p_goal_id: string }
+        Args: {
+          p_goal_id: string
+          p_hypothetical_bucket_id?: string
+          p_hypothetical_delta?: number
+        }
         Returns: number
       }
       goal_bucket_allocated_total: {
@@ -2366,14 +2373,20 @@ export type Database = {
         }
       }
       rules_uncovered_protected_obligations: {
-        Args: never
+        Args: {
+          p_hypothetical_bucket_id?: string
+          p_hypothetical_delta?: number
+        }
         Returns: {
           currency_code: string
           uncovered_amount: number
         }[]
       }
       safe_to_deploy_by_currency: {
-        Args: never
+        Args: {
+          p_hypothetical_bucket_id?: string
+          p_hypothetical_delta?: number
+        }
         Returns: {
           currency_code: string
           liquid_cash: string

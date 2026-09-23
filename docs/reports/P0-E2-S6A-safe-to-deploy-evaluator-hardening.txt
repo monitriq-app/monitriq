@@ -1,0 +1,359 @@
+MONATRIQ — PHASE REPORT
+P0-E2-S6A — SAFE-TO-DEPLOY EVALUATOR CONSISTENCY HARDENING
+========================================================================
+
+PHASE
+------------------------------------------------------------------------
+P0-E2-S6A — Safe-to-Deploy Evaluator Consistency Hardening.
+
+STATUS
+------------------------------------------------------------------------
+COMPLETE. The P0-E2-S6 documented second-order evaluator limitation is
+removed. 290/290 assertions pass across all 8 domain suites after a
+fresh `supabase db reset` (17 new hardening tests, all 69 P0-E2-S6 tests
+unmodified and still passing). Lint, typecheck (app and test harness),
+and both production-build modes pass. The migration was deployed to the
+real remote "Monatriq Dev" project and its sync was verified. No code
+was committed or pushed — the working tree is fully unstaged, as
+instructed. No new product domain, no Decisions, no Home, no UI
+redesign — this is a narrow calculation-logic hardening exactly as
+scoped.
+
+OBJECTIVE
+------------------------------------------------------------------------
+Remove the documented second-order limitation in
+`evaluate_proposed_cash_use()`: the evaluator must produce an internally
+consistent hypothetical post-use Safe-to-Deploy state using the SAME
+economic logic as the authoritative current-state Safe-to-Deploy engine
+(`safe_to_deploy_by_currency()`), correctly accounting for a protected
+goal funded from multiple cash buckets and the protected obligations
+linked to it — before Decisions is ever built to consume the evaluator.
+
+PREVIOUS LIMITATION
+------------------------------------------------------------------------
+`evaluate_proposed_cash_use()` computed the "before" state by calling
+`safe_to_deploy_by_currency()`, but computed the "after" state by locally
+patching only the ONE proposed bucket's own contribution to
+`protected_goal_cash` (via a scalar delta), while leaving
+`uncovered_protected_obligations` completely UNCHANGED from the "before"
+value. This was correct only when the affected protected goal happened
+to be funded from a single bucket. Whenever a goal was funded from
+several buckets — a supported, tested pattern since P0-E2-S5 — a proposed
+spend from one of those buckets could silently under-report (or fail to
+report at all) a resulting protected-obligation coverage shortfall,
+because the OTHER buckets' real, unaffected contribution to that goal's
+backing was never re-examined and the obligation-coverage comparison was
+never re-run against the new total.
+
+ROOT ARCHITECTURE
+------------------------------------------------------------------------
+The fix threads an optional hypothetical bucket-balance override
+(`p_hypothetical_bucket_id`, `p_hypothetical_delta`, both defaulting to
+null/0) through the entire existing dependency chain rather than writing
+a second formula:
+  goal_backed_protected_allocation(goal_id, [hyp_bucket, hyp_delta])
+    -> rules_uncovered_protected_obligations([hyp_bucket, hyp_delta])
+      -> safe_to_deploy_by_currency([hyp_bucket, hyp_delta])
+With no arguments, every function computes exactly the real current
+state — byte-identical to P0-E2-S6's behavior, proven by the complete,
+unmodified P0-E2-S6 test suite (69 assertions) still passing against the
+refactored functions. `evaluate_proposed_cash_use()` now calls
+`safe_to_deploy_by_currency()` exactly twice (real, then hypothetical)
+and contains no independent Safe-to-Deploy arithmetic of its own.
+
+FILES CREATED
+------------------------------------------------------------------------
+supabase/migrations/20260923220000_harden_safe_to_deploy_evaluator.sql
+docs/reports/P0-E2-S6A-safe-to-deploy-evaluator-hardening.txt (this file)
+
+No new lib/domain directory, no new UI component, no new app route — per
+this phase's explicit "do not add new product domains, do not redesign
+UI" scope.
+
+FILES MODIFIED
+------------------------------------------------------------------------
+lib/domain/rules/types.ts        (+11: three new ProposedCashUseEvaluation fields)
+lib/domain/rules/repository.ts   (+3: maps the three new fields)
+supabase/tests/rules/run.ts      (+198: 17 new hardening tests appended; zero existing tests removed or altered)
+lib/supabase/database.types.ts   (regenerated, +19)
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md   (+83: §33 marked RESOLVED, new §33A)
+docs/architecture/SYSTEM_ARCHITECTURE.md      (+7: §4 hardening note)
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md  (+55: new §18)
+docs/project/BUILD_STATE.md                   (rewritten for this phase)
+
+MULTI_CURRENCY_MODEL.md was reviewed and required no changes — the
+hypothetical override is scoped to exactly one bucket's own native
+currency by construction, and cross-currency isolation was already
+correctly documented; this phase changes nothing about that guarantee
+(verified explicitly by a dedicated test).
+
+MIGRATION CHANGES
+------------------------------------------------------------------------
+One new migration, no table added/altered/dropped — every change is to
+function bodies and signatures:
+  - `goal_backed_protected_allocation(uuid)` DROPped and recreated as
+    `(uuid, uuid, numeric)` — hypothetical delta applied to exactly the
+    matching bucket inside the pro-rata backing calculation; a genuine,
+    unrelated NUMERIC-division precision bug was also fixed here (see
+    Validation section).
+  - `rules_uncovered_protected_obligations()` DROPped and recreated as
+    `(uuid, numeric)` — threads the override through to the backing
+    calculation; the per-goal obligation-aggregation logic itself is
+    completely unchanged from P0-E2-S6.
+  - `safe_to_deploy_by_currency()` DROPped and recreated as
+    `(uuid, numeric)` — the hypothetical delta is folded into both the
+    currency's liquid-cash total (via a synthetic adjustment row, scoped
+    to the caller's own bucket) and the affected bucket's own protected-
+    backing contribution; every other CTE (obligations, floors) is
+    unchanged.
+  - `evaluate_proposed_cash_use(uuid, numeric)` DROPped and recreated
+    with the same public signature but an entirely rewritten body (see
+    Shared calculation strategy) and three new output columns.
+Each function is DROPped by its exact prior signature before being
+recreated — required because Postgres identifies a function by
+name+signature; a bare `CREATE OR REPLACE` with a different parameter
+list creates a second, ambiguously-overloaded function rather than
+replacing the first (documented as a standing rule in
+`docs/security/SECURITY_AND_RLS_PRINCIPLES.md §18`).
+
+SHARED CALCULATION STRATEGY
+------------------------------------------------------------------------
+Exactly the brief's "one calculation model" instruction: no
+Safe-to-Deploy-Formula-B exists anywhere. `evaluate_proposed_cash_use()`
+calls the real `safe_to_deploy_by_currency()` for "before" and the same
+function with a hypothetical override for "after," then derives every
+returned figure from a straightforward comparison of those two records
+(or from simple, unchanged bucket-local balance arithmetic for the
+current/post-use-balance and this-bucket's-own-shortfall fields, which
+were never part of the documented limitation). There is no second SQL
+expression anywhere in the codebase that reimplements
+`protected_commitments`, `required_retained_cash`, `safe_to_deploy`, or
+`retained_deficit`.
+
+HYPOTHETICAL-STATE STRATEGY
+------------------------------------------------------------------------
+The override is applied at exactly one point in each function: the
+balance of the one named bucket, inside that function's innermost
+balance-computing subquery (a `case when <this bucket> then real_balance
++ delta else real_balance end`). Every downstream computation —
+per-bucket protected backing (`LEAST(protected_total, balance)`),
+per-goal pro-rata backed allocation, per-goal obligation-coverage
+aggregation, and the final currency-level MAX-based formula — flows from
+that one adjusted number through otherwise completely unmodified logic.
+A hypothetical-bucket lookup is independently scoped to
+`user_id = auth.uid ()` everywhere it's resolved (the
+`hypothetical_adjustment` CTE in `safe_to_deploy_by_currency()`; the
+`case when n.bucket_id = p_hypothetical_bucket_id` branch in
+`goal_backed_protected_allocation()`) — pointing the override at a
+bucket that is not the caller's own silently contributes nothing, never
+an error, never another tenant's data, defense-in-depth alongside
+`evaluate_proposed_cash_use()`'s own mandatory ownership check at the
+entrypoint.
+
+MULTI-BUCKET GOAL BEHAVIOR
+------------------------------------------------------------------------
+Verified against Worked Case 1 exactly: a protected goal funded 4,000
+from Bucket A (balance 5,000) and 4,000 from Bucket B (balance 5,000),
+backed 8,000 total, with a linked 7,000 protected obligation (uncovered
+0). Evaluating a hypothetical 3,000 spend from Bucket A alone: Bucket A
+can now back only 2,000 of its own allocation (pro-rata:
+4,000 × LEAST(2,000, 4,000) / 4,000 = 2,000); Bucket B, untouched,
+still backs its full 4,000. Total backing 6,000, exactly matching the
+brief. Worked Case 2 verified with a smaller 1,500 spend: backing
+reduces to 7,500 (still above the 7,000 obligation), uncovered correctly
+stays 0. Worked Case 5 verified with one bucket funding two separate
+protected goals, each also funded from its own additional bucket:
+combined backing correctly drops from 14,000 to 10,000 after a
+hypothetical spend from the shared bucket, both goals' individual
+pro-rata reductions correctly summed.
+
+OBLIGATION-COVERAGE BEHAVIOR
+------------------------------------------------------------------------
+Verified against Worked Case 4 exactly: a second protected obligation
+(2,000) added to the same multi-bucket goal already carrying a 7,000
+obligation. Combined linked total 9,000 is aggregated PER GOAL before
+comparing against backing (unchanged aggregation logic from P0-E2-S6,
+now correctly fed a hypothetically-recomputed backing figure) — a
+hypothetical spend from Bucket B reducing total backing to 7,000
+correctly reports uncovered = 2,000 (9,000 − 7,000), not 0 (which an
+incorrect independent-per-obligation-claim model would have produced,
+since 2,000 alone is less than 7,000).
+
+CONFLICT SEMANTICS
+------------------------------------------------------------------------
+`protected_obligation_status` is upgraded from P0-E2-S6's coarse "does
+this bucket fund some linked obligation" heuristic to a direct
+comparison of the fully recomputed hypothetical result:
+`conflict` when the proposed use creates or worsens uncovered protected
+obligations (`uncovered_after > uncovered_before`) — a direct coverage
+failure; `attention` when protected liquidity for the currency decreases
+without an outright coverage failure (`protected_goal_cash_after <
+protected_goal_cash_before`) — a factual, evidence-based signal, never an
+invented percentage threshold; `aligned` otherwise. All five labels
+remain within the established neutral vocabulary
+(aligned/attention/conflict/not_configured/insufficient_information) —
+verified by the existing P0-E2-S6 advisory-vocabulary-blocklist test,
+still passing unmodified.
+
+OVERRIDE INTEGRATION
+------------------------------------------------------------------------
+`record_cash_use_override()` was not modified at all this phase — it
+already called `evaluate_proposed_cash_use()` for its snapshot, so
+fixing the evaluator automatically corrects every override recorded from
+this point forward with zero additional code. Verified explicitly:
+recording an override for Worked Case 1's exact scenario (which the
+pre-S6A evaluator would have shown as `'aligned'`, since
+uncovered_protected_obligations was never recomputed) now correctly
+captures `'conflict'` in the immutable `conflicts_snapshot` JSONB.
+
+RLS REVIEW
+------------------------------------------------------------------------
+No RLS policy, grant, or table changed this phase. Every function
+retains `SECURITY INVOKER`. Cross-tenant bucket evaluation
+(`evaluate_proposed_cash_use` against another user's bucket) and
+anonymous evaluator invocation are both re-verified rejected after the
+refactor, using the exact same assertions as P0-E2-S6 plus two dedicated
+new post-refactor regression tests. No shared calculation helper
+consults or leaks another tenant's data: every hypothetical-bucket
+lookup independently re-applies `user_id = auth.uid ()`.
+
+TESTS ADDED
+------------------------------------------------------------------------
+17 new assertions appended to `supabase/tests/rules/run.ts` (no existing
+test removed or altered), covering all 20 items the phase brief
+requested at minimum:
+  1-2.  Multi-bucket funding of one protected goal recomputed correctly,
+        including the unaffected bucket (Worked Case 1).
+  3-5.  Obligation stays fully covered when backing remains sufficient
+        (Worked Case 2); becomes partially uncovered with the exact
+        amount when backing drops below the obligation (Worked Case 1).
+  6.    Multiple obligations sharing one goal aggregated, not
+        independently claimed (Worked Case 4).
+  7.    A bucket funding two protected goals recalculates both correctly
+        (Worked Case 5).
+  8-10. protected_goal_cash_after / uncovered_protected_obligations_after
+        / protected_commitments_after all directly asserted exact.
+  11.   required_retained_cash still uses MAX not SUM post-use (a
+        dedicated deficit-based discriminating assertion: a SUM-based
+        implementation would show a 3,000 deficit where the correct
+        MAX-based result shows 0).
+  12-13. safe_to_deploy_after and retained_deficit_after both directly
+        asserted exact in both worked-case scenarios.
+  14.   protected_obligation_status asserted 'conflict' (Worked Case 1)
+        and 'attention' (Worked Case 2) reflecting the recomputed state.
+  15.   Evaluation remains read-only — real Safe-to-Deploy state
+        reconfirmed byte-identical after two hypothetical evaluations.
+  16.   Override snapshot captures the corrected 'conflict' state with
+        zero changes to the override-recording code path.
+  17-18. Cross-tenant and anonymous evaluator access re-verified rejected
+        after the refactor.
+  19-20. All 69 existing Rules tests, and all six other domain suites,
+        pass unmodified.
+
+FULL REGRESSION RESULTS
+------------------------------------------------------------------------
+Fresh `supabase db reset`, full suite: 290/290 assertions passed —
+Profile 20, Money 37, Currency 11, Assets 28, Receivables 27, Liabilities
+25, Goals 56, Rules/Obligations 86 (69 unmodified P0-E2-S6 + 17 new).
+
+REMOTE MIGRATION STATUS
+------------------------------------------------------------------------
+`supabase db push --linked --dry-run` reviewed (confirmed exactly one new
+migration pending — this phase's), then `supabase db push --linked
+--yes`. `supabase migration list --linked` confirms all 8 local migration
+timestamps match remote exactly. The same benign pg-delta
+catalog-caching warning seen in every prior remote push appeared again
+and did not affect schema application. No `supabase db reset` was ever
+run against remote.
+
+VALIDATION
+------------------------------------------------------------------------
+- Fresh `supabase db reset` (x3 this phase): succeeded, all 8 migrations
+  applied cleanly every time.
+- Full test suite (8 suites): 290/290 assertions passed.
+- Two real bugs were found and fixed during this phase's own
+  development, both confirmed absent on every subsequent run:
+  (1) the new worked-case tests initially failed with numerically
+  correct but over-precise results ("1000.0000000000000000" instead of
+  "1000.000000") traced to `goal_backed_protected_allocation()`'s
+  pro-rata NUMERIC division, which intentionally produces more decimal
+  digits than its operands (unlike multiplication/addition/subtraction)
+  — fixed by wrapping the division in `round(..., 6)`;
+  (2) none other this phase beyond that — the ambiguous-column-reference
+  class of bug from P0-E2-S6 was proactively avoided by reusing the
+  established aliasing pattern from the start. Both lessons documented
+  in `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §18`.
+- `npm run lint`: clean, zero warnings.
+- `npx tsc --noEmit` (app) and `npx tsc --noEmit -p
+  supabase/tests/tsconfig.json` (test harness): clean, zero errors.
+- `npm run build`: succeeds with real Supabase config.
+- `npm run build` with `.env.local` removed: succeeds — all routes
+  (including `/rules`, unchanged) correctly degrade to static.
+- Service-role exposure search (app/components/lib): zero matches.
+- Capital Compass production-source search: zero matches (only the
+  pre-existing historical prohibition note).
+- Remote migration dry-run: reviewed before push, confirmed additive and
+  safe (exactly one new migration).
+- Final `git status`: clean, fully unstaged, nothing committed.
+
+ASSUMPTIONS
+------------------------------------------------------------------------
+- Exposing `protected_goal_cash_after`/`uncovered_protected_obligations_
+  after`/`protected_commitments_after` directly on
+  `evaluate_proposed_cash_use()`'s return shape (beyond what P0-E2-S6
+  originally returned) is a deliberate, minimal addition needed to make
+  the worked cases independently testable and the calculation genuinely
+  inspectable — not a UI change (the existing `CashUseEvaluatorForm` was
+  not modified to surface them), matching this phase's "narrow
+  hardening" scope.
+- `protected_obligation_status`'s upgraded semantics (conflict on
+  coverage worsening, attention on liquidity decrease without coverage
+  failure) is the brief's own stated rule, applied literally with no
+  additional invented threshold.
+- The remote "Monatriq Dev" project identity (confirmed in P0-E2-S3)
+  remains valid and did not need re-confirmation this phase.
+
+OPEN QUESTIONS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Open questions" (13 items, one newly
+resolved this phase) — most relevant new one:
+  - Should `CashUseEvaluatorForm` be updated to surface the three newly-
+    exposed after-state figures for full inspectability? Deliberately
+    deferred this phase per its explicit "do not redesign UI" scope.
+
+RISKS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Risks" (5 items, one resolved this
+phase — the evaluator's second-order scope limitation no longer
+applies). No new risk was introduced by this phase's changes; remote
+schema is deployed but genuinely untested there, unchanged posture from
+every prior phase.
+
+GIT DIFF
+------------------------------------------------------------------------
+8 files changed, 542 insertions(+), 196 deletions(-):
+  docs/architecture/FINANCIAL_DOMAIN_MODEL.md  |  83 +++++-
+  docs/architecture/SYSTEM_ARCHITECTURE.md     |   7 +
+  docs/project/BUILD_STATE.md                  | 362 ++++++++++--------
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md |  55 +++
+  lib/domain/rules/repository.ts               |   3 +
+  lib/domain/rules/types.ts                    |  11 +
+  lib/supabase/database.types.ts               |  19 +-
+  supabase/tests/rules/run.ts                  | 198 +++++++
+Plus 1 new untracked path (the migration) and this report. This diff is
+layered on top of P0-E2-S4 through S6's still-uncommitted changes, per
+the standing "do not commit" instruction across recent phases.
+
+GIT STATUS
+------------------------------------------------------------------------
+Branch: main. Nothing staged. Nothing committed. Nothing pushed. Working
+tree exactly as listed above plus prior phases' carried-forward
+uncommitted changes — no accidental staging occurred.
+
+RECOMMENDED NEXT PHASE
+------------------------------------------------------------------------
+P0-E3-S1 — Home aggregation layer, now with a Safe-to-Deploy engine
+whose evaluator is fully consistent to aggregate. Alternatively,
+Decisions — now a stronger candidate than before this hardening phase,
+since it can consume `evaluate_proposed_cash_use()` directly for its own
+conflict detection without inheriting a known second-order gap.

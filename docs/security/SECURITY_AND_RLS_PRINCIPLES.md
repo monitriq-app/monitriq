@@ -408,3 +408,58 @@ design choice worth recording:
   foundation, no invented heuristic" discipline this document's Financial
   Rules sections (§ established pattern list) already expect of RLS/grant
   design, applied to calculation design instead.
+
+## 18. Established pattern: parameterized hypothetical-state functions (P0-E2-S6A)
+
+`supabase/migrations/*_harden_safe_to_deploy_evaluator.sql` removes a
+documented second-order limitation in `evaluate_proposed_cash_use()` by
+giving `goal_backed_protected_allocation()`, `rules_uncovered_protected_
+obligations()`, and `safe_to_deploy_by_currency()` two new optional
+parameters (`p_hypothetical_bucket_id`, `p_hypothetical_delta`,
+defaulting to `null`/`0`) rather than writing a second, evaluator-specific
+formula. Two lessons:
+
+- **Changing a function's parameter list requires DROP + CREATE, not
+  CREATE OR REPLACE — Postgres identifies a function by name AND
+  signature.** `CREATE OR REPLACE FUNCTION safe_to_deploy_by_currency(a
+  uuid default null, b numeric default 0)` when a zero-argument
+  `safe_to_deploy_by_currency()` already exists does not replace it — it
+  creates a SECOND, overloaded function, and a bare `safe_to_deploy_by_
+  currency()` call then becomes genuinely ambiguous between "call the
+  zero-arg version" and "call the two-arg version with both defaults,"
+  which Postgres correctly refuses to resolve. Every function whose
+  signature changed this migration is explicitly `DROP FUNCTION`ed by its
+  exact prior signature before being recreated, and re-granted from
+  scratch (a dropped function's grants do not carry over to its
+  replacement). **Rule going forward: adding a parameter to an existing
+  function — even an optional, defaulted one — needs an explicit `DROP
+  FUNCTION <name>(<old signature>);` in the same migration, not a bare
+  `CREATE OR REPLACE`.**
+- **A hypothetical-bucket lookup must be independently scoped to
+  `auth.uid ()`, exactly like a real one, even though the calling
+  function already validated ownership before reaching it.** Every place
+  `p_hypothetical_bucket_id` is resolved to a currency or a balance (the
+  `hypothetical_adjustment` CTE in `safe_to_deploy_by_currency()`, the
+  `case when n.bucket_id = p_hypothetical_bucket_id` branch inside
+  `goal_backed_protected_allocation()`) re-applies `b.user_id = auth.uid
+  ()` or is scoped through a table that already carries that condition —
+  so a hypothetical bucket ID belonging to another user (reachable only
+  if some future caller invoked these helpers directly, bypassing
+  `evaluate_proposed_cash_use()`'s own ownership check) silently
+  contributes zero adjustment rather than leaking that user's balance or
+  erroring. Defense-in-depth, not a substitute for the entrypoint's own
+  check, which remains mandatory and unchanged.
+
+A second, unrelated lesson surfaced by the same migration's test suite,
+extending §17's NUMERIC-scale lesson: **NUMERIC division intentionally
+produces MORE decimal digits than either operand, and this only surfaces
+once the result is cast to text.** `goal_backed_protected_allocation()`'s
+pro-rata branch (`nominal_amount * LEAST(balance, protected_total) /
+protected_total`) produced values like `"1000.0000000000000000"` instead
+of the codebase's `"1000.000000"` convention — caught by the new
+worked-case tests, fixed by wrapping the division in `round(..., 6)`.
+**Rule going forward: any NUMERIC division whose result will be
+`::text`-cast for monetary display must be wrapped in `round(..., 6)`
+(or the currency's actual decimal places, where known) — unlike
+multiplication, addition, or subtraction, division does not preserve the
+operands' scale.**

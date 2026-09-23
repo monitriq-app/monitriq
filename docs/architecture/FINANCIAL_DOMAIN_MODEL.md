@@ -859,15 +859,80 @@ protected liquidity if I use this cash" with neutral, non-advisory labels
 cash-floor, protected-goal, protected-obligation) — never
 approve/reject/recommend semantics, verified by an explicit test asserting
 none of the returned labels appear in an approval/rejection vocabulary.
-It is a pure read: calling it writes nothing. **Documented scope
-limitation**: the "after" recomputation faithfully reflects the proposed
-bucket's own contribution to protected backing and to the currency's
-liquid cash, but does not recursively re-derive obligation coverage that
-depends on OTHER buckets funding the same goal — a genuine second-order
-effect deliberately left out of this phase's evaluator (see "Do not turn
-this into a reservation system" in the phase brief) rather than silently
-approximated. A future phase may extend this if the coarse signal proves
-insufficient in practice.
+It is a pure read: calling it writes nothing.
+
+**RESOLVED (P0-E2-S6A).** The second-order limitation this section
+originally documented — the "after" recomputation reflecting only the
+proposed bucket's own contribution, not obligation coverage that depends
+on OTHER buckets funding the same goal — no longer exists. See §33A.
+
+## 33A. Safe-to-Deploy evaluator consistency hardening (P0-E2-S6A)
+
+The fix is architectural, not a patch: `evaluate_proposed_cash_use()` no
+longer contains any independent Safe-to-Deploy arithmetic at all. It
+calls `safe_to_deploy_by_currency()` twice — once with no arguments (the
+real "before" state) and once with the proposed bucket and a negative
+delta as an optional **hypothetical bucket-balance override** (the
+"after" state) — and every returned figure is read directly from one of
+those two calls, or a simple bucket-local balance comparison. Both calls
+run the exact same SQL; there is no second formula that could drift from
+the first.
+
+The hypothetical override threads through the full dependency chain —
+`goal_backed_protected_allocation()` → `rules_uncovered_protected_
+obligations()` → `safe_to_deploy_by_currency()` — applied at exactly one
+point: the balance of the one named bucket, inside each function's
+innermost balance-computing subquery. Every downstream computation (per-
+bucket protected backing, per-goal pro-rata backed allocation correctly
+reading every OTHER bucket funding that goal at its real, unmodified
+balance, per-goal obligation coverage aggregated across every linked
+obligation, and the final currency-level formula) flows from that one
+adjusted number through completely unmodified logic. With no arguments,
+every function in the chain computes exactly the real current state,
+byte-identical to P0-E2-S6's behavior — verified by the full,
+unmodified P0-E2-S6 test suite still passing against the refactored
+functions.
+
+**Worked-case verification** (all reproduced exactly in
+`supabase/tests/rules/run.ts`): a protected goal funded 4,000+4,000 from
+two buckets (backed 8,000) with a 7,000 linked protected obligation
+(uncovered 0) — evaluating a hypothetical 3,000 spend from ONE of the two
+buckets correctly reduces total backing to 6,000 (2,000 now backable from
+the spent bucket, 4,000 unaffected from the other) and uncovered
+protected obligations to 1,000, not 0. A smaller 1,500 spend correctly
+reduces backing to 7,500 while uncovered stays 0 (still fully covered). A
+second obligation added to the same goal is correctly aggregated with the
+first before comparing against backing, never independently over- or
+under-counted. A bucket funding two different protected goals correctly
+recalculates both goals' backing simultaneously.
+
+**`protected_obligation_status` semantics** (upgraded from P0-E2-S6's
+coarse "does this bucket fund some linked obligation" heuristic):
+`conflict` when the hypothetical use creates or worsens uncovered
+protected obligations (a direct coverage failure); `attention` when
+protected liquidity for the currency decreases without an outright
+coverage failure (a factual, evidence-based signal — `protected_goal_
+cash` decreasing — never an invented percentage threshold); `aligned`
+otherwise.
+
+**Override snapshots require no separate formula.**
+`record_cash_use_override()` was not modified at all this phase — it
+already called `evaluate_proposed_cash_use()` for its snapshot, so fixing
+the evaluator automatically corrected every override recorded from that
+point forward, verified explicitly (a scenario that would have
+incorrectly shown `'aligned'` under the P0-E2-S6 evaluator now correctly
+snapshots `'conflict'`).
+
+A genuine second, unrelated NUMERIC-precision bug was found and fixed in
+the same migration: the pro-rata branch of `goal_backed_protected_
+allocation()` (`nominal_amount * LEAST(balance, protected_total) /
+protected_total`) is a NUMERIC division, which intentionally produces
+MORE decimal digits than either operand — left unrounded, this expanded
+to results like `"1000.0000000000000000"` once cast to text, rather than
+the codebase's `"1000.000000"` convention. Fixed by wrapping the division
+in `round(..., 6)`. See
+[SECURITY_AND_RLS_PRINCIPLES.md §17](../security/SECURITY_AND_RLS_PRINCIPLES.md#17-established-pattern-financial-rules-obligations--safe-to-deploy-p0-e2-s6)
+for the general NUMERIC-scale lesson this extends.
 
 ## 33. Override audit (P0-E2-S6)
 
