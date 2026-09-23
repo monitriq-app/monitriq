@@ -1,0 +1,508 @@
+================================================================================
+P0-E3-S1 — UNIFIED FINANCIAL POSITION & CROSS-DOMAIN AGGREGATION ENGINE
+================================================================================
+
+1. PHASE
+--------------------------------------------------------------------------------
+P0-E3-S1 — Unified Financial Position & Cross-Domain Aggregation Engine.
+
+2. STATUS
+--------------------------------------------------------------------------------
+COMPLETE.
+
+3. OBJECTIVE
+--------------------------------------------------------------------------------
+Build Monatriq's canonical Financial Position domain: the one place that
+answers how much cash exists, non-cash asset values, amount owed to the
+user, amount the user owes, native-currency Net Worth, protected cash,
+Safe to Deploy, retained-cash deficit, allocation shortfalls, upcoming
+obligations, active goals, and active decisions — by composing the eight
+domains already built (Money, Assets, Receivables, Liabilities, Goals,
+Rules/Obligations, Decisions, Currency), never by creating a duplicate
+source of truth. Explicitly NOT this phase: final Home, Stitch design,
+any new formula beyond Net Worth itself.
+
+4. REPOSITORY STATE
+--------------------------------------------------------------------------------
+Branch: main. Working tree carries this phase's changes on top of
+P0-E2-S4 through P0-E2-S7's already-uncommitted work (per this session's
+standing "do not commit without explicit request" instruction). No
+commits were made this phase. Full `git status`/`git diff --stat` in
+§40-41 below.
+
+5. SUPABASE ENVIRONMENT
+--------------------------------------------------------------------------------
+Local: Docker-based Supabase stack via `supabase start`/`db reset`.
+Remote: "Monatriq Dev" (ref `mvnwrkfcszazqqccmmxq`), already linked from
+prior phases. Treated as DEVELOPMENT throughout — no destructive/
+adversarial operation was ever run against it; those remain local-only,
+per standing instruction.
+
+6. FILES CREATED
+--------------------------------------------------------------------------------
+supabase/migrations/20260925090000_create_financial_position_engine.sql
+lib/domain/financial-position/types.ts
+lib/domain/financial-position/repository.ts
+lib/domain/financial-position/aggregate.ts
+app/(app)/financial-position/page.tsx
+components/financial-position/NativePositionList.tsx
+components/financial-position/FocusGoalPanel.tsx
+components/financial-position/ActiveDecisionsList.tsx
+supabase/tests/financial-position/run.ts
+docs/reports/P0-E3-S1-unified-financial-position-engine.txt
+
+7. FILES MODIFIED
+--------------------------------------------------------------------------------
+components/layout/AppShell.tsx        (Financial Position nav link)
+lib/supabase/database.types.ts        (regenerated — new RPC signature)
+package.json                          (test:financial-position script;
+                                        extended combined `test` script)
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md   (+§41, pointers from §20/§24)
+docs/architecture/MULTI_CURRENCY_MODEL.md     (+§23)
+docs/architecture/SYSTEM_ARCHITECTURE.md      (repo layout, §4 addendum)
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md  (+§20, new pattern)
+docs/project/BUILD_STATE.md                   (full rewrite for this phase)
+
+8. MIGRATION / SCHEMA STATUS
+--------------------------------------------------------------------------------
+One new migration. Zero new tables. One new function:
+`public.financial_position_by_currency()` — no arguments, returns one row
+per native currency present in any of eight composed source functions.
+`security invoker`, `stable`, `set search_path = pg_catalog, public`.
+`REVOKE ALL ... FROM PUBLIC, anon` / `GRANT EXECUTE ... TO authenticated`.
+Applied cleanly on every local `db reset` this phase (two resets) and
+pushed to remote (see §35). A migration WAS genuinely required this phase
+(one new function) — the brief's "no migration required" escape hatch did
+not apply.
+
+9. AGGREGATION ARCHITECTURE
+--------------------------------------------------------------------------------
+Hybrid query strategy, chosen deliberately and documented in the
+migration's own header comment:
+
+  (a) ONE composed SQL function (`financial_position_by_currency()`) for
+      every per-currency NUMERIC aggregate — cash, assets, receivables,
+      liabilities, Net Worth, Safe-to-Deploy fields, potential liquidity,
+      allocation shortfall. Implemented as CTEs, each selecting from one
+      existing canonical function, joined on `currency_code`. Avoids N+1
+      round trips for tabular, currency-keyed data.
+
+  (b) PARALLEL TypeScript-layer reads (`Promise.all` in
+      `getFinancialPositionSummary()`) for the list-shaped domain
+      summaries that don't fit a currency-keyed row: Goals
+      (`getGoalSummaries()`), Decisions (`getDecisionSummaries()`),
+      Obligations (`getUpcomingObligations()`), plus the user's Profile
+      for `reportingCurrency`. Filtering (`activeGoals`, `focusGoal`,
+      `activeDecisions`) happens in TypeScript over already-fetched data,
+      not via additional queries.
+
+No table is read directly by the new function or the new repository
+layer except through the eight canonical functions/repositories listed
+in §10 — this is "aggregation, not ownership" enforced by construction:
+the new SQL function's body contains no independent balance/valuation/
+outstanding-amount arithmetic anywhere except the one Net Worth sum.
+
+10. CANONICAL SOURCE MAP
+--------------------------------------------------------------------------------
+Liquid Cash              -> money_currency_totals()
+Non-Cash Asset Value      -> asset_native_currency_totals()  (estimated_current_value only)
+Receivables Outstanding   -> receivable_native_currency_totals()
+Liabilities Outstanding   -> liability_native_currency_totals()
+Safe to Deploy / Protected
+  Cash / Retained Deficit -> safe_to_deploy_by_currency()
+Asset Quick-Sale Potential -> asset_summary()  (filtered, summed by currency)
+Receivable Estimated
+  Recoverable              -> receivable_summary()  (filtered, summed by currency)
+Allocation Shortfall       -> goal_bucket_shortfalls()  (summed by currency)
+Active Goals / Focus Goal  -> getGoalSummaries() (TypeScript layer)
+Active Decisions           -> getDecisionSummaries() (TypeScript layer)
+Upcoming Obligations       -> getUpcomingObligations() / upcoming_obligations()
+Reporting Currency         -> getProfile().preferred_currency
+Reporting Conversion       -> convertToReportingCurrency() (lib/domain/currency)
+
+No formula from any of these was re-derived, forked, or duplicated.
+
+11. NATIVE FINANCIAL-POSITION MODEL
+--------------------------------------------------------------------------------
+`NativeFinancialPosition` (lib/domain/financial-position/types.ts): one
+row per native currency — currencyCode, liquidCash, nonCashAssetValue,
+receivablesOutstanding, liabilitiesOutstanding, netWorth,
+protectedGoalCash, protectedCommitments, minimumCashFloor,
+requiredRetainedCash, safeToDeploy, safeToDeployStatus, retainedDeficit,
+assetQuickSalePotential, receivablesEstimatedRecoverable,
+receivablesRecoverabilityDifference, allocationShortfall. All monetary
+fields are exact-decimal strings (never parsed to JS number). Computed
+independently per currency; currencies are never blended.
+
+12. NET-WORTH MODEL
+--------------------------------------------------------------------------------
+netWorth = liquidCash + nonCashAssetValue + receivablesOutstanding
+           − liabilitiesOutstanding
+
+The ONLY new calculation this phase introduces. Never clamped — a
+currency with more debt than assets legitimately produces a negative
+netWorth (verified explicitly: NGN liability-only setup with no
+offsetting cash produces exactly "-50000.000000", not "0.000000" or an
+error). Goals, Rules, Obligations, and Decisions are all verified to
+leave netWorth completely unchanged (see §30).
+
+13. RECEIVABLE TREATMENT
+--------------------------------------------------------------------------------
+Net Worth uses current outstanding receivable amount
+(receivable_native_currency_totals()) — never the estimated recoverable
+value. receivablesEstimatedRecoverable is exposed as a fully separate
+field, null ("Not set") when no estimate was ever recorded — never
+silently assumed equal to outstanding. receivablesRecoverabilityDifference
+= receivablesEstimatedRecoverable − receivablesOutstanding, null exactly
+when the estimate is null. Receivable recovery (cash in, receivable down)
+was verified to leave netWorth completely unchanged (value moves between
+two Net Worth components, doesn't create or destroy it) both when applied
+and after voiding.
+
+14. ASSET VALUATION TREATMENT
+--------------------------------------------------------------------------------
+Net Worth uses the latest estimated_current_value only
+(asset_native_currency_totals()). target_value never enters Net Worth
+(verified: a EUR asset with target_value=9000 and
+estimated_current_value=4000/later 4500 produces netWorth matching the
+current value, never 9000). quick_sale_estimate never enters Net Worth
+either — it is exposed separately as assetQuickSalePotential, null when
+not recorded.
+
+15. LIABILITY TREATMENT
+--------------------------------------------------------------------------------
+Net Worth subtracts current outstanding principal only
+(liability_native_currency_totals()) — never opening principal, never
+already-paid interest, never future interest assumptions, never
+hypothetical Decision debt. Verified explicitly: a principal-only debt
+payment moves cash and liability down by the same amount (netWorth
+unchanged); an interest+fee payment moves cash down with liability
+unchanged (netWorth reduced by exactly the interest+fee total); voiding
+the principal-only payment restores both sides symmetrically (netWorth
+unchanged again, both before/after values matching).
+
+16. GOAL / OBLIGATION / DECISION TREATMENT
+--------------------------------------------------------------------------------
+Verified structurally, not just observed: goal allocation, release, and
+protected-vs-unprotected distinctions all leave netWorth unchanged (goals
+claim already-existing cash, they don't move it between tables). Rule
+creation/change, obligation creation, and marking an obligation
+paid/cancelled all leave netWorth unchanged (configuration and
+commitments, not transactions). Decision scenario evaluation and every
+choice including 'proceed' leave netWorth unchanged (Decisions write only
+to decision_* tables, never to financial_events/cash_movements/assets/
+liabilities). All four are surfaced as separate, factual information
+(activeGoals, focusGoal, activeDecisions, upcomingObligations) — never
+folded into Net Worth.
+
+17. LIQUID-POSITION MODEL
+--------------------------------------------------------------------------------
+protectedGoalCash, protectedCommitments, minimumCashFloor,
+requiredRetainedCash, safeToDeploy, safeToDeployStatus, retainedDeficit
+are read verbatim, per currency, from safe_to_deploy_by_currency() — no
+second liquidity formula exists anywhere in this phase's code.
+
+18. PROTECTED-CASH MODEL
+--------------------------------------------------------------------------------
+protectedGoalCash is Rules' own actual-backed protected cash (capped at
+real bucket balance, never the nominal allocation) — inherited directly,
+not recomputed. Verified with the same underfunded-bucket worked case
+established in P0-E2-S6A: SGD bucket funded to 7000, two protected goals
+allocated 4000+3000 (nominal 7000), a real spend of 2000 leaves only 5000
+actually backed — protectedGoalCash reads exactly "5000.000000", matching
+safe_to_deploy_by_currency() exactly (asserted field-by-field, not just
+value-by-value).
+
+19. SAFE-TO-DEPLOY INTEGRATION
+--------------------------------------------------------------------------------
+Verified with a direct, same-request comparison: `getSafeToDeployByCurrency()`
+and `getFinancialPositionByCurrency()` are called in parallel against
+identical fixture state, and protectedGoalCash/safeToDeploy/retainedDeficit
+are asserted equal between the two results field-by-field. Currencies with
+no configured minimum cash floor report safeToDeployStatus="not_configured"
+in Financial Position exactly as they do in Rules — never a silently
+assumed floor.
+
+20. POTENTIAL LIQUIDITY
+--------------------------------------------------------------------------------
+assetQuickSalePotential (sum of recorded quick_sale_estimate, filtered to
+non-archived assets) and receivablesEstimatedRecoverable (sum of recorded
+estimated_recoverable_value, filtered to non-archived receivables) are
+exposed as fully distinct fields — never combined with cash or receivable
+outstanding into one "liquid total." Both are null (not 0) when nothing
+was ever recorded, via Postgres's natural SUM()-over-empty-filtered-set
+NULL propagation. Verified: receivables never appear in liquidCash; an
+asset's quick-sale estimate never feeds safeToDeploy (a currency with a
+quick-sale estimate but no configured floor still reports
+safeToDeployStatus="not_configured", proving no back-door contribution).
+
+21. ALLOCATION-SHORTFALL MODEL
+--------------------------------------------------------------------------------
+allocationShortfall sums goal_bucket_shortfalls() per currency and is
+always a real number (0 when nothing is short — a genuine computable
+zero, not a missing value). Exposed as its own field, never hidden inside
+safeToDeploy. Verified with the same SGD underfunded-bucket case: nominal
+7000 allocated, 5000 actually backed -> allocationShortfall =
+"2000.000000".
+
+22. REPORTING-CURRENCY MODEL
+--------------------------------------------------------------------------------
+`convertFinancialPositionToReportingCurrency()`
+(lib/domain/financial-position/aggregate.ts) converts each of the four
+Net Worth components independently via convertToReportingCurrency()
+(never pre-summing mixed currencies), then combines the four converted
+totals via decimal.js into one reporting netWorth. Verified with a
+non-round rate (1 EUR = 1.10 USD): USD position (netWorth 5000, already
+reporting currency) + EUR position (netWorth 4500 * 1.10 = 4950) produces
+an exact reporting netWorth of "9950" — no binary-float drift.
+
+23. FX TRANSPARENCY
+--------------------------------------------------------------------------------
+The calculated result exposes reportingCurrency, currenciesRequiringConversion,
+ratesUsed (exact rate strings, scoped only to currencies actually
+requiring conversion), and asOf (calculation timestamp) — never implying
+live FX. No live FX integration exists or was added this phase; every
+rate must be supplied explicitly by the caller.
+
+24. PARTIAL / NOT-CALCULATED STATES
+--------------------------------------------------------------------------------
+Verified explicitly: with a EUR position present and no EUR->USD rate
+supplied, convertFinancialPositionToReportingCurrency() returns
+{status: "not_calculated", missingRates: ["EUR"], currenciesRequiringConversion:
+["EUR"]} — never omitting the unsupported currency, never assuming
+rate=1, never showing a partial Net Worth. Native-currency Financial
+Position remains fully available regardless (it does not depend on this
+function at all). Other honest-nullable states verified throughout: no
+quick-sale estimate -> null, not 0 (§20); no minimum cash floor ->
+safeToDeployStatus="not_configured" (§19); no goals -> protectedGoalCash
+naturally reflects Rules' own not_configured/zero semantics; no focus
+goal explicitly selected -> focusGoal is null, never invented (§16 of the
+FINANCIAL_DOMAIN_MODEL.md addendum).
+
+25. EXACT-DECIMAL STRATEGY
+--------------------------------------------------------------------------------
+Unchanged discipline, reused not reinvented: Postgres numeric(20,6)
+throughout every composed source function, every monetary column in
+financial_position_by_currency()'s return type cast to ::text, decimal.js
+as the only arbitrary-precision library at the TypeScript combination
+step in aggregate.ts. Verified with JPY (0-decimal currency, exact
+"100000.000000"), KWD (3-decimal currency, exact "50.123000"), and the
+non-round EUR->USD reporting conversion (§22) — no binary-float drift
+anywhere in the chain.
+
+26. QUERY / PERFORMANCE STRATEGY
+--------------------------------------------------------------------------------
+Documented explicitly in the migration's header comment and in
+FINANCIAL_DOMAIN_MODEL.md §41 / SYSTEM_ARCHITECTURE.md §4: one SQL round
+trip for the per-currency numeric core (avoiding N+1 across up to eight
+source functions), plus a small, fixed number (5) of parallel
+(Promise.all) reads at the TypeScript layer for list-shaped data that
+doesn't belong in a currency-keyed SQL row. No sequential/serial fetch
+loop exists anywhere in the new code.
+
+27. RLS / SECURITY POSTURE
+--------------------------------------------------------------------------------
+financial_position_by_currency() is SECURITY INVOKER, never DEFINER —
+consistent with every prior domain's read function. It requires no
+service-role client; every underlying domain continues enforcing its own
+RLS through auth.uid()-scoped policies, and composing SECURITY INVOKER
+functions inside another SECURITY INVOKER function never changes whose
+privileges apply at any point in the chain. This is documented as an
+explicit, reusable pattern for future cross-domain aggregation:
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md §20.
+
+28. CROSS-TENANT AGGREGATION TESTS
+--------------------------------------------------------------------------------
+PASSED. Both User A and User B given cash, assets, receivables,
+liabilities, a goal (with User B's set as their own focus goal), an
+obligation, and a decision, all in a currency (THB) unique to this test.
+User A's getFinancialPositionSummary()/getFinancialPositionByCurrency()
+asserted to contain zero THB currency rows, zero of User B's goal/
+decision/obligation records, and a focus goal never equal to User B's
+goal. Anonymous client's direct RPC call to
+financial_position_by_currency() asserted denied (expectDenied()).
+
+29. FINANCIAL-CORRECTNESS TESTS
+--------------------------------------------------------------------------------
+PASSED. Cash-only Net Worth, asset-only Net Worth with target/quick-sale
+exclusion, latest-valuation-used, receivable-outstanding-used-not-estimate,
+liability-outstanding-subtracted, negative Net Worth preserved, combined
+cash+assets+receivables-liabilities equation, two independent currencies
+never summed, reporting-currency not_calculated without required FX,
+reporting-currency exact with complete FX (non-round rate), JPY/KWD
+precision — all verified with concrete worked numbers, asserted against
+exact expected strings.
+
+30. FINANCIAL-INVARIANCE TESTS
+--------------------------------------------------------------------------------
+PASSED. Goal allocation, release, protected/unprotected distinction; rule
+creation; obligation creation and paid-status change; Decision scenario
+evaluation and every choice type including Proceed — all asserted to
+leave netWorth byte-for-byte unchanged before and after, using a single
+NZD fixture user threaded through all these operations in sequence so
+each assertion catches any regression the prior operation might have
+introduced.
+
+31. VOID / CORRECTION TESTS
+--------------------------------------------------------------------------------
+PASSED. Receivable recovery voided -> cash and receivable both restored
+to their pre-recovery values, netWorth unchanged throughout (verified
+before recovery, after recovery, and after voiding — three checkpoints).
+Debt principal-only payment voided -> cash and liability both restored,
+netWorth unchanged throughout (same three-checkpoint pattern, against the
+already-established NGN negative-Net-Worth fixture, also proving voiding
+works correctly on top of a currency that was already Net-Worth-negative).
+
+32. REGRESSION TESTS
+--------------------------------------------------------------------------------
+PASSED, full suite, fresh local `supabase db reset`:
+  RLS/Profile        20/20
+  Money               37/37
+  Currency            11/11
+  Assets              28/28
+  Receivables         27/27
+  Liabilities         25/25
+  Goals               56/56
+  Rules/Obligations   86/86
+  Decisions           70/70
+  Financial Position  33/33
+  TOTAL              393/393
+
+33. APPLICATION INTEGRATION
+--------------------------------------------------------------------------------
+`/financial-position` (app/(app)/financial-position/page.tsx) — a
+restrained, read-only development route proving the domain, explicitly
+NOT final Home, NOT Stitch design, NO fake/seeded data. Shows Financial
+Position by Currency (Net Worth, Liquid Cash, Non-Cash Assets,
+Receivables, Liabilities), Liquid & Protected Position (Safe to Deploy
+inline), Potential Liquidity, Allocation Shortfall / Retained Deficit
+(shown conditionally, only when nonzero), Upcoming Obligations (reusing
+components/obligations/UpcomingObligationsList.tsx unmodified), Focus
+Goal, and Active Decisions. A nav link was added to AppShell.tsx. A
+brand-new user sees "No financial activity recorded yet." / "Not set" /
+"No active Decisions." throughout — verified via the `.env.local`-removed
+build (§34) and by inspection (no seeded/hardcoded data exists anywhere
+in the new files).
+
+34. GENERATED TYPES
+--------------------------------------------------------------------------------
+lib/supabase/database.types.ts regenerated via `npm run db:types` after
+the migration; confirmed the new RPC's shape
+(financial_position_by_currency: Args: never, Returns: 17-column text/
+string row) via direct inspection before writing the domain layer against
+it. Auto-generated header comment re-added per standing practice.
+
+35. REMOTE STATUS
+--------------------------------------------------------------------------------
+`supabase db push --linked --dry-run` confirmed exactly one pending
+migration (this phase's). `supabase db push --linked --yes` applied it.
+`supabase migration list --linked` confirms all 10 local migration
+timestamps match remote exactly. A benign pg-delta catalog-caching
+warning (missing a certificate file inside the CLI's own internal
+sandbox) appeared during the push, identical in nature to warnings seen
+in prior phases — it does not affect schema application, confirmed by the
+migration-list match. No test suite was executed against remote (schema
+deployment only), consistent with every prior phase's remote posture.
+
+36. VALIDATION RESULTS
+--------------------------------------------------------------------------------
+Fresh local db reset: PASSED (both resets this phase, clean).
+Full existing suite: PASSED (360/360 prior + 33/33 new = 393/393).
+Financial Position suite: PASSED (33/33).
+Cross-tenant aggregation tests: PASSED.
+Native Net Worth tests: PASSED.
+Reporting-currency tests: PASSED.
+Safe-to-Deploy reuse tests: PASSED.
+Financial-invariance tests: PASSED.
+Void consistency tests: PASSED.
+Exact-decimal tests: PASSED.
+Lint (`npm run lint`): PASSED, zero warnings/errors.
+Typecheck, app (`tsc --noEmit`): PASSED, zero errors.
+Typecheck, test harness (`tsc --noEmit -p supabase/tests/tsconfig.json`): PASSED, zero errors.
+Build, with Supabase config: PASSED, /financial-position registers dynamic (ƒ).
+Build, without Supabase config (.env.local moved aside): PASSED, /financial-position degrades to static (○), consistent with every other authenticated route.
+Service-role exposure search (outside test harness): CLEAN — zero matches in app/lib/components.
+SECURITY DEFINER search (new migration): CLEAN — zero matches.
+Prototype-data search (cars, land, receivable amounts, rent, house target, Autodrip, Nemryn, prototype cash): CLEAN — zero matches anywhere in app/lib/components/migrations/tests.
+Capital Compass source search: CLEAN — zero matches in app/lib/components/supabase.
+git diff / git status reviewed: see §40-41.
+
+37. ASSUMPTIONS
+--------------------------------------------------------------------------------
+- "Active" Decisions for the summary means status = 'active' (excludes
+  'closed' and 'archived'), matching DecisionStatus's own vocabulary and
+  the brief's "archived Decisions excluded from active view" requirement.
+- "Active" Goals for the summary means status = 'active', matching
+  GoalStatus's own vocabulary.
+- Financial Position's own read model exposes GoalSummary/DecisionSummary/
+  UpcomingObligation objects verbatim (not a narrowed/reshaped subset) —
+  the brief explicitly permits diverging from its own suggested shape "if
+  a cleaner typed model exists," and reusing each domain's own summary
+  type in full keeps domain boundaries intact with zero remapping risk.
+- upcomingObligations uses upcoming_obligations()'s own default horizon
+  (no explicit start/end passed) rather than Financial Position inventing
+  its own default — consistent with "reuse Obligations' own date-range
+  logic."
+
+38. OPEN QUESTIONS
+--------------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md, "Open questions" — items 13-14 are new
+this phase (Home's exact consumption shape of getFinancialPositionSummary();
+whether a future historical-snapshot feature reuses
+financial_position_by_currency() as its source). All prior open questions
+(1-12) remain unchanged and are carried forward verbatim.
+
+39. RISKS
+--------------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md, "Risks" — item 4 is new this phase:
+financial_position_by_currency()'s currency-discovery CTE is a `union`
+across eight source functions; a future ninth canonical source (a new
+domain with its own currency-keyed totals) must be added to that union
+explicitly, or that domain's currencies simply won't surface as rows even
+if every other column would otherwise resolve to 0/null for them. Flagged
+as a low-probability but real maintenance trap for whoever adds domain #9.
+
+40. GIT DIFF SUMMARY
+--------------------------------------------------------------------------------
+ components/layout/AppShell.tsx               |   3 +
+ docs/architecture/FINANCIAL_DOMAIN_MODEL.md  | 112 ++++++++++
+ docs/architecture/MULTI_CURRENCY_MODEL.md    |  30 +++
+ docs/architecture/SYSTEM_ARCHITECTURE.md     |  22 +-
+ docs/project/BUILD_STATE.md                  | 323 +++++++++++++--------------
+ docs/security/SECURITY_AND_RLS_PRINCIPLES.md |  39 ++++
+ lib/supabase/database.types.ts               |  22 ++
+ package.json                                 |   3 +-
+ 8 files changed, 379 insertions(+), 175 deletions(-)
+(plus untracked new files listed in §41 below, not reflected in `git diff --stat`)
+
+41. GIT STATUS
+--------------------------------------------------------------------------------
+ M components/layout/AppShell.tsx
+ M docs/architecture/FINANCIAL_DOMAIN_MODEL.md
+ M docs/architecture/MULTI_CURRENCY_MODEL.md
+ M docs/architecture/SYSTEM_ARCHITECTURE.md
+ M docs/project/BUILD_STATE.md
+ M docs/security/SECURITY_AND_RLS_PRINCIPLES.md
+ M lib/supabase/database.types.ts
+ M package.json
+?? app/(app)/financial-position/
+?? components/financial-position/
+?? lib/domain/financial-position/
+?? supabase/migrations/20260925090000_create_financial_position_engine.sql
+?? supabase/tests/financial-position/
+
+Working tree remains entirely unstaged/uncommitted, consistent with every
+prior phase's "do not commit or push without explicit request" standing
+instruction. This includes P0-E2-S4 through P0-E2-S7's still-uncommitted
+work from before this phase began.
+
+42. RECOMMENDED NEXT PHASE
+--------------------------------------------------------------------------------
+P0-E3-S2 — Home, now buildable on a genuinely complete Financial Position
+aggregation (Net Worth, Liquid/Protected Position, Safe to Deploy,
+Receivables/Liabilities, Potential Liquidity, Upcoming Obligations, Focus
+Goal, Active Decisions) without inventing any new calculation. A smaller-
+scoped alternative: a dedicated Money "This Month" read model (documented
+as a known gap this phase), which a later Home phase would otherwise need
+to invent ad hoc. Do not begin Home automatically — pending user review.
+================================================================================

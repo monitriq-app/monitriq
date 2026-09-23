@@ -506,3 +506,42 @@ one new plpgsql lesson:
   outside the block that populated it — a bare `IF ... THEN SELECT ...
   INTO v_x; END IF;` with no `ELSE` is never safe if `v_x` is read
   later unconditionally.**
+
+## 20. Established pattern: pure composition function over other `SECURITY INVOKER` functions (P0-E3-S1)
+
+`financial_position_by_currency()` (Financial Position, §41 of
+FINANCIAL_DOMAIN_MODEL.md) introduces no new table, no new RLS policy, and
+no new grant beyond `EXECUTE` on itself. It is `security invoker`,
+`stable`, `set search_path = pg_catalog, public` — the same declaration
+every prior domain's read function uses — but its body is entirely CTEs
+selecting from eight other `SECURITY INVOKER` functions
+(`money_currency_totals()`, `asset_native_currency_totals()`,
+`receivable_native_currency_totals()`, `liability_native_currency_totals()`,
+`safe_to_deploy_by_currency()`, `asset_summary()`, `receivable_summary()`,
+`goal_bucket_shortfalls()`), never a direct table read.
+
+This is safe specifically *because* every one of those eight functions is
+itself `SECURITY INVOKER`: calling them from inside another `SECURITY
+INVOKER` function does not change whose privileges apply at any point in
+the chain — `auth.uid()` inside each of them still resolves to the
+actual calling user, and each one's own `WHERE user_id = auth.uid()` (or
+equivalent RLS-backed filter) still applies exactly as it would if called
+directly from the client. No cross-tenant leakage path is introduced by
+composing them, because no new privilege boundary is crossed anywhere in
+the chain — **the moment any function in a composition chain like this
+were changed to `SECURITY DEFINER`, every caller above it in the chain
+would silently inherit that function's owner's privileges instead of the
+real user's, which is exactly the kind of bypass §11 exists to prevent.**
+Verified explicitly for this function: the full cross-tenant test (both
+users given cash, assets, receivables, liabilities, goals, obligations,
+and decisions; User A's result asserted to contain zero User B values)
+and the anonymous-denial test (`anonClient.rpc("financial_position_by_
+currency")` rejected) in `supabase/tests/financial-position/run.ts`.
+
+**Rule going forward:** any future cross-domain aggregation/reporting
+function should follow this same shape — compose existing `SECURITY
+INVOKER` functions via CTEs/joins, add no new table, and never reach for
+`SECURITY DEFINER` as a way to "simplify" fetching another domain's data.
+If a composition ever needs privileges beyond the calling user's own, that
+is a sign the composition is wrong, not a justification for `SECURITY
+DEFINER`.

@@ -386,3 +386,33 @@ currency) — reusing `convertToReportingCurrency()` (§10), the same
 function Rules' own reporting-currency aggregation (§20) uses. Missing
 the required rate returns `not_calculated`, never a guessed conversion.
 No live FX integration exists, and none is added this phase.
+
+## 23. Financial Position: reporting-currency Net Worth (P0-E3-S1)
+
+`convertFinancialPositionToReportingCurrency()` in
+`lib/domain/financial-position/aggregate.ts` is the fourth consumer of
+`convertToReportingCurrency()` (§10), after Money, Rules (§20), and
+Decisions (§22) — still one shared conversion layer, never a second FX
+implementation.
+
+What's different here is that Net Worth is a *sum of four components*
+(`liquidCash + nonCashAssetValue + receivablesOutstanding −
+liabilitiesOutstanding`), each independently spread across native
+currencies. Converting a pre-summed mixed-currency Net Worth would be
+invalid — `convertToReportingCurrency()` itself only ever operates on one
+already-homogeneous-per-currency-code list at a time. So each component is
+converted separately (four independent calls, one per component, each
+summing across all native currencies for that component into one
+reporting-currency figure), and only after all four succeed are the four
+reporting-currency totals combined into reporting Net Worth, via
+`decimal.js` — never binary float arithmetic, never a second combination
+formula.
+
+If any native currency present in any component is missing its required
+rate, the result is `{ status: "not_calculated", missingRates: [...] }` —
+even if the other three components would have converted fine. Native-
+currency Financial Position remains fully available regardless; only the
+one consolidated reporting figure is withheld. Exact non-round rates
+(e.g. `1 EUR = 1.10 USD`) are exercised explicitly in
+`supabase/tests/financial-position/run.ts` to prove no binary-float drift
+enters the combination step.

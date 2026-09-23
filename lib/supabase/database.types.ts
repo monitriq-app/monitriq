@@ -2020,6 +2020,28 @@ export type Database = {
           uncovered_protected_obligations_after: string
         }[]
       }
+      financial_position_by_currency: {
+        Args: never
+        Returns: {
+          allocation_shortfall: string
+          asset_quick_sale_potential: string
+          currency_code: string
+          liabilities_outstanding: string
+          liquid_cash: string
+          minimum_cash_floor: string
+          net_worth: string
+          non_cash_asset_value: string
+          protected_commitments: string
+          protected_goal_cash: string
+          receivables_estimated_recoverable: string
+          receivables_outstanding: string
+          receivables_recoverability_difference: string
+          required_retained_cash: string
+          retained_deficit: string
+          safe_to_deploy: string
+          safe_to_deploy_status: string
+        }[]
+      }
       financial_rule_history: {
         Args: { p_limit?: number; p_rule_id: string }
         Returns: {

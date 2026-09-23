@@ -30,11 +30,14 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E2-S7,
+This is a target layout to build toward incrementally. As of P0-E3-S1,
 `lib/supabase/`, `lib/domain/{profile,money,assets,currency,receivables,
-liabilities,goals,rules,obligations,decisions}/`, `supabase/migrations/`,
-and `supabase/tests/{shared,rls,money,currency,assets,receivables,
-liabilities,goals,rules,decisions}/` exist for real. `lib/domain/currency/`
+liabilities,goals,rules,obligations,decisions,financial-position}/`,
+`supabase/migrations/`, and `supabase/tests/{shared,rls,money,currency,
+assets,receivables,liabilities,goals,rules,decisions,financial-position}/`
+exist for real. `lib/domain/financial-position/` is a composition-only
+domain — it owns no tables and reads every other domain's canonical
+functions rather than re-deriving them (§4). `lib/domain/currency/`
 (types, repository, format, conversion) is the one shared currency stack
 every domain imports from — never duplicated per domain, per
 [MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one),
@@ -155,6 +158,17 @@ itself a further consumer: it reads live facts from `asset_summary()`/
 bucket_liquidity()` for every liquidity/rule figure, and re-derives
 nothing that any prior domain already owns. See
 FINANCIAL_DOMAIN_MODEL.md §37.
+
+**Net worth implemented (P0-E3-S1).** `financial_position_by_currency()`
+is the one composed SQL function computing Net Worth per native currency
+from the six read models listed above plus `asset_summary()`/
+`receivable_summary()`/`goal_bucket_shortfalls()` for the potential-
+liquidity and allocation-shortfall figures — no independent formula, no
+stored result. `lib/domain/financial-position/repository.ts`'s
+`getFinancialPositionSummary()` composes it further with Goals/Decisions/
+Obligations summaries at the TypeScript layer (parallel reads, not a
+second SQL function, since those are list-shaped rather than
+currency-keyed). See FINANCIAL_DOMAIN_MODEL.md §41.
 
 ## 5. Financial event / audit layer
 

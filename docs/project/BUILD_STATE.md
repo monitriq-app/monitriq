@@ -5,168 +5,154 @@ Do not mark future phases complete ahead of time.
 
 ## Current phase
 
-P0-E2-S7 — Decisions Engine, Scenario Evaluation & Decision Journal.
+P0-E3-S1 — Unified Financial Position & Cross-Domain Aggregation Engine.
 
 ## Current status
 
-**Complete.** The Decisions domain (`decision_types`, `decisions`,
-`decision_scenarios`, `decision_choices`, `decision_scenario_evaluations`,
-plus `create_decision()`, `create_decision_scenario()`,
-`record_decision_choice()`, `evaluate_decision_scenario()`,
-`save_decision_scenario_evaluation()`, and three read functions) exists
-with RLS enabled and deny-by-default policies/grants throughout. Core
-principle ("a Decision is a plan, never a transaction") is architecturally
-enforced, not just documented: no function anywhere in this migration
-writes to `financial_events`/`cash_movements`/`assets`/`liabilities`/
-`goals`/`obligations` — verified explicitly across every write path,
-including recording a `'proceed'` choice. Every liquidity/rule-conflict
-figure reuses the established Safe-to-Deploy chain directly: P0-E2-S6A's
-`evaluate_proposed_cash_use()` was itself refactored (its public behavior
-fully preserved) so its core logic could be shared with Decisions'
-cash-inflow evaluation need, rather than forked into a second formula.
-Verified against a real local Supabase stack, fresh `supabase db reset`:
-20 (Profile) + 37 (Money) + 11 (Currency) + 28 (Assets) + 27 (Receivables)
-+ 25 (Liabilities) + 56 (Goals) + 86 (Rules/Obligations) + 70 (Decisions)
-= **360/360 assertions passed**. Migration was also pushed to the real
-remote "Monatriq Dev" project this phase; schema deployment is confirmed
-there; RLS/isolation test *execution* remains local-only by the same
-explicit, standing instruction as every prior phase.
+**Complete.** `lib/domain/financial-position/` composes the eight prior
+domains' canonical read functions into one Financial Position boundary —
+`financial_position_by_currency()` (one new `SECURITY INVOKER` SQL
+function, zero new tables) for per-currency NUMERIC aggregates, plus
+`getFinancialPositionSummary()`'s parallel TypeScript-layer reads for
+Goals/Decisions/Obligations. Net Worth (`liquidCash + nonCashAssetValue +
+receivablesOutstanding − liabilitiesOutstanding`, per native currency,
+never clamped) is the only new calculation this phase introduces — Safe
+to Deploy, protected cash, allocation shortfall, potential liquidity, and
+every list-shaped summary are read verbatim from their owning domain.
+Reporting-currency Net Worth
+(`convertFinancialPositionToReportingCurrency()`) converts each of the
+four Net Worth components independently and combines only after all
+succeed, returning `not_calculated` (never a partial sum) if any required
+FX rate is missing. Verified against a real local Supabase stack, fresh
+`supabase db reset`: 20 (Profile) + 37 (Money) + 11 (Currency) + 28
+(Assets) + 27 (Receivables) + 25 (Liabilities) + 56 (Goals) + 86 (Rules/
+Obligations) + 70 (Decisions) + 33 (Financial Position) = **393/393
+assertions passed**. Migration was also pushed to the real remote
+"Monatriq Dev" project this phase; schema deployment is confirmed there.
 
 ## Supabase environment state
 
-Same remote project as P0-E2-S3 through S6A: "monatriq's Project" (ref
+Same remote project as P0-E2-S3 through S7: "monatriq's Project" (ref
 `mvnwrkfcszazqqccmmxq`), already linked at the start of this phase — no
 new confirmation needed.
 
 Sequence: `supabase db push --linked --dry-run` (confirmed exactly one new
 migration, this phase's), then `supabase db push --linked --yes`. Verified
-via `supabase migration list --linked`: all 9 local migration timestamps
+via `supabase migration list --linked`: all 10 local migration timestamps
 match remote exactly (20260922201924/210653/220526/221247/230750/
-20260923120000/180000/220000/20260924100000 — the last one is this
-phase's). The same benign, unrelated pg-delta catalog-caching warning
-seen in every prior remote push (missing a certificate file inside the
-CLI's own internal sandbox) appeared again; it did not affect schema
+20260923120000/180000/220000/20260924100000/20260925090000 — the last one
+is this phase's). The same benign, unrelated pg-delta catalog-caching
+warning seen in every prior remote push (missing a certificate file inside
+the CLI's own internal sandbox) appeared again; it did not affect schema
 application, confirmed by the migration-list match.
 
 **What was NOT done against remote, deliberately**: same as every prior
-phase — the RLS/adversarial test suites were not executed against it.
+phase — the isolation test suite was not executed against it.
 `supabase/tests/shared/env.ts`'s localhost-only guard was not touched.
-Remote validation for this phase is: **schema deployment CONFIRMED,
-RLS/isolation test EXECUTION NOT RUN** against remote — local execution
-(360/360) is what this phase's COMPLETE status rests on.
+Remote validation for this phase is: **schema deployment CONFIRMED, test
+EXECUTION NOT RUN** against remote — local execution (393/393) is what
+this phase's COMPLETE status rests on.
 
 All local validation ran against the same local Docker stack as prior
-phases, reset from migration history three times this phase — two real
-bugs were caught by the new test suite and fixed before the final reset
-(both plpgsql `RECORD`-variable-assignment bugs, see Architecture changes
-below and `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §19`).
+phases, reset from migration history twice this phase. One bug was found
+and fixed before the final reset — but it was in the new test file's own
+arithmetic (a manually-computed expected value, `1800 − 2000`, was
+transcribed as `-1000` instead of `-200`), not in the migration or domain
+layer; the migration and domain-layer TypeScript were both correct on the
+first attempt.
 
 ## Files created
 
-`supabase/migrations/*_create_decisions_domain.sql`
-`lib/domain/decisions/{types,repository,aggregate}.ts`
-`app/(app)/decisions/page.tsx`
-`app/(app)/decisions/[decisionId]/page.tsx`
-`components/decisions/{DecisionList,CreateDecisionForm,
-CreateScenarioForm,ScenarioEvaluationPanel,DecisionJournal}.tsx`
-`supabase/tests/decisions/run.ts`
-`docs/reports/P0-E2-S7-decisions-engine-foundation.txt`
+`supabase/migrations/20260925090000_create_financial_position_engine.sql`
+`lib/domain/financial-position/{types,repository,aggregate}.ts`
+`app/(app)/financial-position/page.tsx`
+`components/financial-position/{NativePositionList,FocusGoalPanel,
+ActiveDecisionsList}.tsx`
+`supabase/tests/financial-position/run.ts`
+`docs/reports/P0-E3-S1-unified-financial-position-engine.txt`
 
 ## Files modified
 
-`components/layout/AppShell.tsx` (Decisions nav link), `lib/supabase/
-database.types.ts` (regenerated), `package.json` (`test:decisions`
-script, extended combined `test` script — no new dependency added this
-phase, `package-lock.json` unchanged), `docs/architecture/
-{FINANCIAL_DOMAIN_MODEL,MULTI_CURRENCY_MODEL,SYSTEM_ARCHITECTURE}.md`,
-`docs/security/SECURITY_AND_RLS_PRINCIPLES.md`.
+`components/layout/AppShell.tsx` (Financial Position nav link),
+`lib/supabase/database.types.ts` (regenerated), `package.json`
+(`test:financial-position` script, extended combined `test` script — no
+new dependency added this phase, `package-lock.json` unchanged),
+`docs/architecture/{FINANCIAL_DOMAIN_MODEL,MULTI_CURRENCY_MODEL,
+SYSTEM_ARCHITECTURE}.md`, `docs/security/SECURITY_AND_RLS_PRINCIPLES.md`.
 
-The same migration also **refactored** (behavior-preserving)
-`evaluate_proposed_cash_use()` — extracting its core logic into a new
-shared, sign-agnostic function so Decisions could reuse it for cash-
-inflow scenarios (P0-E2-S6A's version only ever modeled a spend). Its
-public signature and return shape are unchanged; the full, unmodified
-P0-E2-S6/S6A test suite (155 assertions) verifies this by continuing to
-pass.
+The application layer reused `UpcomingObligationsList` from
+`components/obligations/` unmodified rather than creating a duplicate —
+Financial Position's obligations section is the exact same component
+Rules' own page uses, fed the same `UpcomingObligation[]` shape.
 
 ## Migrations
 
 One new migration:
-`supabase/migrations/*_create_decisions_domain.sql`. Five new tables
-(`decision_types`, `decisions`, `decision_scenarios`, `decision_choices`,
-`decision_scenario_evaluations`), one new shared function
-(`evaluate_hypothetical_bucket_liquidity()`), `evaluate_proposed_cash_
-use()` recreated via `CREATE OR REPLACE` (signature unchanged, body
-delegates to the new shared function), and the Decisions-specific
-creation/evaluation/journal RPCs and read models. Applied cleanly at the
-schema level on all three resets this phase; two logic bugs (both in
-`evaluate_decision_scenario()`'s plpgsql body, not the schema) were fixed
-between resets.
+`supabase/migrations/20260925090000_create_financial_position_engine.sql`.
+Zero new tables. One new function, `financial_position_by_currency()` —
+`security invoker`, `stable`, no arguments, returning one row per native
+currency present in any of eight composed canonical functions
+(`money_currency_totals()`, `asset_native_currency_totals()`,
+`receivable_native_currency_totals()`, `liability_native_currency_
+totals()`, `safe_to_deploy_by_currency()`, `asset_summary()`,
+`receivable_summary()`, `goal_bucket_shortfalls()`). `REVOKE ALL ... FROM
+PUBLIC, anon` / `GRANT EXECUTE ... TO authenticated` follows the same
+convention as every prior domain's read function. Applied cleanly at the
+schema level on both resets this phase.
 
 ## Architecture changes
 
-- **A Decision is a plan, never a transaction — architecturally
-  enforced.** No table outside `decision_*` is ever written to by any
-  function in this migration. Creating a decision, creating a scenario,
-  evaluating a scenario, saving an evaluation snapshot, and recording
-  every one of the four user choices (including `'proceed'`) are all
-  verified zero-financial-effect operations.
-- **`linked_asset_id`/`linked_liability_id` live on `decisions`, not on
-  each scenario** — the subject of consideration is shared by every
-  scenario under one Decision (e.g. "Sell As-Is" vs. "Repair Then Sell"
-  both concern the same asset). Neither link is type-enforced by a CHECK
-  constraint, deliberately, so "Other" stays genuinely flexible.
-- **`decision_scenarios` uses a moderate, deliberately-reused set of
-  strongly-typed columns** (`cash_required`, `gross_proceeds`/
-  `proceeds_costs`, `debt_principal_payment`/`debt_interest_payment`/
-  `debt_fee_payment`, ...) — each with ONE economic role shared by name
-  across every decision type that needs it, avoiding both a giant
-  per-type column explosion and a JSONB/EAV bag of authoritative
-  numbers. JSONB is used only for the immutable evaluation-snapshot
-  audit trail, never for arithmetic.
-- **One calculation model extended one layer deeper.** P0-E2-S6A already
-  established "Safe-to-Deploy has exactly one formula." This phase
-  extends that to "hypothetical bucket liquidity has exactly one
-  formula" — `evaluate_hypothetical_bucket_liquidity(bucket, delta)`
-  accepts any sign of delta and is now the shared core both
-  `evaluate_proposed_cash_use()` (Rules UI, spend-only) and
-  `evaluate_decision_scenario()` (Decisions, either direction) consume.
-- **Facts, assumptions, and derived values are kept structurally
-  distinct** at both the SQL return shape and the TypeScript type level —
-  facts are read live from `asset_summary()`/`liability_outstanding_
-  principal()`/`cash_movements` on every call (never copied), assumptions
-  are echoed back exactly as entered (never auto-substituted — a sell
-  scenario never uses an asset's target value as the sale price unless
-  the user enters it), and derived figures are always computed fresh,
-  never stored.
-- **New lesson: a plpgsql `RECORD` variable only conditionally populated
-  via `IF ... THEN SELECT INTO ... END IF` (no `ELSE`) is unsafe if read
-  later unconditionally.** Caught by the new test suite's no-linked-
-  asset/no-linked-bucket cases (six failures across two rounds, "record
-  is not assigned yet" then "record has no field ..."), fixed by
-  removing the guard where the source query is safe to run empty
-  (`asset_summary()`) and by adding an explicitly-column-aliased
-  literal-`NULL` `ELSE` branch where it isn't (`evaluate_hypothetical_
-  bucket_liquidity()`, which raises for an unknown bucket). Full
-  account: `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §19`.
+- **Aggregation, not ownership — enforced by construction, not just by
+  convention.** `financial_position_by_currency()`'s body is entirely
+  CTEs selecting from other functions; it contains no independent
+  balance/valuation/outstanding-amount arithmetic anywhere except the one
+  Net Worth sum itself. There is no table this function reads directly
+  other than through those eight functions.
+- **Hybrid query strategy, chosen deliberately.** Per-currency NUMERIC
+  aggregates (tabular, currency-keyed) go through the one composed SQL
+  function to avoid N+1; Goals/Decisions/Obligations (list-shaped, not
+  currency-keyed) are fetched in parallel at the TypeScript layer instead
+  of being forced into the SQL row shape or fetched serially.
+- **Honest-nullable-mapping extended to a fourth distinct case.**
+  Prior domains distinguished true zero from missing from not-configured;
+  this phase adds a fourth: `netWorth` (and its four components) are
+  *always* a real number (defaulting an absent domain's contribution to 0
+  via `coalesce`), because Net Worth is definitionally computable the
+  moment any currency-relevant data exists anywhere for that currency —
+  unlike `assetQuickSalePotential`/`receivablesEstimatedRecoverable`
+  (`null`/"Not set" when nothing was ever recorded, via natural `SUM()`
+  NULL-propagation) or Safe-to-Deploy's fields (`null` specifically when
+  `safe_to_deploy_by_currency()` has no row for that currency at all).
+- **Reporting-currency conversion converts components, never a pre-summed
+  total.** `convertFinancialPositionToReportingCurrency()` calls
+  `convertToReportingCurrency()` four times (once per Net Worth
+  component, each internally summing across native currencies for that
+  one component), and only combines the four results — via `decimal.js`
+  — once every one of the four has succeeded. See MULTI_CURRENCY_MODEL.md
+  §23.
+- **New security pattern documented, not just followed.** A pure
+  composition function calling only other `SECURITY INVOKER` functions,
+  adding no new table/policy/grant beyond `EXECUTE` on itself, is safe
+  specifically because privilege never changes hands anywhere in the
+  chain. Written up as an explicit, reusable pattern for future
+  cross-domain aggregation phases: `docs/security/
+  SECURITY_AND_RLS_PRINCIPLES.md §20`.
 
 ## Known limitations
 
-- Decisions UI was validated the same way every prior domain's was: the
-  isolation suite calling the exact repository functions the UI calls
-  (70/70), plus `next build` + route-level smoke testing with and
+- Financial Position UI was validated the same way every prior domain's
+  was: the isolation suite calling the exact repository functions the UI
+  calls (33/33), plus `next build` + route-level smoke testing with and
   without Supabase config present. Not driven through a real browser.
-- A scenario naming both a source and a genuinely different destination
-  bucket has only its source bucket's outflow modeled through the
-  hypothetical Safe-to-Deploy chain — a documented, narrow scope
-  limitation (realistic only for a generic "other" scenario; none of the
-  other nine canonical decision types need two buckets simultaneously).
-- No amortization schedule is computed for `take_debt` scenarios —
-  `interest_rate`/`term_months`/`monthly_payment_assumption` are recorded
-  assumptions only, per the phase brief's explicit instruction.
-- Actual-outcome (expected vs. actual) comparison is an explicit, clean
-  extension point, not implemented this phase — a Decision without a
-  linked real transaction has no "actual outcome" concept yet.
+- Recent Activity and a "This Month" figure are deliberately NOT included
+  in `FinancialPositionSummary` this phase — Recent Activity would either
+  duplicate Money's own activity read model or need a second one (neither
+  is acceptable per the phase brief), and no canonical Money "this month"
+  read model exists yet to reuse. Both are documented, deliberate gaps for
+  Home's own integration phase.
+- Reporting-currency conversion has no live FX integration — same
+  standing limitation as Money/Rules/Decisions before it. Rates must be
+  supplied explicitly by the caller.
 - Remote (Monatriq Dev) has the new schema but has not been exercised by
   any test suite — unchanged posture from every prior phase.
 
@@ -177,9 +163,10 @@ Unchanged: `npm run db:start` (Docker), populate `.env.local` from
 `SUPABASE_TEST_SERVICE_ROLE_KEY`), `npm run db:types` after any migration
 change. `npm run test:rls` / `test:money` / `test:currency` / `test:assets`
 / `test:receivables` / `test:liabilities` / `test:goals` / `test:rules` /
-`test:decisions` / `test` (all nine) run the isolation suites. Remote
-project already linked — `supabase db push --linked --dry-run` before any
-future real push, never `supabase db reset` against it.
+`test:decisions` / `test:financial-position` / `test` (all ten) run the
+isolation suites. Remote project already linked — `supabase db push
+--linked --dry-run` before any future real push, never `supabase db
+reset` against it.
 
 ## Open questions
 
@@ -187,9 +174,9 @@ future real push, never `supabase db reset` against it.
    Income (unchanged).
 2. Timing of the curated final Stitch/design-reference set (unchanged).
 3. Local-vs-remote RLS-testing policy (unchanged — still unresolved
-   across seven phases now).
+   across eight phases now).
 4. Account-deletion / data-removal flow (unchanged, now applies to
-   Decisions data too).
+   Financial Position's read surface too, though it owns no data itself).
 5. Should FX transfer fees eventually be one combined RPC call
    (unchanged).
 6. Should a future phase add cross-currency handling across domains
@@ -199,50 +186,46 @@ future real push, never `supabase db reset` against it.
    (unchanged).
 9. Should `financial_rules.rule_type` grow additional values (unchanged
    from P0-E2-S6).
-10. **New**: should the scenario-with-two-different-buckets scope
-    limitation be resolved with a second hypothetical-override parameter
-    on the shared Safe-to-Deploy chain, the same way P0-E2-S6A resolved
-    the multi-bucket-goal limitation? None of the ten canonical decision
-    types currently need it, so this remains deferred until a real need
-    appears.
-11. **New**: what does "actual outcome" linkage look like when it is
-    eventually built — does `record_decision_choice(proceed)` gain an
-    optional link to the real Money/Asset/Liability event it led to, or
-    does the journal infer it heuristically? Deliberately left open this
-    phase, per the brief's "leave a clean extension point" instruction.
-12. **New**: should `CreateScenarioForm`'s field-visibility-by-decision-
-    type logic move server-side (e.g. into the decision_types registry
-    as metadata) rather than living as a client-side constant list, once
-    more decision types or a richer form experience is needed?
+10. Whether the scenario-with-two-different-buckets scope limitation
+    (Decisions, P0-E2-S7) should be resolved with a second hypothetical-
+    override parameter (unchanged, still deferred).
+11. What "actual outcome" linkage looks like when eventually built
+    (unchanged from P0-E2-S7).
+12. Whether `CreateScenarioForm`'s field-visibility-by-decision-type logic
+    should move server-side (unchanged from P0-E2-S7).
+13. **New**: when Home is actually built, does it consume
+    `getFinancialPositionSummary()` directly, or does a Home-specific
+    aggregation layer wrap it (e.g. to add Recent Activity / This Month
+    once those exist)? Left open deliberately — Home was explicitly out
+    of scope this phase.
+14. **New**: does a future historical-snapshot feature (explicitly
+    deferred by this phase's brief) store periodic Financial Position
+    captures, and if so, does it reuse `financial_position_by_currency()`
+    as its source on a schedule, or need its own read path?
 
 ## Risks
 
 1. No production traffic has touched the remote Monatriq Dev project yet
-   — schema is deployed but genuinely untested there (unchanged risk, now
-   the largest schema surface yet).
-2. Decisions UI has only been smoke-tested at the route/build/repository-
-   function level, not driven end-to-end through a browser.
-3. `decision_scenarios`/`decision_choices`/`decision_scenario_evaluations`
-   have a `SELECT` grant to `authenticated` for the established reason
-   every prior domain's ledger/detail tables do (§13-18 of the security
-   doc) — RLS scopes it correctly (proven by the isolation suite), but
-   any future code querying these tables directly instead of through the
-   text-casting read functions needs the same float-precision review.
-4. The documented two-different-buckets scope limitation (Known
-   limitations, above) means a scenario's destination-bucket inflow is
-   shown as a fact but not combined into the same hypothetical Safe-to-
-   Deploy view as the source-bucket outflow when they differ — a coarse,
-   honest, but incomplete signal for that narrow case.
-5. The local-vs-remote RLS-testing policy remains unsettled across seven
+   — schema is deployed but genuinely untested there (unchanged risk).
+2. Financial Position UI has only been smoke-tested at the route/build/
+   repository-function level, not driven end-to-end through a browser.
+3. The local-vs-remote RLS-testing policy remains unsettled across eight
    phases now.
+4. `financial_position_by_currency()`'s `union`-based currency-discovery
+   CTE means a ninth canonical source added by a future phase (e.g. a new
+   domain with its own currency-keyed totals) must be added to that
+   `union` explicitly, or that domain's currencies simply won't appear as
+   rows even if every other column would otherwise resolve to 0/null for
+   them — a documented, low-probability but real maintenance trap for
+   whoever adds domain #9.
 
 ## Next approved step
 
 Do not begin automatically. Recommended next phase (pending user review):
-**P0-E3-S1 — Home aggregation layer**, now with seven real domains
-(Money, Assets, Receivables, Liabilities, Goals, Rules/Obligations/Safe-
-to-Deploy, Decisions) to aggregate — Home can finally show a genuinely
-complete financial position, including upcoming obligations and active
-decisions, without inventing a new calculation of its own. Alternatively,
-Financial Rules could grow additional rule types now that Decisions
-proves the rule-relationship vocabulary generalizes beyond Rules' own UI.
+**P0-E3-S2 — Home**, now with a genuine, complete Financial Position
+aggregation (Net Worth, Liquid/Protected Position, Safe to Deploy,
+Receivables/Liabilities, Potential Liquidity, Upcoming Obligations, Focus
+Goal, Active Decisions) to build the real Home experience on top of —
+plus, as a smaller-scoped alternative, a dedicated Money "This Month" read
+model (documented as a known gap this phase) that a later Home phase would
+otherwise need to invent ad hoc.

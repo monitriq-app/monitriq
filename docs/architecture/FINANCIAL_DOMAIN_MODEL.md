@@ -448,6 +448,8 @@ current); `quick_sale_estimate` is not the default Net Worth basis either
 — both are deliberately absent from `asset_native_currency_totals()`'s
 source query, not merely omitted from a future formula's intentions.
 
+> Net Worth is now implemented — see [§41](#41-unified-financial-position--net-worth-p0-e3-s1). This section is kept for historical context; the preparation described here is exactly what `financial_position_by_currency()` ended up consuming.
+
 ## 21. Receivables domain implementation summary (P0-E2-S4)
 
 Full detail in `supabase/migrations/*_create_receivables_liabilities_domain.sql`.
@@ -577,6 +579,8 @@ Recoverable Value and Target Value are excluded from every native-total
 calculation, for the same reason target values are excluded from Assets'
 totals (§20): they are not current position, they are estimates or
 aspirations.
+
+> Net Worth is now implemented — see [§41](#41-unified-financial-position--net-worth-p0-e3-s1).
 
 ## 25. Goals domain implementation summary (P0-E2-S5)
 
@@ -1184,3 +1188,111 @@ were used, what the evaluation showed at the time, and how the user's
 own conclusion evolved — without a second, duplicate transaction system.
 Actual-outcome (expected vs. actual) comparison remains an explicit,
 clean extension point, not implemented this phase.
+
+## 41. Unified Financial Position & Net Worth (P0-E3-S1)
+
+**Aggregation, not ownership.** `lib/domain/financial-position/` is a
+composition boundary, not a new data owner. It stores nothing and
+re-derives nothing that another domain already calculates — it reads
+`money_currency_totals()`, `asset_native_currency_totals()`,
+`receivable_native_currency_totals()`, `liability_native_currency_totals()`,
+`safe_to_deploy_by_currency()`, `asset_summary()`, `receivable_summary()`,
+and `goal_bucket_shortfalls()` and composes them. Net Worth is the *only*
+new calculation this phase introduces.
+
+**Query strategy.** One `SECURITY INVOKER` SQL function,
+`financial_position_by_currency()`, composes every per-currency NUMERIC
+figure via CTEs (one per canonical function, `union`-ed on `currency_code`
+so a currency present in any source appears in the result even if others
+have no row for it) — avoiding N+1 round trips for tabular, currency-keyed
+data. Goals/Decisions/Obligations summaries (list-shaped, not
+currency-keyed) are fetched in parallel (`Promise.all`) at the TypeScript
+layer by `getFinancialPositionSummary()` in
+`lib/domain/financial-position/repository.ts`, reusing `getGoalSummaries()`,
+`getDecisionSummaries()`, and `getUpcomingObligations()` unmodified.
+
+**Net Worth formula** (per native currency):
+
+```
+netWorth = liquidCash + nonCashAssetValue + receivablesOutstanding − liabilitiesOutstanding
+```
+
+- `liquidCash` = `money_currency_totals()` — actual bucket balances.
+- `nonCashAssetValue` = `asset_native_currency_totals()` — latest
+  `estimated_current_value` only. `target_value` and `quick_sale_estimate`
+  never enter this figure (§20).
+- `receivablesOutstanding` = `receivable_native_currency_totals()` — face
+  minus recovered, never the estimated recoverable value (§24).
+- `liabilitiesOutstanding` = `liability_native_currency_totals()` — current
+  outstanding principal only; interest/fees already paid are gone from
+  cash but never reduce this figure retroactively, and future interest is
+  never assumed.
+- Never clamped: a currency with more debt than assets legitimately
+  produces a negative `netWorth`.
+
+**Why this formula is invariant under Goals/Rules/Obligations/Decisions.**
+None of those domains write to `cash_buckets`, `asset_valuations`,
+`receivable_ledger_events`, or `liability_principal_events` — the four
+tables Net Worth's inputs are ultimately read from. Goal allocation moves
+nothing between tables (it's a claim on cash already in a bucket, not a
+new balance); Rules/Obligations are configuration and commitments, not
+transactions; Decision evaluation is a pure read and `record_decision_
+choice()` writes only to `decision_choices`. This is structural, not
+coincidental — verified explicitly in
+`supabase/tests/financial-position/run.ts` for every combination (goal
+allocate/release/protect, rule create, obligation create/pay, decision
+evaluate/choose).
+
+**Liquid & Protected Position.** `protectedGoalCash`, `protectedCommitments`,
+`minimumCashFloor`, `requiredRetainedCash`, `safeToDeploy`,
+`safeToDeployStatus`, `retainedDeficit` are read verbatim from
+`safe_to_deploy_by_currency()` (P0-E2-S6/S6A) — not recomputed. In
+particular `protectedGoalCash` is already the *actual backed* protected
+cash from that function (capped at real bucket balance, never the nominal
+allocation), so Financial Position inherits that correctness for free.
+
+**Allocation shortfall.** `allocationShortfall` sums `goal_bucket_
+shortfalls()` per currency and is always a real number (0 when nothing is
+short) — exposed as its own field, never folded into `safeToDeploy`.
+
+**Potential Liquidity — kept structurally separate from Net Worth and
+Safe to Deploy.** `assetQuickSalePotential` (sum of recorded
+`quick_sale_estimate`s) and `receivablesEstimatedRecoverable` (sum of
+recorded `estimated_recoverable_value`s) are both `null` — not `0` — when
+nothing was ever recorded, achieved for free via Postgres's `SUM()` over
+an empty/all-`NULL`-filtered group returning `NULL`. Neither figure feeds
+`liquidCash`, `netWorth`, or `safeToDeploy` at any point in the query —
+there is no code path connecting them. `receivablesRecoverabilityDifference
+= receivablesEstimatedRecoverable − receivablesOutstanding`, `null` exactly
+when the estimate is `null`.
+
+**Reporting currency.** `lib/domain/financial-position/aggregate.ts`'s
+`convertFinancialPositionToReportingCurrency()` converts each of the four
+Net Worth components independently through `convertToReportingCurrency()`
+(never pre-summing mixed currencies), and only combines the four
+converted, reporting-currency totals — via `decimal.js` — once all four
+succeed. If any required rate is missing for any component, the whole
+result is `{ status: "not_calculated", missingRates: [...] }` — never a
+partial sum silently omitting a currency. See
+[MULTI_CURRENCY_MODEL.md §23](./MULTI_CURRENCY_MODEL.md#23-financial-position-reporting-currency-net-worth-p0-e3-s1).
+
+**No stored snapshot.** Financial Position has no table. Every value is
+derived live, on every read, from its owning domain's current state —
+`asOf` is a calculation timestamp, not a claim of permanent currency.
+
+**Read model.** `NativeFinancialPosition` (one row per currency) and
+`FinancialPositionSummary` (the composed whole, including `focusGoal` —
+`null` unless the user explicitly selected one — and `activeDecisions` —
+unranked, no `rank`/`score`/`winner` field) live in
+`lib/domain/financial-position/types.ts`. Recent Activity and a "This
+Month" figure are deliberately **not** included this phase: Recent
+Activity would either duplicate Money's own activity read model or
+require a second one, and no canonical Money read model for a monthly
+summary exists yet to reuse — both are left as documented, deliberate gaps
+for Home's own integration phase, not ad hoc inventions here.
+
+**Application integration.** `/financial-position`
+(`app/(app)/financial-position/page.tsx`) is a restrained, read-only proof
+of the domain — Financial Position by Currency, Liquid & Protected
+Position, Potential Liquidity, Upcoming Obligations, Focus Goal, Active
+Decisions — not the final Home design, no fake data.
