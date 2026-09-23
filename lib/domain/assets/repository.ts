@@ -4,11 +4,13 @@ import type {
   Asset,
   AssetBasisEvent,
   AssetBasisTotal,
+  AssetQuickSaleCoverage,
   AssetSummary,
   AssetType,
   AssetUpdate,
   AssetValuation,
   CreateAssetInput,
+  QuickSaleCoverageStatus,
   RecordBasisEventInput,
   RecordValuationInput,
 } from "./types.ts";
@@ -89,6 +91,19 @@ export async function getAssetSummaries(client: Client): Promise<AssetSummary[]>
     quickSaleEstimate: row.quick_sale_estimate as string | null,
     targetValue: row.target_value as string | null,
     latestValuedAt: row.latest_valued_at as string | null,
+  }));
+}
+
+/** Per-currency quick-sale-estimate coverage — see asset_quicksale_coverage() in the migration. */
+export async function getAssetQuickSaleCoverage(client: Client): Promise<AssetQuickSaleCoverage[]> {
+  const { data, error } = await client.rpc("asset_quicksale_coverage");
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    currencyCode: row.currency_code,
+    activeAssetCount: row.active_asset_count,
+    quickSaleEstimateCount: row.quicksale_estimate_count,
+    quickSaleSum: row.quicksale_sum,
+    coverageStatus: row.coverage_status as QuickSaleCoverageStatus,
   }));
 }
 

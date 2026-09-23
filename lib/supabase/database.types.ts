@@ -1607,6 +1607,16 @@ export type Database = {
           total_estimated_value: string
         }[]
       }
+      asset_quicksale_coverage: {
+        Args: never
+        Returns: {
+          active_asset_count: number
+          coverage_status: string
+          currency_code: string
+          quicksale_estimate_count: number
+          quicksale_sum: string
+        }[]
+      }
       asset_summary: {
         Args: never
         Returns: {
@@ -2230,6 +2240,19 @@ export type Database = {
           currency_code: string
         }[]
       }
+      money_period_summary: {
+        Args: { p_end?: string; p_start?: string }
+        Returns: {
+          cash_in: string
+          cash_out: string
+          currency_code: string
+          earned_income: string
+          expense: string
+          net_external_cash_flow: string
+          transfer_in: string
+          transfer_out: string
+        }[]
+      }
       money_recent_activity: {
         Args: { p_limit?: number }
         Returns: {
@@ -2286,6 +2309,16 @@ export type Database = {
       receivable_outstanding_amount: {
         Args: { p_receivable_id: string }
         Returns: number
+      }
+      receivable_recoverability_coverage: {
+        Args: never
+        Returns: {
+          active_receivable_count: number
+          coverage_status: string
+          currency_code: string
+          recoverability_estimate_count: number
+          recoverable_sum: string
+        }[]
       }
       receivable_summary: {
         Args: never
@@ -2667,6 +2700,31 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_manual_reporting_rate: {
+        Args: {
+          p_base_currency: string
+          p_quote_currency: string
+          p_rate: number
+          p_rate_as_of?: string
+        }
+        Returns: {
+          base_currency: string
+          created_at: string
+          event_id: string | null
+          id: string
+          quote_currency: string
+          rate: number
+          rate_as_of: string
+          source: string
+          user_id: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "fx_rates"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_money_received: {
         Args: {
           p_amount: number
@@ -2870,6 +2928,23 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reporting_fx_rates: {
+        Args: { p_reporting_currency: string }
+        Returns: {
+          base_currency: string
+          quote_currency: string
+          rate: string
+          rate_as_of: string
+          source: string
+        }[]
+      }
+      resolve_period_bounds: {
+        Args: { p_end?: string; p_start?: string }
+        Returns: {
+          period_end: string
+          period_start: string
+        }[]
       }
       rules_uncovered_protected_obligations: {
         Args: {

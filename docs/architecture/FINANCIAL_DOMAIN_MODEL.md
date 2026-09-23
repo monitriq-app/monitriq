@@ -1284,15 +1284,127 @@ derived live, on every read, from its owning domain's current state —
 `FinancialPositionSummary` (the composed whole, including `focusGoal` —
 `null` unless the user explicitly selected one — and `activeDecisions` —
 unranked, no `rank`/`score`/`winner` field) live in
-`lib/domain/financial-position/types.ts`. Recent Activity and a "This
-Month" figure are deliberately **not** included this phase: Recent
-Activity would either duplicate Money's own activity read model or
-require a second one, and no canonical Money read model for a monthly
-summary exists yet to reuse — both are left as documented, deliberate gaps
-for Home's own integration phase, not ad hoc inventions here.
+`lib/domain/financial-position/types.ts`. Recent Activity is deliberately
+**not** included: it would either duplicate Money's own activity read
+model or require a second one — Home calls `money_recent_activity()`
+directly instead. A "This Month" figure was a deliberate gap as of this
+section's original writing (P0-E3-S1) — see
+[§42](#42-money-period-summary-reporting-fx-context--liquidity-completeness-p0-e3-s1a),
+which closes it.
 
 **Application integration.** `/financial-position`
 (`app/(app)/financial-position/page.tsx`) is a restrained, read-only proof
 of the domain — Financial Position by Currency, Liquid & Protected
 Position, Potential Liquidity, Upcoming Obligations, Focus Goal, Active
-Decisions — not the final Home design, no fake data.
+Decisions — not the final Home design, no fake data. Extended P0-E3-S1A
+with Reporting Position, a manual reporting-rate entry form, This Month,
+and Liquidity Completeness — see §42.
+
+## 42. Money period summary, reporting FX context & liquidity completeness (P0-E3-S1A)
+
+A narrow, three-part Home-readiness phase — no new product domain, no
+redesign of any foundation screen. All three reuse existing tables and
+classification; the only new tables are none (zero new tables this
+phase — six new functions only).
+
+**Money period summary ("This Month").** `money_period_summary()`
+classifies purely from `financial_events.cash_flow_class` — the same
+income/other_inflow/expense/other_outflow/transfer/opening_balance
+vocabulary `set_financial_event_classification()` already derives (§17,
+§21) — never from `event_type` directly. This is deliberate and
+forward-looking: a future event type (e.g. an eventual asset-sale-
+proceeds event) needs no change to this function at all as long as its
+`cash_flow_class` is set correctly, since the filter is semantic, not
+enumerative. `cashIn`/`cashOut` are real EXTERNAL flows only —
+`opening_balance` and `transfer`/`fx_transfer` are excluded entirely, on
+both legs of a transfer including a cross-currency one.
+`earnedIncome`/`expense` are strict subsets (`income` only, `expense`
+only) — receivable recovery and loan proceeds are `cashIn` but never
+`earnedIncome`; debt principal repayment is `cashOut` but never
+`expense`; debt interest/fees are both. `transferIn`/`transferOut` are
+exposed separately, never folded into external flow.
+
+**Timezone/period boundary.** `resolve_period_bounds()` is the single
+place "what period does 'this month' mean for this user, right now" is
+resolved — `coalesce(profiles.timezone, 'UTC')`, exactly the pattern
+`obligation_summary()`/`upcoming_obligations()` already established
+(§27-ish; see the Rules/Obligations migration), never the database
+server's own timezone. It is called both directly (so a period with zero
+activity still has knowable, real bounds) and internally by
+`money_period_summary()`, so the two can never disagree.
+
+**Reporting FX context.** No second FX subsystem: `public.fx_rates`
+(P0-E2-S2) already anticipated exactly this use — its own original
+comment says "source=manual rows are standalone user notes."
+`record_manual_reporting_rate()` is a thin, self-documenting entry point
+(`source` is always `'manual'`, `event_id` is always `null`) over the
+same table. Transaction-actual rates (`source='transaction_actual'`,
+auto-created by `record_fx_transfer()` for the rate actually applied to
+one real transfer) remain completely separate rows with a different
+meaning; `reporting_fx_rates()` filters `source = 'manual'` explicitly,
+so a past transaction's actual rate is never silently reused as a
+current reporting/valuation rate — verified explicitly (a real
+`fx_transfer` auto-creates a `transaction_actual` row, a manual rate is
+recorded for the same pair with a deliberately different value, and only
+the manual one is ever returned).
+
+Direct/inverse resolution happens in TypeScript
+(`lib/domain/currency/reporting-rates.ts`'s `resolveReportingRates()`),
+not SQL: `reporting_fx_rates()` returns the user's own latest-per-pair
+manual rows touching the reporting currency, in either direction,
+completely unmodified; a direct rate (stored as currency → reporting)
+always wins over an inverse rate (stored as reporting → currency) when
+both exist, since the direct entry is literally what the user recorded
+to express that currency in the reporting currency. Inversion itself
+uses `decimal.js` exclusively. Rate history is append-only — recording a
+new rate never overwrites an older one; the latest `rate_as_of` wins.
+
+**Financial Position reporting integration.** `getFinancialPositionSummary()`
+(`lib/domain/financial-position/repository.ts`) now also resolves the
+user's own manual rates and calls the unchanged, reused
+`convertFinancialPositionToReportingCurrency()` (§41) — Home never
+constructs a rate map itself. `reportingPosition` is a genuinely
+three-state field: `null` when the user has no reporting currency
+configured at all (nothing to consolidate into — a more fundamental gap
+than a missing rate), `{status: "not_calculated", missingRates: [...]}`
+when the reporting currency is known but a required rate is missing, and
+`{status: "calculated", ...}` only once every required rate exists.
+`reportingRateContext` exposes full provenance per currency — stored
+base/quote as recorded, whether inverted, `rate_as_of`, source (always
+`"manual"` this phase, never `live`/`market`/`official`) — so Home can
+eventually explain exactly how a consolidated figure was constructed.
+
+**Liquidity completeness.** `asset_quicksale_coverage()`/
+`receivable_recoverability_coverage()` read from `asset_summary()`/
+`receivable_summary()` — the same canonical sources
+`financial_position_by_currency()` already uses for
+`assetQuickSalePotential`/`receivablesEstimatedRecoverable` — never a
+second raw-table query, so the sums stay trivially consistent with what
+Financial Position already shows. Each adds COUNTS (active items vs.
+items with a recorded estimate) and a `coverage_status` of `not_set`
+(zero recorded), `partial` (some but not all), or `complete` (every
+active item), so Home can distinguish "the only number we have" from
+"the whole picture." Archived items are excluded from both the numerator
+and denominator, so archiving an unestimated item can restore `complete`
+status — verified explicitly. These completeness fields alter neither
+Net Worth nor Safe to Deploy — verified explicitly by capturing a
+currency's `financial_position_by_currency()` row before and after
+completing its coverage and asserting `netWorth`/`safeToDeploy`/
+`safeToDeployStatus` are byte-identical.
+
+**Query strategy.** `getFinancialPositionSummary()` batches every read
+that doesn't depend on another read's result into one `Promise.all` (8
+parallel round trips: profile, native positions, goals, decisions,
+obligations, this month, both coverage reads), followed by one
+conditional extra round trip (`reporting_fx_rates()`) only when a
+reporting currency is actually configured — it cannot be batched with
+the rest because it needs `profile.preferred_currency` first.
+
+**Security.** All six new functions are `SECURITY INVOKER`; zero new
+tables, zero new RLS policies. See
+[SECURITY_AND_RLS_PRINCIPLES.md §20](../security/SECURITY_AND_RLS_PRINCIPLES.md#20-established-pattern-pure-composition-function-over-other-security-invoker-functions-p0-e3-s1)
+for why composing only `SECURITY INVOKER` functions is safe by
+construction — this phase's functions follow the identical pattern, plus
+one ordinary owned-row table (`record_manual_reporting_rate()` inserts
+with `user_id = auth.uid()`, already RLS-enforced by `fx_rates_insert_own`
+from P0-E2-S2).

@@ -23,7 +23,8 @@
     "test:rules": "node --env-file-if-exists=.env.local supabase/tests/rules/run.ts",
     "test:decisions": "node --env-file-if-exists=.env.local supabase/tests/decisions/run.ts",
     "test:financial-position": "node --env-file-if-exists=.env.local supabase/tests/financial-position/run.ts",
-    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets && npm run test:receivables && npm run test:liabilities && npm run test:goals && npm run test:rules && npm run test:decisions && npm run test:financial-position"
+    "test:home-readiness": "node --env-file-if-exists=.env.local supabase/tests/home-readiness/run.ts",
+    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets && npm run test:receivables && npm run test:liabilities && npm run test:goals && npm run test:rules && npm run test:decisions && npm run test:financial-position && npm run test:home-readiness"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

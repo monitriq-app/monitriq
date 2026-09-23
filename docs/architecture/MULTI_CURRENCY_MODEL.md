@@ -416,3 +416,57 @@ one consolidated reporting figure is withheld. Exact non-round rates
 (e.g. `1 EUR = 1.10 USD`) are exercised explicitly in
 `supabase/tests/financial-position/run.ts` to prove no binary-float drift
 enters the combination step.
+
+## 24. Transaction FX vs. reporting FX — two different concepts, one table (P0-E3-S1A)
+
+§23 answers "how is a consolidated Net Worth combined once rates exist."
+This section answers "where do those rates come from" — and, just as
+importantly, where they deliberately do *not* come from.
+
+`public.fx_rates` (P0-E2-S2) has always held two conceptually different
+kinds of row, distinguished by `source`:
+
+- **`transaction_actual`** — the exact rate actually applied to one real
+  `fx_transfer` between the user's own buckets. Auto-created by
+  `record_fx_transfer()`, immutable, tied to that one `event_id`. This
+  answers "what rate was used *then*, for *that* transfer."
+- **`manual`** — a standalone rate the user records explicitly, not tied
+  to any transaction. This phase gives this kind of row its first real
+  purpose: **reporting/valuation rate** — "what rate does the user want
+  Monatriq to use *right now* to express one currency in the reporting
+  currency." Recorded via `record_manual_reporting_rate()`
+  (`lib/domain/currency/repository.ts`'s `recordManualReportingRate()`),
+  always `event_id = null`.
+
+These answer different questions, and P0-E3-S1A keeps them from ever
+being confused: `reporting_fx_rates()` filters `source = 'manual'`
+explicitly, so a `transaction_actual` row is structurally invisible to
+Financial Position's reporting conversion — even when it exists for the
+exact same currency pair the reporting calculation needs. Reusing an old
+transaction's actual rate as today's valuation rate would be silently
+wrong (that rate reflects one moment's actual exchange, not a current
+view of worth) and V1 never does it. Verified explicitly: a real
+`fx_transfer` is recorded (auto-creating a `transaction_actual` row), a
+`manual` rate is recorded for the identical pair with a deliberately
+different value, and only the manual one is ever returned by
+`reporting_fx_rates()`.
+
+**Direct vs. inverse.** A user who recorded `1 EUR = 1.10 USD` (base=EUR,
+quote=USD) has, by construction, also implicitly defined the USD→EUR
+rate as its mathematical inverse. `reporting_fx_rates(p_reporting_currency)`
+returns the user's latest manual row per pair touching the reporting
+currency in *either* direction, unmodified; `resolveReportingRates()`
+(`lib/domain/currency/reporting-rates.ts`) is where the inversion
+actually happens — via `decimal.js`, never in SQL — and a direct rate
+always wins over an inverse one for the same currency when both exist. No
+triangulation: a currency with neither a direct nor an explicit-inverse
+manual rate against the reporting currency simply does not resolve. Every
+resolved rate carries full provenance (`isInverse`, the stored base/
+quote, the stored rate pre-inversion, `rate_as_of`, `source`) so a
+consolidated figure is never a black box.
+
+**V1 is manual-first, deliberately.** `source` is never labeled `live`,
+`market`, `real-time`, or `official` — only `manual`. No live-provider
+integration exists or is planned by this phase; a future provider-sourced
+rate would need its own `source` value and its own selection logic, not
+a silent upgrade of what `manual` means today.

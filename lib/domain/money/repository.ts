@@ -9,6 +9,7 @@ import type {
   CurrencyAmount,
   FinancialEvent,
   MoneyActivityItem,
+  MoneyPeriodSummary,
   MoneyReceivedCategory,
   MoneySpendingCategory,
 } from "./types.ts";
@@ -280,6 +281,39 @@ export async function getCurrencyTotals(client: Client): Promise<CurrencyAmount[
     currencyCode: row.currency_code,
     amount: row.balance,
   }));
+}
+
+/**
+ * Canonical "This Month" / period-summary boundary — see
+ * money_period_summary()/resolve_period_bounds() in the migration for the
+ * full timezone/classification strategy. `start`/`end` (YYYY-MM-DD) select
+ * an explicit period; omitting both resolves the current calendar month in
+ * the caller's own profile timezone. periodStart/periodEnd are always
+ * returned, even when the period had zero activity in every currency.
+ */
+export async function getMoneyPeriodSummary(client: Client, start?: string, end?: string): Promise<MoneyPeriodSummary> {
+  const [boundsResult, summaryResult] = await Promise.all([
+    client.rpc("resolve_period_bounds", { p_start: start, p_end: end }),
+    client.rpc("money_period_summary", { p_start: start, p_end: end }),
+  ]);
+  if (boundsResult.error) throw boundsResult.error;
+  if (summaryResult.error) throw summaryResult.error;
+
+  const bounds = boundsResult.data?.[0];
+  return {
+    periodStart: bounds?.period_start ?? "",
+    periodEnd: bounds?.period_end ?? "",
+    currencies: (summaryResult.data ?? []).map((row) => ({
+      currencyCode: row.currency_code,
+      cashIn: row.cash_in,
+      cashOut: row.cash_out,
+      netExternalCashFlow: row.net_external_cash_flow,
+      earnedIncome: row.earned_income,
+      expense: row.expense,
+      transferIn: row.transfer_in,
+      transferOut: row.transfer_out,
+    })),
+  };
 }
 
 export async function getRecentActivity(client: Client, limit = 25): Promise<MoneyActivityItem[]> {

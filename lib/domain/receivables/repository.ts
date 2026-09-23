@@ -5,12 +5,14 @@ import type {
   Receivable,
   ReceivableLedgerEvent,
   ReceivableLedgerHistoryItem,
+  ReceivableRecoverabilityCoverage,
   ReceivableRecoverableEstimate,
   ReceivableSummary,
   ReceivableUpdate,
   RecordAdjustmentInput,
   RecordEstimateInput,
   RecordRecoveryInput,
+  RecoverabilityCoverageStatus,
 } from "./types.ts";
 import type { CurrencyAmount } from "../currency/types.ts";
 
@@ -80,6 +82,19 @@ export async function getReceivableSummaries(client: Client): Promise<Receivable
     lastFollowUpAt: row.last_follow_up_at as string | null,
     isArchived: row.is_archived,
     latestRecoveryAt: row.latest_recovery_at as string | null,
+  }));
+}
+
+/** Per-currency recoverability-estimate coverage — see receivable_recoverability_coverage() in the migration. */
+export async function getReceivableRecoverabilityCoverage(client: Client): Promise<ReceivableRecoverabilityCoverage[]> {
+  const { data, error } = await client.rpc("receivable_recoverability_coverage");
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    currencyCode: row.currency_code,
+    activeReceivableCount: row.active_receivable_count,
+    recoverabilityEstimateCount: row.recoverability_estimate_count,
+    recoverableSum: row.recoverable_sum,
+    coverageStatus: row.coverage_status as RecoverabilityCoverageStatus,
   }));
 }
 

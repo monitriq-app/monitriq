@@ -86,4 +86,21 @@ export interface ReceivableUpdate {
   isArchived?: boolean;
 }
 
+export type RecoverabilityCoverageStatus = "not_set" | "partial" | "complete";
+
+/**
+ * Per-currency recoverability-estimate completeness — same reasoning as
+ * AssetQuickSaleCoverage (lib/domain/assets/types.ts). recoverableSum
+ * matches financial_position_by_currency()'s receivablesEstimatedRecoverable
+ * exactly (same source, receivable_summary()) — null when
+ * recoverabilityEstimateCount is 0.
+ */
+export interface ReceivableRecoverabilityCoverage {
+  currencyCode: string;
+  activeReceivableCount: number;
+  recoverabilityEstimateCount: number;
+  recoverableSum: string | null;
+  coverageStatus: RecoverabilityCoverageStatus;
+}
+
 export type { CurrencyAmount };

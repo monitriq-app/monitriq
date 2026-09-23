@@ -1,0 +1,474 @@
+================================================================================
+P0-E3-S1A — HOME READINESS: MONTHLY MONEY SUMMARY, REPORTING FX CONTEXT
+& LIQUIDITY COMPLETENESS
+================================================================================
+
+1. PHASE
+--------------------------------------------------------------------------------
+P0-E3-S1A — Home Readiness: Monthly Money Summary, Reporting FX Context &
+Liquidity Completeness.
+
+2. STATUS
+--------------------------------------------------------------------------------
+COMPLETE.
+
+3. OBJECTIVE
+--------------------------------------------------------------------------------
+Close the remaining data/read-model gaps identified at the end of
+P0-E3-S1 before the final Home Command Center is built, without building
+Home itself: (A) a canonical Money "This Month" / period-summary read
+model, (B) persistent manual reporting-FX context for multi-currency
+reporting, (C) completeness metadata for partial quick-sale and
+recoverability estimates. No new product domain; no redesign of any
+existing foundation screen; no financial advice or calculation unrelated
+to these three requirements.
+
+4. REPOSITORY STATE
+--------------------------------------------------------------------------------
+Branch: main. Working tree carries this phase's changes on top of every
+prior phase's already-uncommitted work (standing "do not commit without
+explicit request" instruction, unchanged). No commits were made this
+phase. Full `git status`/`git diff --stat` in §36-37 below.
+
+5. SUPABASE ENVIRONMENT
+--------------------------------------------------------------------------------
+Local: Docker-based Supabase stack via `supabase start`/`db reset`.
+Remote: "Monatriq Dev" (ref `mvnwrkfcszazqqccmmxq`), already linked from
+prior phases. Treated as DEVELOPMENT throughout — destructive/adversarial
+operations remain local-only.
+
+6. FILES CREATED
+--------------------------------------------------------------------------------
+supabase/migrations/20260926090000_create_home_readiness_data_foundation.sql
+lib/domain/currency/reporting-rates.ts
+supabase/tests/home-readiness/run.ts
+components/financial-position/ReportingPositionPanel.tsx
+components/financial-position/ReportingRateForm.tsx
+components/financial-position/MonthlyMoneySummaryPanel.tsx
+components/financial-position/LiquidityCoveragePanel.tsx
+docs/reports/P0-E3-S1A-home-readiness-data-foundation.txt
+
+7. FILES MODIFIED
+--------------------------------------------------------------------------------
+lib/domain/currency/types.ts, lib/domain/currency/repository.ts
+lib/domain/money/types.ts, lib/domain/money/repository.ts
+lib/domain/assets/types.ts, lib/domain/assets/repository.ts
+lib/domain/receivables/types.ts, lib/domain/receivables/repository.ts
+lib/domain/financial-position/types.ts, lib/domain/financial-position/repository.ts
+app/(app)/financial-position/page.tsx
+lib/supabase/database.types.ts (regenerated)
+package.json (test:home-readiness script; extended combined test script)
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md (+§42, updated §41 pointer)
+docs/architecture/MULTI_CURRENCY_MODEL.md (+§24)
+docs/architecture/SYSTEM_ARCHITECTURE.md (repo layout, §4 addendum)
+docs/project/BUILD_STATE.md (full rewrite for this phase)
+
+lib/domain/financial-position/aggregate.ts is UNCHANGED — reused exactly
+as P0-E3-S1 left it. docs/security/SECURITY_AND_RLS_PRINCIPLES.md is
+UNCHANGED — see §25.
+
+8. MIGRATION / SCHEMA STATUS
+--------------------------------------------------------------------------------
+One new migration. ZERO new tables. Six new functions, all `security
+invoker`: resolve_period_bounds(), money_period_summary(),
+record_manual_reporting_rate(), reporting_fx_rates(),
+asset_quicksale_coverage(), receivable_recoverability_coverage().
+financial_position_by_currency() (P0-E3-S1) is completely untouched.
+Applied cleanly on both local resets this phase (after fixing the
+coalesce scale bug described in §32) and pushed to remote (§31).
+
+9. MONEY PERIOD-SUMMARY ARCHITECTURE
+--------------------------------------------------------------------------------
+Two functions: resolve_period_bounds(p_start, p_end) resolves an explicit
+range or, when omitted, the current calendar month in the caller's
+profile timezone — the single source of "what period does This Month
+mean," called both directly (so a zero-activity period still has known,
+real bounds) and internally by money_period_summary(p_start, p_end),
+which does the actual per-currency aggregation. Classification is
+entirely by financial_events.cash_flow_class (income/other_inflow/
+expense/other_outflow/transfer/opening_balance) — never by
+hand-enumerating event_type — so a future event type needs no change here
+as long as its cash_flow_class is set correctly (this directly covers the
+brief's "future asset-sale proceeds"/"future external purchase" hints).
+lib/domain/money/repository.ts's getMoneyPeriodSummary(client, start?,
+end?) calls both functions in parallel and returns one
+MoneyPeriodSummary{periodStart, periodEnd, currencies: [...]}.
+
+10. MONTH/TIMEZONE BOUNDARY MODEL
+--------------------------------------------------------------------------------
+Identical pattern to obligation_summary()/upcoming_obligations()
+(P0-E2-S6): coalesce(profiles.timezone, 'UTC'), never the database
+server's own timezone. Verified explicitly with a real UTC+14 case
+(Pacific/Kiritimati): an event at 2026-01-31T23:30:00Z is still January
+31 in UTC but 2026-02-01 13:30 local under Pacific/Kiritimati — the SAME
+event was proven to resolve into the January period under one timezone
+and the February period under the other, by switching the profile's
+timezone between two calls with fixed explicit period bounds.
+
+11. CASH-IN/OUT SEMANTICS
+--------------------------------------------------------------------------------
+cashIn = sum of income/other_inflow-classified movements (always
+positive by construction). cashOut = sum of the negation of expense/
+other_outflow-classified movements (always positive). Both exclude
+opening_balance and transfer/fx_transfer entirely. Verified: an fx
+transfer between the user's own HKD and AED buckets contributes to
+neither leg's cashIn/cashOut, only to transferIn/transferOut, on BOTH
+currencies independently.
+
+12. INCOME/EXPENSE SEMANTICS
+--------------------------------------------------------------------------------
+earnedIncome = income-classified only (a strict subset of cashIn).
+expense = expense-classified only (a strict subset of cashOut). Verified
+explicitly: receivable recovery and loan proceeds both contribute to
+cashIn but earnedIncome stays exactly 0; debt principal repayment
+contributes to cashOut but expense stays unaffected by it, while debt
+interest and fees contribute to both cashOut and expense.
+
+13. TRANSFER/OPENING-BALANCE TREATMENT
+--------------------------------------------------------------------------------
+transferIn/transferOut are exposed as their own fields, summing the
+positive/negated-negative transfer-classified movements respectively —
+never folded into cashIn/cashOut. opening_balance is excluded from every
+field (cashIn, cashOut, earnedIncome, expense, transferIn, transferOut) —
+verified explicitly with an opening-balance event that never appears in
+cashIn despite occurring in the same query period as a real salary
+deposit.
+
+14. REPORTING-FX ARCHITECTURE
+--------------------------------------------------------------------------------
+record_manual_reporting_rate(p_base_currency, p_quote_currency, p_rate,
+p_rate_as_of default now()) inserts one append-only row into the EXISTING
+public.fx_rates table with source='manual', event_id=null.
+reporting_fx_rates(p_reporting_currency) returns the caller's own latest
+manual row per (base_currency, quote_currency) pair touching the
+reporting currency, in either direction — filtering source='manual'
+explicitly. Direct/inverse resolution and the inversion arithmetic itself
+happen entirely in TypeScript (lib/domain/currency/reporting-rates.ts's
+resolveReportingRates(), using decimal.js), never in SQL.
+
+15. EXISTING fx_rates REUSE/NEW-MODEL DECISION
+--------------------------------------------------------------------------------
+Inspected first, as required. public.fx_rates (P0-E2-S2) already has
+exactly the right shape and its own original comment already anticipated
+this use ("source=manual rows are standalone user notes"). No schema
+change was made. The one place reuse would have been WRONG — treating a
+transaction_actual row (the rate actually applied to a past fx_transfer)
+as a current reporting rate — is explicitly prevented by
+reporting_fx_rates()'s source='manual' filter, never by conflating the
+two concepts into one query. No second FX subsystem was created.
+
+16. MANUAL-RATE HISTORY
+--------------------------------------------------------------------------------
+Append-only: record_manual_reporting_rate() only ever inserts; no
+update/delete path exists for a manual rate. Verified explicitly: an
+older EUR->BRL rate (6.00) remains readable via listManualReportingRates()
+after a newer one (6.20) is recorded, and reporting_fx_rates() resolves
+to the latest applicable one (ORDER BY rate_as_of DESC, created_at DESC).
+
+17. DIRECT/INVERSE-RATE STRATEGY
+--------------------------------------------------------------------------------
+A direct rate (stored as currency -> reporting currency) always wins over
+an inverse rate (stored as reporting currency -> currency) for the same
+currency when both exist, since the direct entry is literally what the
+user recorded to express that currency in the reporting currency.
+Inversion uses decimal.js exclusively (new Decimal(1).dividedBy(rate)) —
+verified with an exact non-terminating-decimal case (1/1.90). No
+triangulation/multi-hop routing exists or was added.
+
+18. FINANCIAL POSITION REPORTING INTEGRATION
+--------------------------------------------------------------------------------
+getFinancialPositionSummary() resolves the caller's own rates into a
+plain Map<string,string> and passes it to the UNCHANGED, REUSED
+convertFinancialPositionToReportingCurrency() (P0-E3-S1) — zero new
+combination arithmetic was written. reportingPosition is a genuine
+three-state field: null (no reporting currency configured at all —
+distinct from a missing rate), {status:"not_calculated", missingRates}
+(reporting currency known, a rate is missing), {status:"calculated", ...}
+(every required rate resolved). Verified end-to-end at the summary level
+with an isolated fixture (User B: EUR cash position, USD reporting
+currency, one recorded EUR->USD rate) producing an exact calculated
+result, and separately with User A's NOK position (deliberately left
+unrated) producing an explicit not_calculated result with NOK listed in
+missingRates.
+
+19. FX TRANSPARENCY
+--------------------------------------------------------------------------------
+reportingRateContext exposes, per currency: the resolved (possibly
+inverted) rate, isInverse, storedBaseCurrency/storedQuoteCurrency (as the
+user actually recorded them), storedRate (pre-inversion), rateAsOf, and
+source (always "manual" this phase, never live/market/official).
+reportingPosition itself continues to expose reportingCurrency,
+currenciesRequiringConversion, ratesUsed, and asOf (all P0-E3-S1,
+unchanged).
+
+20. ASSET QUICK-SALE COVERAGE MODEL
+--------------------------------------------------------------------------------
+asset_quicksale_coverage() reads asset_summary() (the same canonical
+source financial_position_by_currency() already uses for
+assetQuickSalePotential), filtered to non-archived assets, grouped by
+currency: activeAssetCount, quickSaleEstimateCount, quickSaleSum (null
+when zero estimated, exact sum otherwise), coverageStatus
+(not_set/partial/complete). Verified through a full not_set -> partial ->
+complete -> (new unestimated asset) partial -> (archived) complete
+progression on one currency, with exact sums asserted at every step via
+decimal.js-computed expected values.
+
+21. RECEIVABLE RECOVERABILITY COVERAGE MODEL
+--------------------------------------------------------------------------------
+receivable_recoverability_coverage() mirrors §20 exactly, reading
+receivable_summary(): activeReceivableCount, recoverabilityEstimateCount,
+recoverableSum, coverageStatus. Verified through the identical
+not_set -> partial -> complete -> archived-exclusion progression on a
+dedicated currency.
+
+22. PARTIAL/NOT-SET/COMPLETE SEMANTICS
+--------------------------------------------------------------------------------
+not_set: zero recorded estimates among active items (including the
+appropriate empty state of zero rows at all for a currency with zero
+items — verified: a currency with literally no assets produces no row in
+asset_quicksale_coverage() at all, never a fabricated 0/not_set row).
+partial: some but not all active items estimated. complete: every active
+item estimated. Archived items are excluded from both the numerator and
+denominator — verified explicitly that archiving the one unestimated item
+in a partial set restores complete status, proving exclusion rather than
+mere non-counting-toward-the-sum.
+
+23. FINANCIAL POSITION SUMMARY CHANGES
+--------------------------------------------------------------------------------
+FinancialPositionSummary gained five fields: reportingPosition,
+reportingRateContext, thisMonth, assetQuickSaleCoverage,
+receivableRecoverabilityCoverage. Every existing field (asOf,
+reportingCurrency, nativePositions, upcomingObligations, focusGoal,
+activeGoals, activeDecisions) is unchanged in shape and behavior — the
+full P0-E3-S1 financial-position suite (33/33) continues to pass
+unmodified, proving no regression. Recent Activity remains deliberately
+excluded — Home calls money_recent_activity() directly; delegating it
+through this summary would add a hop without adding a new capability.
+
+24. EXACT-DECIMAL STRATEGY
+--------------------------------------------------------------------------------
+Unchanged discipline: Postgres numeric(20,6) for Money amounts,
+numeric(24,12) for fx_rates.rate (unchanged from P0-E2-S2), every
+monetary/rate column cast to ::text in every new SQL function, decimal.js
+as the only arbitrary-precision library at every TypeScript combination
+step (resolveReportingRates()'s inversion; every test's expected-value
+computation). One real scale-loss bug was found and fixed this phase —
+see §32.
+
+25. RLS/SECURITY
+--------------------------------------------------------------------------------
+All six new functions are SECURITY INVOKER; zero new tables, zero new RLS
+policies. Five are pure compositions over other SECURITY INVOKER
+functions or direct RLS-scoped table reads (following the already-
+documented pattern at SECURITY_AND_RLS_PRINCIPLES.md §20, established
+P0-E3-S1). record_manual_reporting_rate() is the one write; it sets
+user_id=auth.uid() itself and is additionally checked by the existing
+fx_rates_insert_own RLS policy (auth.uid()=user_id) from P0-E2-S2 — the
+same belt-and-suspenders pattern every prior owner-setting write function
+uses. No genuinely new security pattern was introduced, so
+SECURITY_AND_RLS_PRINCIPLES.md was deliberately left unmodified.
+
+26. ADVERSARIAL TESTS
+--------------------------------------------------------------------------------
+PASSED. User A cannot read User B's manual reporting rate (direct
+fx_rates query and listManualReportingRates() both confirmed empty/
+absent). User B's own manual rate for the exact same currency pair User A
+needs is never returned by User A's reporting_fx_rates() call, and User
+A's own reporting calculation remains not_calculated despite User B
+having recorded exactly that pair. Anonymous denied on reporting_fx_
+rates(), record_manual_reporting_rate(), and direct fx_rates SELECT (no
+anon grant exists on that table at all — confirmed via expectDenied, the
+same established pattern already used for Money's own anonymous fx_rates
+test).
+
+27. FINANCIAL-CORRECTNESS TESTS
+--------------------------------------------------------------------------------
+PASSED. Full 15-item Money period-summary matrix (income/other_inflow
+cashIn without earnedIncome contamination; expense/other_outflow cashOut
+with correct expense subset; internal and cross-currency transfer
+exclusion on both legs; opening-balance exclusion; voided-event
+exclusion; multi-currency separation; exact net calculation). Full
+reporting-FX matrix (manual rate recording, history preservation, latest-
+wins resolution, transaction_actual never selected, direct and inverse
+resolution both exact via decimal.js, missing-rate not_calculated,
+complete-rate calculated, non-round-rate exactness, JPY/KWD precision
+conventions). Full liquidity-completeness matrix (not_set/partial/
+complete for both assets and receivables, exact sums throughout, archived
+exclusion).
+
+28. REGRESSION RESULTS
+--------------------------------------------------------------------------------
+PASSED, full suite, fresh local `supabase db reset`:
+  RLS/Profile        20/20
+  Money               37/37
+  Currency            11/11
+  Assets              28/28
+  Receivables         27/27
+  Liabilities         25/25
+  Goals               56/56
+  Rules/Obligations   86/86
+  Decisions           70/70
+  Financial Position  33/33
+  Home Readiness      30/30
+  TOTAL              423/423
+
+29. APPLICATION INTEGRATION
+--------------------------------------------------------------------------------
+`/financial-position` (already the restrained P0-E3-S1 development route)
+gained four sections, all reading straight from getFinancialPositionSummary()
+with nothing computed in the page: Reporting Position (consolidated
+figure + full rate-context transparency) plus a manual-rate entry form
+(ReportingRateForm, base currency + rate, quote fixed to the user's own
+reporting currency); This Month (per-currency cashIn/cashOut/net/
+earnedIncome/expense/transferIn/transferOut); Liquidity Completeness
+(asset and receivable coverage side by side). Still explicitly NOT final
+Home, NOT Stitch design, NO fake/seeded data — verified via the
+.env.local-removed build and by inspection.
+
+30. GENERATED TYPES
+--------------------------------------------------------------------------------
+lib/supabase/database.types.ts regenerated via `npm run db:types` after
+the migration; confirmed all six new RPCs' exact Args/Returns shapes via
+direct inspection before writing the domain layer against them. Header
+comment re-added per standing practice.
+
+31. REMOTE MIGRATION STATUS
+--------------------------------------------------------------------------------
+`supabase db push --linked --dry-run` confirmed exactly one pending
+migration (this phase's). `supabase db push --linked --yes` applied it.
+`supabase migration list --linked` confirms all 11 local migration
+timestamps match remote exactly. The same benign pg-delta catalog-caching
+warning seen in every prior remote push appeared again — does not affect
+schema application, confirmed by the migration-list match. No test suite
+was executed against remote (schema deployment only).
+
+32. VALIDATION RESULTS
+--------------------------------------------------------------------------------
+Fresh local db reset: PASSED (both resets this phase, clean after the fix
+below). Full existing suite: PASSED (393/393 prior + 30/30 new =
+423/423). Home Readiness suite: PASSED (30/30). Adversarial tests:
+PASSED. Financial-correctness tests: PASSED. Exact-decimal tests: PASSED.
+Lint (`npm run lint`): PASSED, zero warnings/errors after one fix (an
+unused prop threaded through a component that never needed it). Typecheck,
+app (`tsc --noEmit`): PASSED, zero errors. Typecheck, test harness
+(`tsc --noEmit -p supabase/tests/tsconfig.json`): PASSED, zero errors.
+Build, with Supabase config: PASSED, /financial-position registers
+dynamic (ƒ). Build, without Supabase config: PASSED, /financial-position
+degrades to static (○). Service-role exposure search: CLEAN. SECURITY
+DEFINER search (new migration): CLEAN. Prototype-data search: CLEAN.
+Capital Compass source search: CLEAN. git diff/git status reviewed: see
+§36-37.
+
+One real migration bug was found during local testing (not present in
+the final applied schema): money_period_summary()'s original
+`coalesce(sum(...), 0)::text` lost NUMERIC's declared 6-decimal scale
+whenever a filtered sum matched zero rows, producing "0" instead of
+"0.000000" — caught immediately by the GHS and HKD test blocks (an
+unearned-income field and an untouched cashOut field, respectively, both
+expected "0.000000" and got "0"). Fixed by casting every fallback to
+`0::numeric(20, 6)` explicitly, matching the pattern
+financial_position_by_currency() already established. Two further
+failures were test-file mistakes, not migration bugs (an amount exceeding
+CHF's 2-decimal precision; two rate-string equality checks not accounting
+for fx_rates.rate's 12-decimal text-cast representation) — both fixed in
+the test file itself.
+
+33. ASSUMPTIONS
+--------------------------------------------------------------------------------
+- "This Month" / period summary intentionally does not expose category or
+  source-level breakdowns — the brief explicitly allows this only "if
+  inexpensive and useful," and deferring it avoids scope creep; a future
+  breakdown, if needed, would be its own canonical function, not folded
+  into this one.
+- The manual reporting-rate UI records rates only in the currency ->
+  reporting-currency direction (quote fixed to the user's own reporting
+  currency) — the domain layer supports resolving an inverse-stored rate,
+  but the restrained UI this phase doesn't need to expose recording one
+  in that direction, since every rate this phase's UI records is already
+  in the direction Financial Position actually needs.
+- reportingRateContext returns ALL resolved rates (both those actually
+  used and, when reportingPosition is not_calculated, whatever partial
+  context exists) rather than being empty whenever the position isn't
+  fully calculated — this was judged more transparent ("show what we do
+  know") than hiding partial context behind a not_calculated status.
+
+34. OPEN QUESTIONS
+--------------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md, "Open questions" — items 15-16 are new
+this phase (whether the manual-rate UI should eventually support
+recording an inverse-direction rate; how a future live-FX-provider source
+would interact with source preference against manual rates). All prior
+open questions (1-14) remain unchanged and are carried forward verbatim.
+
+35. RISKS
+--------------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md, "Risks" — item 5 is new this phase: a
+manual reporting rate has no expiry/staleness indicator beyond rate_as_of
+itself; nothing currently warns a user that a rate recorded months ago is
+still what's being used. rate_as_of is exposed specifically so a future
+Home/staleness feature can be built against it without a schema change.
+
+36. GIT DIFF SUMMARY
+--------------------------------------------------------------------------------
+ app/(app)/financial-position/page.tsx       |  35 ++-
+ docs/architecture/FINANCIAL_DOMAIN_MODEL.md | 126 +++++++++-
+ docs/architecture/MULTI_CURRENCY_MODEL.md   |  54 +++++
+ docs/architecture/SYSTEM_ARCHITECTURE.md    |  29 ++-
+ docs/project/BUILD_STATE.md                 | 343 ++++++++++++++++------------
+ lib/domain/assets/repository.ts             |  15 ++
+ lib/domain/assets/types.ts                  |  18 ++
+ lib/domain/currency/repository.ts           |  47 +++-
+ lib/domain/currency/types.ts                |  47 ++++
+ lib/domain/financial-position/repository.ts |  65 ++++--
+ lib/domain/financial-position/types.ts      |  23 ++
+ lib/domain/money/repository.ts              |  34 +++
+ lib/domain/money/types.ts                   |  32 +++
+ lib/domain/receivables/repository.ts        |  15 ++
+ lib/domain/receivables/types.ts             |  17 ++
+ lib/supabase/database.types.ts              |  75 ++++++
+ package.json                                |   3 +-
+ 17 files changed, 799 insertions(+), 179 deletions(-)
+(plus untracked new files listed in §37 below, not reflected in `git diff --stat`)
+
+37. GIT STATUS
+--------------------------------------------------------------------------------
+ M app/(app)/financial-position/page.tsx
+ M docs/architecture/FINANCIAL_DOMAIN_MODEL.md
+ M docs/architecture/MULTI_CURRENCY_MODEL.md
+ M docs/architecture/SYSTEM_ARCHITECTURE.md
+ M docs/project/BUILD_STATE.md
+ M lib/domain/assets/repository.ts
+ M lib/domain/assets/types.ts
+ M lib/domain/currency/repository.ts
+ M lib/domain/currency/types.ts
+ M lib/domain/financial-position/repository.ts
+ M lib/domain/financial-position/types.ts
+ M lib/domain/money/repository.ts
+ M lib/domain/money/types.ts
+ M lib/domain/receivables/repository.ts
+ M lib/domain/receivables/types.ts
+ M lib/supabase/database.types.ts
+ M package.json
+?? components/financial-position/LiquidityCoveragePanel.tsx
+?? components/financial-position/MonthlyMoneySummaryPanel.tsx
+?? components/financial-position/ReportingPositionPanel.tsx
+?? components/financial-position/ReportingRateForm.tsx
+?? lib/domain/currency/reporting-rates.ts
+?? supabase/migrations/20260926090000_create_home_readiness_data_foundation.sql
+?? supabase/tests/home-readiness/
+
+Working tree remains entirely unstaged/uncommitted, consistent with every
+prior phase's "do not commit or push without explicit request" standing
+instruction — this includes every earlier phase's still-uncommitted work
+from before this phase began.
+
+38. RECOMMENDED NEXT PHASE
+--------------------------------------------------------------------------------
+P0-E3-S2 — Home, now with every remaining data-foundation gap this
+session identified explicitly closed: a genuinely complete Financial
+Position aggregation including This Month, a reporting-currency
+consolidated view built from the user's own stored rates, and liquidity
+completeness metadata — no "Home would need to invent this" gaps remain
+documented anywhere in BUILD_STATE.md. Do not begin Home automatically —
+pending user review.
+================================================================================

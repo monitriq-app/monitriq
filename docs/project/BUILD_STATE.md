@@ -5,154 +5,198 @@ Do not mark future phases complete ahead of time.
 
 ## Current phase
 
-P0-E3-S1 — Unified Financial Position & Cross-Domain Aggregation Engine.
+P0-E3-S1A — Home Readiness: Monthly Money Summary, Reporting FX Context &
+Liquidity Completeness.
 
 ## Current status
 
-**Complete.** `lib/domain/financial-position/` composes the eight prior
-domains' canonical read functions into one Financial Position boundary —
-`financial_position_by_currency()` (one new `SECURITY INVOKER` SQL
-function, zero new tables) for per-currency NUMERIC aggregates, plus
-`getFinancialPositionSummary()`'s parallel TypeScript-layer reads for
-Goals/Decisions/Obligations. Net Worth (`liquidCash + nonCashAssetValue +
-receivablesOutstanding − liabilitiesOutstanding`, per native currency,
-never clamped) is the only new calculation this phase introduces — Safe
-to Deploy, protected cash, allocation shortfall, potential liquidity, and
-every list-shaped summary are read verbatim from their owning domain.
-Reporting-currency Net Worth
-(`convertFinancialPositionToReportingCurrency()`) converts each of the
-four Net Worth components independently and combines only after all
-succeed, returning `not_calculated` (never a partial sum) if any required
-FX rate is missing. Verified against a real local Supabase stack, fresh
-`supabase db reset`: 20 (Profile) + 37 (Money) + 11 (Currency) + 28
-(Assets) + 27 (Receivables) + 25 (Liabilities) + 56 (Goals) + 86 (Rules/
-Obligations) + 70 (Decisions) + 33 (Financial Position) = **393/393
-assertions passed**. Migration was also pushed to the real remote
-"Monatriq Dev" project this phase; schema deployment is confirmed there.
+**Complete.** A narrow, three-part Home-readiness phase closing the
+remaining data/read-model gaps identified at the end of P0-E3-S1 — no new
+product domain, no redesign of any foundation screen. (A) `money_period_
+summary()`/`resolve_period_bounds()`: Money's canonical "This Month" /
+period-summary boundary, classified purely from `financial_events.cash_
+flow_class` (never `event_type`), timezone-correct via `coalesce(profiles.
+timezone, 'UTC')`. (B) `record_manual_reporting_rate()`/`reporting_fx_
+rates()`: manual reporting-FX context reusing `public.fx_rates` (P0-E2-S2)
+exactly as designed — zero new FX subsystem — with direct/inverse
+resolution done via `decimal.js` in TypeScript
+(`lib/domain/currency/reporting-rates.ts`), and transaction-actual rates
+structurally excluded from ever being selected as a reporting rate. (C)
+`asset_quicksale_coverage()`/`receivable_recoverability_coverage()`:
+per-currency completeness metadata (not_set/partial/complete) for
+quick-sale and recoverability estimates, reading the same canonical
+sources Financial Position already uses. `getFinancialPositionSummary()`
+was extended to compose all three in, plus a `reportingPosition` field
+computed from the user's own stored manual rates via the unchanged,
+reused `convertFinancialPositionToReportingCurrency()` (P0-E3-S1) — no
+rate-map construction pushed onto Home. Zero new tables this phase — six
+new `SECURITY INVOKER` functions only. Verified against a real local
+Supabase stack, fresh `supabase db reset`: 20 (Profile) + 37 (Money) + 11
+(Currency) + 28 (Assets) + 27 (Receivables) + 25 (Liabilities) + 56
+(Goals) + 86 (Rules/Obligations) + 70 (Decisions) + 33 (Financial
+Position) + 30 (Home Readiness) = **423/423 assertions passed**.
+Migration was also pushed to the real remote "Monatriq Dev" project this
+phase; schema deployment is confirmed there.
 
 ## Supabase environment state
 
-Same remote project as P0-E2-S3 through S7: "monatriq's Project" (ref
-`mvnwrkfcszazqqccmmxq`), already linked at the start of this phase — no
-new confirmation needed.
+Same remote project as every phase since P0-E2-S3: "monatriq's Project"
+(ref `mvnwrkfcszazqqccmmxq`), already linked at the start of this phase —
+no new confirmation needed.
 
 Sequence: `supabase db push --linked --dry-run` (confirmed exactly one new
 migration, this phase's), then `supabase db push --linked --yes`. Verified
-via `supabase migration list --linked`: all 10 local migration timestamps
+via `supabase migration list --linked`: all 11 local migration timestamps
 match remote exactly (20260922201924/210653/220526/221247/230750/
-20260923120000/180000/220000/20260924100000/20260925090000 — the last one
-is this phase's). The same benign, unrelated pg-delta catalog-caching
-warning seen in every prior remote push (missing a certificate file inside
-the CLI's own internal sandbox) appeared again; it did not affect schema
-application, confirmed by the migration-list match.
+20260923120000/180000/220000/20260924100000/20260925090000/20260926090000
+— the last one is this phase's). The same benign, unrelated pg-delta
+catalog-caching warning seen in every prior remote push (missing a
+certificate file inside the CLI's own internal sandbox) appeared again; it
+did not affect schema application, confirmed by the migration-list match.
 
 **What was NOT done against remote, deliberately**: same as every prior
 phase — the isolation test suite was not executed against it.
 `supabase/tests/shared/env.ts`'s localhost-only guard was not touched.
 Remote validation for this phase is: **schema deployment CONFIRMED, test
-EXECUTION NOT RUN** against remote — local execution (393/393) is what
+EXECUTION NOT RUN** against remote — local execution (423/423) is what
 this phase's COMPLETE status rests on.
 
 All local validation ran against the same local Docker stack as prior
-phases, reset from migration history twice this phase. One bug was found
-and fixed before the final reset — but it was in the new test file's own
-arithmetic (a manually-computed expected value, `1800 − 2000`, was
-transcribed as `-1000` instead of `-200`), not in the migration or domain
-layer; the migration and domain-layer TypeScript were both correct on the
-first attempt.
+phases, reset from migration history twice this phase. Two real bugs were
+found and fixed before the final reset:
+
+1. **A genuine migration bug** — `money_period_summary()`'s original
+   `coalesce(sum(...), 0)::text` pattern lost NUMERIC's declared scale
+   whenever a filtered `sum()` matched zero rows (Postgres's bare integer
+   literal `0` has no scale, unlike `numeric(20,6)`), producing `"0"`
+   instead of `"0.000000"` for any currency/field with no matching
+   activity — the exact same class of bug documented from an earlier
+   phase. Fixed by casting every fallback to `0::numeric(20, 6)`
+   explicitly, matching `financial_position_by_currency()`'s own
+   established pattern.
+2. Two test-file mistakes (not migration/domain bugs): an amount recorded
+   with more decimal places than CHF's registered precision allows, and
+   two rate-string equality assertions that didn't account for
+   `fx_rates.rate` (`numeric(24,12)`) always casting to a full
+   12-decimal-place text representation — both fixed in the test file
+   (the second by comparing via `decimal.js` equality instead of exact
+   string match, which is also more robust going forward).
 
 ## Files created
 
-`supabase/migrations/20260925090000_create_financial_position_engine.sql`
-`lib/domain/financial-position/{types,repository,aggregate}.ts`
-`app/(app)/financial-position/page.tsx`
-`components/financial-position/{NativePositionList,FocusGoalPanel,
-ActiveDecisionsList}.tsx`
-`supabase/tests/financial-position/run.ts`
-`docs/reports/P0-E3-S1-unified-financial-position-engine.txt`
+`supabase/migrations/20260926090000_create_home_readiness_data_foundation.sql`
+`lib/domain/currency/reporting-rates.ts`
+`supabase/tests/home-readiness/run.ts`
+`components/financial-position/{ReportingPositionPanel,ReportingRateForm,
+MonthlyMoneySummaryPanel,LiquidityCoveragePanel}.tsx`
+`docs/reports/P0-E3-S1A-home-readiness-data-foundation.txt`
 
 ## Files modified
 
-`components/layout/AppShell.tsx` (Financial Position nav link),
-`lib/supabase/database.types.ts` (regenerated), `package.json`
-(`test:financial-position` script, extended combined `test` script — no
-new dependency added this phase, `package-lock.json` unchanged),
+`lib/domain/currency/{types,repository}.ts` (manual reporting-rate types +
+read/write functions), `lib/domain/money/{types,repository}.ts`
+(`MoneyPeriodSummary`, `getMoneyPeriodSummary()`), `lib/domain/assets/
+{types,repository}.ts` (`AssetQuickSaleCoverage`, `getAssetQuickSaleCoverage()`),
+`lib/domain/receivables/{types,repository}.ts`
+(`ReceivableRecoverabilityCoverage`, `getReceivableRecoverabilityCoverage()`),
+`lib/domain/financial-position/{types,repository}.ts` (extended
+`FinancialPositionSummary` with `reportingPosition`, `reportingRateContext`,
+`thisMonth`, `assetQuickSaleCoverage`, `receivableRecoverabilityCoverage`;
+`getFinancialPositionSummary()` composes all five in — `aggregate.ts`
+itself is UNCHANGED, reused as-is), `app/(app)/financial-position/page.tsx`
+(Reporting Position + manual-rate form, This Month, Liquidity Completeness
+sections), `lib/supabase/database.types.ts` (regenerated), `package.json`
+(`test:home-readiness` script, extended combined `test` script — no new
+dependency added this phase, `package-lock.json` unchanged),
 `docs/architecture/{FINANCIAL_DOMAIN_MODEL,MULTI_CURRENCY_MODEL,
-SYSTEM_ARCHITECTURE}.md`, `docs/security/SECURITY_AND_RLS_PRINCIPLES.md`.
+SYSTEM_ARCHITECTURE}.md`.
 
-The application layer reused `UpcomingObligationsList` from
-`components/obligations/` unmodified rather than creating a duplicate —
-Financial Position's obligations section is the exact same component
-Rules' own page uses, fed the same `UpcomingObligation[]` shape.
+`docs/security/SECURITY_AND_RLS_PRINCIPLES.md` was deliberately NOT
+modified — every new function this phase follows the already-documented
+§20 pattern (pure composition over `SECURITY INVOKER` functions) or the
+already-established owned-row-insert pattern (`record_manual_reporting_
+rate()`); no genuinely new security pattern was introduced.
 
 ## Migrations
 
 One new migration:
-`supabase/migrations/20260925090000_create_financial_position_engine.sql`.
-Zero new tables. One new function, `financial_position_by_currency()` —
-`security invoker`, `stable`, no arguments, returning one row per native
-currency present in any of eight composed canonical functions
-(`money_currency_totals()`, `asset_native_currency_totals()`,
-`receivable_native_currency_totals()`, `liability_native_currency_
-totals()`, `safe_to_deploy_by_currency()`, `asset_summary()`,
-`receivable_summary()`, `goal_bucket_shortfalls()`). `REVOKE ALL ... FROM
-PUBLIC, anon` / `GRANT EXECUTE ... TO authenticated` follows the same
-convention as every prior domain's read function. Applied cleanly at the
-schema level on both resets this phase.
+`supabase/migrations/20260926090000_create_home_readiness_data_foundation.sql`.
+Zero new tables. Six new functions, all `SECURITY INVOKER`:
+`resolve_period_bounds()`, `money_period_summary()`,
+`record_manual_reporting_rate()`, `reporting_fx_rates()`,
+`asset_quicksale_coverage()`, `receivable_recoverability_coverage()`.
+`financial_position_by_currency()` (P0-E3-S1) is completely untouched —
+zero regression risk to its own 33/33 suite, confirmed by the full
+regression run. Applied cleanly at the schema level on both resets this
+phase (after the `coalesce` scale fix above).
 
 ## Architecture changes
 
-- **Aggregation, not ownership — enforced by construction, not just by
-  convention.** `financial_position_by_currency()`'s body is entirely
-  CTEs selecting from other functions; it contains no independent
-  balance/valuation/outstanding-amount arithmetic anywhere except the one
-  Net Worth sum itself. There is no table this function reads directly
-  other than through those eight functions.
-- **Hybrid query strategy, chosen deliberately.** Per-currency NUMERIC
-  aggregates (tabular, currency-keyed) go through the one composed SQL
-  function to avoid N+1; Goals/Decisions/Obligations (list-shaped, not
-  currency-keyed) are fetched in parallel at the TypeScript layer instead
-  of being forced into the SQL row shape or fetched serially.
-- **Honest-nullable-mapping extended to a fourth distinct case.**
-  Prior domains distinguished true zero from missing from not-configured;
-  this phase adds a fourth: `netWorth` (and its four components) are
-  *always* a real number (defaulting an absent domain's contribution to 0
-  via `coalesce`), because Net Worth is definitionally computable the
-  moment any currency-relevant data exists anywhere for that currency —
-  unlike `assetQuickSalePotential`/`receivablesEstimatedRecoverable`
-  (`null`/"Not set" when nothing was ever recorded, via natural `SUM()`
-  NULL-propagation) or Safe-to-Deploy's fields (`null` specifically when
-  `safe_to_deploy_by_currency()` has no row for that currency at all).
-- **Reporting-currency conversion converts components, never a pre-summed
-  total.** `convertFinancialPositionToReportingCurrency()` calls
-  `convertToReportingCurrency()` four times (once per Net Worth
-  component, each internally summing across native currencies for that
-  one component), and only combines the four results — via `decimal.js`
-  — once every one of the four has succeeded. See MULTI_CURRENCY_MODEL.md
-  §23.
-- **New security pattern documented, not just followed.** A pure
-  composition function calling only other `SECURITY INVOKER` functions,
-  adding no new table/policy/grant beyond `EXECUTE` on itself, is safe
-  specifically because privilege never changes hands anywhere in the
-  chain. Written up as an explicit, reusable pattern for future
-  cross-domain aggregation phases: `docs/security/
-  SECURITY_AND_RLS_PRINCIPLES.md §20`.
+- **Classification-based, not enumeration-based, period filtering.**
+  `money_period_summary()` filters by `financial_events.cash_flow_class`
+  (`income`/`other_inflow`/`expense`/`other_outflow`/`transfer`/
+  `opening_balance`) rather than hand-listing `event_type` values — this
+  makes it automatically correct for any future event type as long as its
+  `cash_flow_class` is set correctly, with no change to this function
+  required.
+- **One period-bounds resolver, called both directly and internally.**
+  `resolve_period_bounds()` exists so a period with zero activity in every
+  currency still has real, knowable bounds — `money_period_summary()`
+  alone (a table function with no matching currency rows) would otherwise
+  give no way to know which period was actually evaluated.
+- **Reused, not duplicated, FX infrastructure.** `record_manual_reporting_
+  rate()`/`reporting_fx_rates()` add a self-documenting entry point over
+  the EXISTING `public.fx_rates` table (P0-E2-S2) — no schema change was
+  needed, since that table's own original design comment already
+  anticipated `source='manual'` "standalone user notes." Transaction-
+  actual rates remain structurally invisible to reporting resolution (the
+  SQL filters `source = 'manual'` explicitly), so a past transaction's
+  rate is never silently reused as a current valuation rate — see
+  MULTI_CURRENCY_MODEL.md §24.
+- **Direct/inverse resolution lives in TypeScript, not SQL.**
+  `reporting_fx_rates()` returns raw, unmodified rows in either direction;
+  `resolveReportingRates()` (pure function, `lib/domain/currency/
+  reporting-rates.ts`) decides direct-vs-inverse precedence and performs
+  the inversion via `decimal.js` — keeping the "no binary-float authoritative
+  arithmetic" discipline in exactly one place, and keeping the new SQL
+  function itself simple and auditable.
+- **`aggregate.ts` (P0-E3-S1) reused completely unchanged.**
+  `getFinancialPositionSummary()` resolves the user's own rates into a
+  plain `Map<string,string>` and passes it to the existing
+  `convertFinancialPositionToReportingCurrency()` — zero new combination
+  arithmetic was written this phase; the only new code is rate resolution
+  and provenance, layered on top.
+- **`reportingPosition` is a genuine three-state field**, not two:
+  `null` when no reporting currency is configured at all (a more
+  fundamental gap than a missing rate), `not_calculated` when the
+  reporting currency is known but a rate is missing, `calculated`
+  otherwise. This preserves the honest-nullable-mapping discipline every
+  prior domain follows rather than collapsing two different kinds of
+  "unavailable" into one.
+- **Coverage metadata reads the same canonical sources Financial Position
+  already uses**, never a second raw-table query — `asset_quicksale_
+  coverage()`/`receivable_recoverability_coverage()` read `asset_summary()`/
+  `receivable_summary()`, so their sums stay trivially consistent with
+  `financial_position_by_currency()`'s `assetQuickSalePotential`/
+  `receivablesEstimatedRecoverable` by construction, not by a
+  cross-checking test alone (though that's also verified).
 
 ## Known limitations
 
-- Financial Position UI was validated the same way every prior domain's
-  was: the isolation suite calling the exact repository functions the UI
-  calls (33/33), plus `next build` + route-level smoke testing with and
-  without Supabase config present. Not driven through a real browser.
-- Recent Activity and a "This Month" figure are deliberately NOT included
-  in `FinancialPositionSummary` this phase — Recent Activity would either
-  duplicate Money's own activity read model or need a second one (neither
-  is acceptable per the phase brief), and no canonical Money "this month"
-  read model exists yet to reuse. Both are documented, deliberate gaps for
-  Home's own integration phase.
-- Reporting-currency conversion has no live FX integration — same
-  standing limitation as Money/Rules/Decisions before it. Rates must be
-  supplied explicitly by the caller.
+- The new `/financial-position` UI additions (Reporting Position panel,
+  manual-rate entry form, This Month, Liquidity Completeness) were
+  validated the same way every prior domain's was: the isolation suite
+  calling the exact repository functions the UI calls (30/30), plus
+  `next build` + route-level smoke testing with and without Supabase
+  config present. Not driven through a real browser.
+- The manual reporting-rate entry form always records the rate against
+  the user's own `preferred_currency` as `quoteCurrency` — there is no UI
+  path to record an inverse-direction or third-currency rate; the domain
+  layer (`resolveReportingRates()`) supports inverse resolution, but nothing
+  in the UI exercises recording one. Acceptable for this phase's
+  restrained-integration goal; a fuller rate-management UI is future work.
+- No live FX provider integration exists or is planned by this phase — V1
+  remains manual-first throughout, unchanged from the standing decision.
 - Remote (Monatriq Dev) has the new schema but has not been exercised by
   any test suite — unchanged posture from every prior phase.
 
@@ -163,10 +207,10 @@ Unchanged: `npm run db:start` (Docker), populate `.env.local` from
 `SUPABASE_TEST_SERVICE_ROLE_KEY`), `npm run db:types` after any migration
 change. `npm run test:rls` / `test:money` / `test:currency` / `test:assets`
 / `test:receivables` / `test:liabilities` / `test:goals` / `test:rules` /
-`test:decisions` / `test:financial-position` / `test` (all ten) run the
-isolation suites. Remote project already linked — `supabase db push
---linked --dry-run` before any future real push, never `supabase db
-reset` against it.
+`test:decisions` / `test:financial-position` / `test:home-readiness` /
+`test` (all eleven) run the isolation suites. Remote project already
+linked — `supabase db push --linked --dry-run` before any future real
+push, never `supabase db reset` against it.
 
 ## Open questions
 
@@ -174,9 +218,8 @@ reset` against it.
    Income (unchanged).
 2. Timing of the curated final Stitch/design-reference set (unchanged).
 3. Local-vs-remote RLS-testing policy (unchanged — still unresolved
-   across eight phases now).
-4. Account-deletion / data-removal flow (unchanged, now applies to
-   Financial Position's read surface too, though it owns no data itself).
+   across nine phases now).
+4. Account-deletion / data-removal flow (unchanged).
 5. Should FX transfer fees eventually be one combined RPC call
    (unchanged).
 6. Should a future phase add cross-currency handling across domains
@@ -187,45 +230,55 @@ reset` against it.
 9. Should `financial_rules.rule_type` grow additional values (unchanged
    from P0-E2-S6).
 10. Whether the scenario-with-two-different-buckets scope limitation
-    (Decisions, P0-E2-S7) should be resolved with a second hypothetical-
-    override parameter (unchanged, still deferred).
+    (Decisions, P0-E2-S7) should be resolved (unchanged, still deferred).
 11. What "actual outcome" linkage looks like when eventually built
     (unchanged from P0-E2-S7).
 12. Whether `CreateScenarioForm`'s field-visibility-by-decision-type logic
     should move server-side (unchanged from P0-E2-S7).
-13. **New**: when Home is actually built, does it consume
-    `getFinancialPositionSummary()` directly, or does a Home-specific
-    aggregation layer wrap it (e.g. to add Recent Activity / This Month
-    once those exist)? Left open deliberately — Home was explicitly out
-    of scope this phase.
-14. **New**: does a future historical-snapshot feature (explicitly
-    deferred by this phase's brief) store periodic Financial Position
-    captures, and if so, does it reuse `financial_position_by_currency()`
-    as its source on a schedule, or need its own read path?
+13. When Home is actually built, does it consume `getFinancialPositionSummary()`
+    directly, or does a Home-specific aggregation layer wrap it (unchanged
+    from P0-E3-S1 — now more directly answerable, since the summary is
+    materially more complete).
+14. Does a future historical-snapshot feature reuse `financial_position_
+    by_currency()`/`money_period_summary()` as its source on a schedule
+    (unchanged from P0-E3-S1).
+15. **New**: should the manual reporting-rate UI eventually let a user
+    record a rate in the non-default direction (currency → currency, not
+    just currency → reporting), now that the domain layer already
+    supports resolving either direction?
+16. **New**: should a future phase add a live FX provider as a second
+    `fx_rates.source` value, and if so, does `reporting_fx_rates()` need a
+    source-preference order (e.g. manual override beats provider) or does
+    manual remain exclusively authoritative even then?
 
 ## Risks
 
 1. No production traffic has touched the remote Monatriq Dev project yet
    — schema is deployed but genuinely untested there (unchanged risk).
-2. Financial Position UI has only been smoke-tested at the route/build/
+2. The new UI additions have only been smoke-tested at the route/build/
    repository-function level, not driven end-to-end through a browser.
-3. The local-vs-remote RLS-testing policy remains unsettled across eight
+3. The local-vs-remote RLS-testing policy remains unsettled across nine
    phases now.
 4. `financial_position_by_currency()`'s `union`-based currency-discovery
-   CTE means a ninth canonical source added by a future phase (e.g. a new
-   domain with its own currency-keyed totals) must be added to that
-   `union` explicitly, or that domain's currencies simply won't appear as
-   rows even if every other column would otherwise resolve to 0/null for
-   them — a documented, low-probability but real maintenance trap for
-   whoever adds domain #9.
+   CTE (P0-E3-S1) still means a future canonical source added to Financial
+   Position's own composition must be added to that `union` explicitly —
+   unaffected by this phase but still an open maintenance trap for a
+   future domain #9 (unchanged from P0-E3-S1).
+5. **New**: a manual reporting rate has no expiry or staleness indicator
+   beyond `rate_as_of` itself — a rate recorded once and never updated
+   will keep resolving as "the" reporting rate indefinitely, with no
+   automatic staleness warning. The domain layer exposes `rate_as_of`
+   for Home to build a staleness indicator against, but nothing does so
+   yet.
 
 ## Next approved step
 
 Do not begin automatically. Recommended next phase (pending user review):
-**P0-E3-S2 — Home**, now with a genuine, complete Financial Position
-aggregation (Net Worth, Liquid/Protected Position, Safe to Deploy,
-Receivables/Liabilities, Potential Liquidity, Upcoming Obligations, Focus
-Goal, Active Decisions) to build the real Home experience on top of —
-plus, as a smaller-scoped alternative, a dedicated Money "This Month" read
-model (documented as a known gap this phase) that a later Home phase would
-otherwise need to invent ad hoc.
+**P0-E3-S2 — Home**, now with every remaining data-foundation gap closed:
+a genuine, complete Financial Position aggregation (Net Worth, Liquid/
+Protected Position, Safe to Deploy, Receivables/Liabilities, Potential
+Liquidity with completeness metadata, Upcoming Obligations, Focus Goal,
+Active Decisions, This Month, and a reporting-currency consolidated view
+using the user's own stored rates) to build the real Home experience on
+top of, with no remaining "Home would need to invent this" gaps
+documented anywhere in this file.

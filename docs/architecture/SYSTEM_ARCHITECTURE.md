@@ -30,14 +30,20 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E3-S1,
+This is a target layout to build toward incrementally. As of P0-E3-S1A,
 `lib/supabase/`, `lib/domain/{profile,money,assets,currency,receivables,
 liabilities,goals,rules,obligations,decisions,financial-position}/`,
 `supabase/migrations/`, and `supabase/tests/{shared,rls,money,currency,
-assets,receivables,liabilities,goals,rules,decisions,financial-position}/`
-exist for real. `lib/domain/financial-position/` is a composition-only
-domain — it owns no tables and reads every other domain's canonical
-functions rather than re-deriving them (§4). `lib/domain/currency/`
+assets,receivables,liabilities,goals,rules,decisions,financial-position,
+home-readiness}/` exist for real. `lib/domain/financial-position/` is a
+composition-only domain — it owns no tables and reads every other
+domain's canonical functions rather than re-deriving them (§4).
+`lib/domain/currency/reporting-rates.ts` (P0-E3-S1A) is a small, pure
+module (no I/O) resolving raw manual-rate rows into direct/inverse
+per-currency rates — kept separate from `lib/domain/currency/
+repository.ts` (I/O) and `lib/domain/currency/conversion.ts` (the actual
+summation arithmetic, unchanged) to keep each file's one concern clear.
+`lib/domain/currency/`
 (types, repository, format, conversion) is the one shared currency stack
 every domain imports from — never duplicated per domain, per
 [MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one),
@@ -169,6 +175,19 @@ stored result. `lib/domain/financial-position/repository.ts`'s
 Obligations summaries at the TypeScript layer (parallel reads, not a
 second SQL function, since those are list-shaped rather than
 currency-keyed). See FINANCIAL_DOMAIN_MODEL.md §41.
+
+**Home-readiness additions (P0-E3-S1A).** Three narrow, independent
+extensions, all SQL functions composed over existing canonical sources —
+zero new tables: `money_period_summary()`/`resolve_period_bounds()`
+(Money "This Month", classified via `financial_events.cash_flow_class`,
+never `event_type`); `record_manual_reporting_rate()`/
+`reporting_fx_rates()` (reusing `public.fx_rates` from P0-E2-S2, never a
+second FX subsystem); `asset_quicksale_coverage()`/
+`receivable_recoverability_coverage()` (reading `asset_summary()`/
+`receivable_summary()`, the same sources `financial_position_by_
+currency()` already uses). `getFinancialPositionSummary()` composes all
+three in alongside its existing parallel reads. See
+FINANCIAL_DOMAIN_MODEL.md §42.
 
 ## 5. Financial event / audit layer
 

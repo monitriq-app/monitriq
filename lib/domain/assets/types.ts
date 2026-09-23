@@ -75,3 +75,21 @@ export interface RecordBasisEventInput {
   occurredAt?: string;
   description?: string;
 }
+
+export type QuickSaleCoverageStatus = "not_set" | "partial" | "complete";
+
+/**
+ * Per-currency quick-sale-estimate completeness — distinguishes "no active
+ * asset has an estimate" (not_set) from "some do" (partial) from "every
+ * active asset does" (complete), so a recorded sum is never mistaken for
+ * covering every asset. quickSaleSum matches financial_position_by_
+ * currency()'s assetQuickSalePotential exactly (same source,
+ * asset_summary()) — null when quickSaleEstimateCount is 0.
+ */
+export interface AssetQuickSaleCoverage {
+  currencyCode: string;
+  activeAssetCount: number;
+  quickSaleEstimateCount: number;
+  quickSaleSum: string | null;
+  coverageStatus: QuickSaleCoverageStatus;
+}

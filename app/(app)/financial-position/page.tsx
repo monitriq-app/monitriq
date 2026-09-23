@@ -6,13 +6,17 @@ import { NativePositionList } from "@/components/financial-position/NativePositi
 import { FocusGoalPanel } from "@/components/financial-position/FocusGoalPanel";
 import { ActiveDecisionsList } from "@/components/financial-position/ActiveDecisionsList";
 import { UpcomingObligationsList } from "@/components/obligations/UpcomingObligationsList";
+import { ReportingPositionPanel } from "@/components/financial-position/ReportingPositionPanel";
+import { ReportingRateForm } from "@/components/financial-position/ReportingRateForm";
+import { MonthlyMoneySummaryPanel } from "@/components/financial-position/MonthlyMoneySummaryPanel";
+import { LiquidityCoveragePanel } from "@/components/financial-position/LiquidityCoveragePanel";
 
 /**
- * Foundation-level Financial Position screen (P0-E3-S1) — proves the
- * aggregation domain, not the final Home design. Every figure here is
- * read straight from getFinancialPositionSummary(); nothing is computed
- * in this page. No fake data: a brand-new user sees empty/"Not set"
- * states throughout.
+ * Foundation-level Financial Position screen (P0-E3-S1, extended P0-E3-S1A)
+ * — proves the aggregation domain, not the final Home design. Every
+ * figure here is read straight from getFinancialPositionSummary();
+ * nothing is computed in this page. No fake data: a brand-new user sees
+ * empty/"Not set" states throughout.
  */
 export default async function FinancialPositionPage() {
   const user = await getCurrentUser();
@@ -39,6 +43,27 @@ export default async function FinancialPositionPage() {
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium text-text-secondary">Financial Position by Currency</h2>
         <NativePositionList positions={summary.nativePositions} currencies={currenciesByCode} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium text-text-secondary">Reporting Position</h2>
+        <ReportingPositionPanel
+          reportingCurrency={summary.reportingCurrency}
+          reportingPosition={summary.reportingPosition}
+          rateContext={summary.reportingRateContext}
+          currencies={currenciesByCode}
+        />
+        {summary.reportingCurrency ? <ReportingRateForm currencies={currencies} reportingCurrency={summary.reportingCurrency} /> : null}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium text-text-secondary">This Month</h2>
+        <MonthlyMoneySummaryPanel summary={summary.thisMonth} currencies={currenciesByCode} />
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-sm font-medium text-text-secondary">Liquidity Completeness</h2>
+        <LiquidityCoveragePanel assetCoverage={summary.assetQuickSaleCoverage} receivableCoverage={summary.receivableRecoverabilityCoverage} currencies={currenciesByCode} />
       </section>
 
       <section className="flex flex-col gap-3">

@@ -2,6 +2,11 @@ import type { GoalSummary } from "../goals/types.ts";
 import type { DecisionSummary } from "../decisions/types.ts";
 import type { UpcomingObligation } from "../obligations/types.ts";
 import type { SafeToDeployStatus } from "../rules/types.ts";
+import type { MoneyPeriodSummary } from "../money/types.ts";
+import type { AssetQuickSaleCoverage } from "../assets/types.ts";
+import type { ReceivableRecoverabilityCoverage } from "../receivables/types.ts";
+import type { ResolvedReportingRate } from "../currency/types.ts";
+import type { ReportingFinancialPosition } from "./aggregate.ts";
 
 /**
  * One row per native currency — the composed output of
@@ -57,10 +62,28 @@ export interface FinancialPositionSummary {
   /** The user's profiles.preferred_currency — null if onboarding never set one. */
   reportingCurrency: string | null;
   nativePositions: NativeFinancialPosition[];
+  /**
+   * Consolidated reporting-currency Net Worth, computed from the user's
+   * own stored manual reporting rates (reportingRateContext) via the
+   * unchanged, reused convertFinancialPositionToReportingCurrency(). Null
+   * — a distinct third state from "calculated"/"not_calculated" — only
+   * when reportingCurrency itself is unset (nothing to consolidate
+   * into); "not_calculated" means the reporting currency IS known but a
+   * required rate is missing.
+   */
+  reportingPosition: ReportingFinancialPosition | null;
+  /** Full provenance for every rate reportingPosition did (or would) use — base/quote as stored, whether inverted, rate_as_of, source. Empty when reportingPosition is null. */
+  reportingRateContext: ResolvedReportingRate[];
+  /** Money's canonical current-month summary, per native currency — never a second monthly formula. See lib/domain/money/repository.ts's getMoneyPeriodSummary(). */
+  thisMonth: MoneyPeriodSummary;
   upcomingObligations: UpcomingObligation[];
   /** The user's explicitly-chosen focus goal, or null — never algorithmically selected. */
   focusGoal: GoalSummary | null;
   activeGoals: GoalSummary[];
   /** Active (non-archived) Decisions only, in no particular order — never ranked. */
   activeDecisions: DecisionSummary[];
+  /** Per-currency quick-sale-estimate completeness — distinct from assetQuickSalePotential's plain sum. */
+  assetQuickSaleCoverage: AssetQuickSaleCoverage[];
+  /** Per-currency recoverability-estimate completeness — distinct from receivablesEstimatedRecoverable's plain sum. */
+  receivableRecoverabilityCoverage: ReceivableRecoverabilityCoverage[];
 }
