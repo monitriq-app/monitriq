@@ -17,7 +17,9 @@
     "test:money": "node --env-file-if-exists=.env.local supabase/tests/money/run.ts",
     "test:currency": "node --env-file-if-exists=.env.local supabase/tests/currency/run.ts",
     "test:assets": "node --env-file-if-exists=.env.local supabase/tests/assets/run.ts",
-    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets"
+    "test:receivables": "node --env-file-if-exists=.env.local supabase/tests/receivables/run.ts",
+    "test:liabilities": "node --env-file-if-exists=.env.local supabase/tests/liabilities/run.ts",
+    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets && npm run test:receivables && npm run test:liabilities"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

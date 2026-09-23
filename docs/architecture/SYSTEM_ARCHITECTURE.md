@@ -30,14 +30,16 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E2-S3,
-`lib/supabase/`, `lib/domain/{profile,money,assets,currency}/`,
-`supabase/migrations/`, and
-`supabase/tests/{shared,rls,money,currency,assets}/` exist for real.
-`lib/domain/currency/` (types, repository, format, conversion) is the one
-shared currency stack Profile/Money/Assets all import from — never
-duplicated per domain, per
-[MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one).
+This is a target layout to build toward incrementally. As of P0-E2-S4,
+`lib/supabase/`, `lib/domain/{profile,money,assets,currency,receivables,
+liabilities}/`, `supabase/migrations/`, and
+`supabase/tests/{shared,rls,money,currency,assets,receivables,liabilities}/`
+exist for real. `lib/domain/currency/` (types, repository, format,
+conversion) is the one shared currency stack Profile/Money/Assets/
+Receivables/Liabilities all import from — never duplicated per domain, per
+[MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one)
+and
+[§16](./MULTI_CURRENCY_MODEL.md#16-receivables-and-liabilities-reuse-the-same-currency-stack).
 `lib/types/` and the rest of `lib/domain/` (Goals, Decisions, Financial
 Rules) remain future work, created when their owning phase needs them:
 
@@ -110,12 +112,16 @@ constraint for future implementation phases.
 **Concrete instances so far:** cash position (P0-E2-S2) is
 `money_bucket_balances()`/`money_currency_totals()`; asset value (P0-E2-S3)
 is `asset_summary()`/`asset_native_currency_totals()`/
-`asset_current_basis()` (all SQL functions, `lib/domain/{money,assets}/
-repository.ts`'s thin wrappers) — `/money`, `/assets`, and any future
-consumer (Home, Decisions) call these, none re-sums `cash_movements` or
-`asset_valuations`/`asset_basis_events` independently. Net worth, Safe to
-Deploy, goal allocation, obligations, and recurring income remain future
-work — no Goals/Financial Rules schema exists yet.
+`asset_current_basis()`; receivables/liabilities position (P0-E2-S4) is
+`receivable_summary()`/`receivable_native_currency_totals()`/
+`liability_summary()`/`liability_native_currency_totals()` (all SQL
+functions, `lib/domain/{money,assets,receivables,liabilities}/
+repository.ts`'s thin wrappers) — `/money`, `/assets`, `/receivables`,
+`/liabilities`, and any future consumer (Home, Decisions) call these, none
+re-sums `cash_movements`, `asset_valuations`/`asset_basis_events`,
+`receivable_ledger_events`, or `liability_principal_events` independently.
+Net worth, Safe to Deploy, goal allocation, obligations, and recurring
+income remain future work — no Goals/Financial Rules schema exists yet.
 
 ## 5. Financial event / audit layer
 
@@ -133,6 +139,14 @@ in Decisions.
 (a real PostgreSQL transaction boundary, not sequential client-side
 inserts) — see
 [FINANCIAL_DOMAIN_MODEL.md §17](./FINANCIAL_DOMAIN_MODEL.md#17-money-domain-implementation-summary-p0-e2-s2).
+
+**Extended (P0-E2-S4)** with `financial_operations`, a grouping construct
+for the rare case where one user action must create more than one
+correctly-classified `financial_events` row atomically (a debt payment's
+principal/interest/fee split). Simple single-component events still write
+one `financial_events` row directly, `operation_id` null — the grouping
+table is additive, not a restructuring of the event log. See
+[FINANCIAL_DOMAIN_MODEL.md §23](./FINANCIAL_DOMAIN_MODEL.md#23-compound-financial-operations-and-voiding-consistency-p0-e2-s4).
 
 ## 6. Multi-currency posture
 

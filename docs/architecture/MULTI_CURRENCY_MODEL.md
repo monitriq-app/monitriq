@@ -243,3 +243,54 @@ missing reporting-currency rate for one of the currencies present means
 `convertToReportingCurrency()` (§10) returns `not_calculated`, exactly as
 it does for Money — Assets never falls back to summing NGN and USD
 figures together just because a rate wasn't available.
+
+## 15. Receivables and Liabilities: same immutability and same-currency rules as Assets
+
+`receivables.currency_code` and `liabilities.currency_code` follow the
+identical immutability pattern as bucket/asset currency (§4, §12): once a
+receivable has any `receivable_ledger_events` row, or a liability any
+`liability_principal_events` row, its `currency_code` cannot change
+(`enforce_receivable_currency_immutable()` /
+`enforce_liability_currency_immutable()`, both `BEFORE UPDATE` triggers).
+Every ledger row's currency must equal its parent's currency, enforced by
+the same `prepare_*` trigger pattern used for `cash_movements` and
+`asset_valuations`.
+
+**Recovery and debt payments are same-currency-only this phase** —
+mirroring §12's Assets ruling, not the more permissive `fx_transfer` path
+(§8): the destination/source bucket's `currency_code` must equal the
+receivable's/liability's `currency_code`, or `record_receivable_recovery()`
+/ `record_debt_payment()` / `record_loan_proceeds()` reject the call
+outright. A receivable denominated in USD can only be recovered into a USD
+bucket; a debt drawn in NGN can only be repaid from an NGN bucket. This is
+a deliberate scope limit, not an oversight — cross-currency settlement
+(e.g. recovering a USD receivable into an NGN bucket at whatever rate
+applied that day) has the same "needs its own explicit design" status as
+cross-currency asset appraisal (§12), and would need its own rate-capture
+story analogous to `fx_transfer`'s (§7-8) if built later.
+
+## 16. Receivables and Liabilities reuse the same currency stack
+
+Neither domain defines its own currency list, formatting, or
+reporting-conversion logic. `lib/domain/receivables/` and
+`lib/domain/liabilities/` import `formatCurrencyAmount()`, the
+exact-decimal discipline (§6), and `convertToReportingCurrency()` from
+`lib/domain/currency/` exclusively — the same rule established for Assets
+in §13, now proven across four domains. `receivable_native_currency_
+totals()` and `liability_native_currency_totals()` both return the same
+`{currencyCode, amount}[]` shape as `money_currency_totals()` and
+`asset_native_currency_totals()`, so the one shared conversion function
+accepts any of the four without translation.
+
+## 17. Receivables and Liabilities: native totals, never summed, estimates/target excluded
+
+`receivable_native_currency_totals()` sums only `outstanding_amount` per
+receivable, grouped by currency, excluding archived receivables —
+`estimated_recoverable_value` is never included (see
+[FINANCIAL_DOMAIN_MODEL.md §21](./FINANCIAL_DOMAIN_MODEL.md#21-receivables-domain-implementation-summary-p0-e2-s4)).
+`liability_native_currency_totals()` sums only `outstanding_principal` per
+liability, grouped by currency, excluding archived liabilities. Neither
+function ever sums across currencies, and a missing reporting-currency
+rate for any currency present means `convertToReportingCurrency()` (§10)
+returns `not_calculated` — identical behavior to Money and Assets, no
+domain-specific exception.

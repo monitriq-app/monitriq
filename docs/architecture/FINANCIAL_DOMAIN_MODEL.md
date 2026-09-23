@@ -144,6 +144,10 @@ Money owed to the user is an asset, not automatically liquid cash. Fields:
 
 Full collectibility is never assumed by default.
 
+**Implemented (P0-E2-S4)** — see §21. Face/Recovered/Outstanding/
+Estimated Recoverable Value are each structurally distinct, and recovery
+is a real atomic cash event, not a fabricated one.
+
 ## 7. Asset valuation
 
 Valuation updates are their own record type (valuation history), separate
@@ -162,6 +166,12 @@ Debt transactions separate principal, interest, and fees (see §5.6). A
 liability record tracks outstanding principal, and optionally links to the
 asset it financed. Liabilities reduce net worth; paying them down is
 net-worth-neutral to the extent principal and cash move together.
+
+**Implemented (P0-E2-S4)** — see §21/§22. A debt payment's principal,
+interest, and fee components are genuinely separate `financial_events`
+(different `cash_flow_class` each), created atomically as one compound
+operation — not merged into a single event that would misclassify at
+least two of the three.
 
 ## 9. Goals domain
 
@@ -373,3 +383,133 @@ currency, excluding archived assets — and convert through the same shared
 current); `quick_sale_estimate` is not the default Net Worth basis either
 — both are deliberately absent from `asset_native_currency_totals()`'s
 source query, not merely omitted from a future formula's intentions.
+
+## 21. Receivables domain implementation summary (P0-E2-S4)
+
+Full detail in `supabase/migrations/*_create_receivables_liabilities_domain.sql`.
+Summary:
+
+- **Outstanding is derived, not stored**, from two independently-summed
+  running totals on one append-only ledger
+  (`receivable_ledger_events`): `face_total` (`opening_face` +
+  `adjustment` rows) minus `recovered_total` (`recovery` rows) —
+  `outstanding = face_total − recovered_total`, computed by
+  `receivable_summary()`/`receivable_outstanding_amount()`, matching this
+  document's §6 formula exactly.
+- **Recovery is a real atomic cash event**, not a status change: `record_
+  receivable_recovery()` creates one `financial_events` row
+  (`cash_flow_class = 'other_inflow'`, never `'income'`), one positive
+  `cash_movements` row into the destination bucket, and one `recovery`
+  ledger row, all in one transaction. Onboarding an existing receivable
+  (`create_receivable()`) never does this — it only inserts the
+  `opening_face` ledger row, no cash effect at all.
+- **Recovery cannot exceed outstanding.** Enforced inside the RPC
+  (`receivable_outstanding_amount()` checked before the insert), not left
+  to the UI.
+- **Same-currency only.** The destination bucket's currency must equal
+  the receivable's native currency; a mismatch is rejected outright — no
+  cross-currency settlement this phase (see MULTI_CURRENCY_MODEL.md §12's
+  reasoning for Assets, applied identically here).
+- **Estimated Recoverable Value is its own append-only, latest-wins
+  concept** (`receivable_recoverable_estimates`) — never equated with
+  Outstanding Amount, never treated as cash. Absent, it reads as `null`
+  ("Not set"), never a guessed haircut.
+- **Potential Liquidity is deliberately NOT computed for receivables at
+  all this phase** — a stricter position than Assets (§20), per explicit
+  product direction: Face Amount is not liquidity, Outstanding Amount is
+  not automatically liquidity, and even a recorded Estimated Recoverable
+  Value is not automatically classified as deployable cash. No
+  `getPotentialLiquidity()`-equivalent function exists for receivables;
+  this is intentional, not an oversight.
+- **Status is derived, not a stored flag** — "fully recovered" is simply
+  `outstanding_amount = 0`, readable directly from `receivable_summary()`.
+  No `written_down`/`active` status column exists; a write-down is just a
+  negative `adjustment` ledger row, visible in the outstanding figure
+  itself.
+
+## 22. Liabilities/Debt domain implementation summary (P0-E2-S4)
+
+Full detail in the same migration file. Summary:
+
+- **Outstanding principal is derived**, `sum(amount)` over an append-only
+  `liability_principal_events` ledger (`opening_principal`/`draw`
+  positive, `repayment` negative, `adjustment` either sign) — never a
+  mutable `current_balance` column.
+- **A debt payment is a compound operation, not one event.** Principal
+  (not an expense), interest (an expense), and fees (an expense) are
+  genuinely different `cash_flow_class` values that cannot correctly
+  share one `financial_events` row. `record_debt_payment()` creates one
+  `financial_operations` row (`operation_type = 'debt_payment'`) and up
+  to three `financial_events` rows — only for the components actually
+  submitted with a positive amount — sharing that `operation_id`, plus
+  one `cash_movements` row per component and one `liability_principal_
+  events` `repayment` row for the principal component, all in a single
+  transaction. See §3 and the migration file's header for why this
+  needed a new grouping construct rather than forcing three semantics
+  into Money's existing single-classification event shape.
+- **`financial_operations` is deliberately generic** (`operation_type` is
+  a CHECK-constrained list, currently just `'debt_payment'`) so a future
+  compound operation (asset sale, asset purchase, receivable settlement)
+  can reuse the same table by adding a new `operation_type` value — no
+  new grouping mechanism, no schema change to `financial_events` itself.
+- **Loan proceeds** (`record_loan_proceeds()`) is implemented as a
+  minimal atomic operation: one `financial_events` row (`cash_flow_class
+  = 'other_inflow'`, never income), one positive `cash_movements` row,
+  and one `draw` principal-ledger row. Existing-debt onboarding
+  (`create_liability()`) works independently of this — it never touches
+  cash at all.
+- **Onboarding existing debt never fabricates cash.** `create_liability()`
+  inserts only the liability row and an `opening_principal` ledger row —
+  no `financial_events`/`cash_movements` row, tested explicitly.
+- **Interest rate is metadata, not a forecasting engine.** An optional
+  recorded `numeric(7,4)` rate exists on `liabilities`; no amortization
+  schedule, compounding convention, or payment forecast is calculated
+  from it this phase.
+- **Same-currency only**, same reasoning as Receivables §21.
+
+## 23. Compound financial operations and voiding consistency (P0-E2-S4)
+
+The `financial_operations` grouping construct (§22) and the voiding-
+consistency mechanism are the two load-bearing new ideas this phase, both
+generic enough to outlive this specific use:
+
+- **Grouping**: any future feature that needs more than one correctly-
+  classified `financial_events` row from a single user action creates a
+  `financial_operations` row (adding a new `operation_type` value if
+  needed) and sets `operation_id` on each of its events. Simple,
+  single-component events (`money_received`, `transfer`,
+  `receivable_recovery`, `loan_proceeds`, ...) leave `operation_id` null
+  — nothing about their shape changes.
+- **Voiding consistency (a critical requirement this phase)**: when a
+  domain-ledger row has a real cash effect (a receivable's `recovery` row,
+  a liability's `draw`/`repayment` row), it carries a nullable
+  `financial_event_id` pointing at the `financial_events` row that caused
+  it. There is deliberately no separate void/active flag on the ledger
+  tables — every read model (`receivable_outstanding_amount()`,
+  `liability_outstanding_principal()`, and the summary functions) derives
+  "is this ledger row still active" from `financial_events.voided_at` via
+  a join, exactly mirroring how Money's balance functions already exclude
+  voided events. Voiding a `receivable_recovery` or
+  `debt_principal_payment` event through the existing, **unmodified**
+  `voidFinancialEvent()` mechanism therefore automatically and
+  consistently reverts both the cash balance and the domain balance
+  (outstanding amount / outstanding principal) — there is no second flag
+  that could independently drift out of sync with the first. Verified
+  explicitly in both `supabase/tests/receivables/run.ts` and
+  `supabase/tests/liabilities/run.ts`: voiding an event changes both
+  balances by the exact same originating amount, in the correct opposite
+  directions.
+
+## 24. Net worth preparation (Receivables/Liabilities, P0-E2-S4)
+
+Extends §20's pattern: `receivable_native_currency_totals()` and
+`liability_native_currency_totals()` return the same `{currency_code,
+amount}[]` shape `money_currency_totals()`/`asset_native_currency_totals()`
+do, so a future Net Worth/Financial Position calculation can add
+receivables as an asset-like figure and liabilities as a deduction, per
+currency, converting through the same shared `convertToReportingCurrency()`
+— never a second reporting-conversion implementation. Estimated
+Recoverable Value and Target Value are excluded from every native-total
+calculation, for the same reason target values are excluded from Assets'
+totals (§20): they are not current position, they are estimates or
+aspirations.

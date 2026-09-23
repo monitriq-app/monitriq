@@ -341,6 +341,7 @@ export type Database = {
           id: string
           idempotency_key: string | null
           occurred_at: string
+          operation_id: string | null
           received_category_code: string | null
           spending_category_code: string | null
           updated_at: string
@@ -355,6 +356,7 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           occurred_at: string
+          operation_id?: string | null
           received_category_code?: string | null
           spending_category_code?: string | null
           updated_at?: string
@@ -369,6 +371,7 @@ export type Database = {
           id?: string
           idempotency_key?: string | null
           occurred_at?: string
+          operation_id?: string | null
           received_category_code?: string | null
           spending_category_code?: string | null
           updated_at?: string
@@ -376,6 +379,13 @@ export type Database = {
           voided_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "financial_events_operation_id_fkey"
+            columns: ["operation_id"]
+            isOneToOne: false
+            referencedRelation: "financial_operations"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "financial_events_received_category_code_fkey"
             columns: ["received_category_code"]
@@ -391,6 +401,36 @@ export type Database = {
             referencedColumns: ["code"]
           },
         ]
+      }
+      financial_operations: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          operation_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          idempotency_key?: string | null
+          occurred_at: string
+          operation_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          idempotency_key?: string | null
+          occurred_at?: string
+          operation_type?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       fx_rates: {
         Row: {
@@ -449,6 +489,145 @@ export type Database = {
             referencedColumns: ["code"]
           },
         ]
+      }
+      liabilities: {
+        Row: {
+          counterparty: string | null
+          created_at: string
+          currency_code: string
+          id: string
+          interest_rate: number | null
+          is_archived: boolean
+          liability_type: string
+          maturity_date: string | null
+          name: string
+          opened_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          counterparty?: string | null
+          created_at?: string
+          currency_code: string
+          id?: string
+          interest_rate?: number | null
+          is_archived?: boolean
+          liability_type: string
+          maturity_date?: string | null
+          name: string
+          opened_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          counterparty?: string | null
+          created_at?: string
+          currency_code?: string
+          id?: string
+          interest_rate?: number | null
+          is_archived?: boolean
+          liability_type?: string
+          maturity_date?: string | null
+          name?: string
+          opened_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "liabilities_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "liabilities_liability_type_fkey"
+            columns: ["liability_type"]
+            isOneToOne: false
+            referencedRelation: "liability_types"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      liability_principal_events: {
+        Row: {
+          amount: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          financial_event_id: string | null
+          id: string
+          liability_id: string
+          occurred_at: string
+          principal_event_type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency_code: string
+          description?: string | null
+          financial_event_id?: string | null
+          id?: string
+          liability_id: string
+          occurred_at: string
+          principal_event_type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency_code?: string
+          description?: string | null
+          financial_event_id?: string | null
+          id?: string
+          liability_id?: string
+          occurred_at?: string
+          principal_event_type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "liability_principal_events_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "liability_principal_events_financial_event_id_fkey"
+            columns: ["financial_event_id"]
+            isOneToOne: false
+            referencedRelation: "financial_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "liability_principal_events_liability_id_fkey"
+            columns: ["liability_id"]
+            isOneToOne: false
+            referencedRelation: "liabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      liability_types: {
+        Row: {
+          code: string
+          created_at: string
+          display_name: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          display_name: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          display_name?: string
+        }
+        Relationships: []
       }
       money_received_categories: {
         Row: {
@@ -524,6 +703,162 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      receivable_ledger_events: {
+        Row: {
+          amount: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          financial_event_id: string | null
+          id: string
+          ledger_event_type: string
+          occurred_at: string
+          receivable_id: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency_code: string
+          description?: string | null
+          financial_event_id?: string | null
+          id?: string
+          ledger_event_type: string
+          occurred_at: string
+          receivable_id: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency_code?: string
+          description?: string | null
+          financial_event_id?: string | null
+          id?: string
+          ledger_event_type?: string
+          occurred_at?: string
+          receivable_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receivable_ledger_events_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "receivable_ledger_events_financial_event_id_fkey"
+            columns: ["financial_event_id"]
+            isOneToOne: false
+            referencedRelation: "financial_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "receivable_ledger_events_receivable_id_fkey"
+            columns: ["receivable_id"]
+            isOneToOne: false
+            referencedRelation: "receivables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receivable_recoverable_estimates: {
+        Row: {
+          created_at: string
+          currency_code: string
+          estimated_at: string
+          id: string
+          note: string | null
+          receivable_id: string
+          user_id: string
+          value: number
+        }
+        Insert: {
+          created_at?: string
+          currency_code: string
+          estimated_at: string
+          id?: string
+          note?: string | null
+          receivable_id: string
+          user_id: string
+          value: number
+        }
+        Update: {
+          created_at?: string
+          currency_code?: string
+          estimated_at?: string
+          id?: string
+          note?: string | null
+          receivable_id?: string
+          user_id?: string
+          value?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receivable_recoverable_estimates_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "receivable_recoverable_estimates_receivable_id_fkey"
+            columns: ["receivable_id"]
+            isOneToOne: false
+            referencedRelation: "receivables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      receivables: {
+        Row: {
+          created_at: string
+          currency_code: string
+          description: string | null
+          expected_payment_date: string | null
+          id: string
+          is_archived: boolean
+          last_follow_up_at: string | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency_code: string
+          description?: string | null
+          expected_payment_date?: string | null
+          id?: string
+          is_archived?: boolean
+          last_follow_up_at?: string | null
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency_code?: string
+          description?: string | null
+          expected_payment_date?: string | null
+          id?: string
+          is_archived?: boolean
+          last_follow_up_at?: string | null
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "receivables_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
       }
     }
     Views: {
@@ -602,6 +937,107 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_liability: {
+        Args: {
+          p_counterparty?: string
+          p_currency_code: string
+          p_interest_rate?: number
+          p_liability_type: string
+          p_maturity_date?: string
+          p_name: string
+          p_occurred_at?: string
+          p_opened_at?: string
+          p_opening_principal: number
+        }
+        Returns: {
+          counterparty: string | null
+          created_at: string
+          currency_code: string
+          id: string
+          interest_rate: number | null
+          is_archived: boolean
+          liability_type: string
+          maturity_date: string | null
+          name: string
+          opened_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "liabilities"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_receivable: {
+        Args: {
+          p_currency_code: string
+          p_description?: string
+          p_estimated_recoverable_value?: number
+          p_expected_payment_date?: string
+          p_face_amount: number
+          p_name: string
+          p_occurred_at?: string
+        }
+        Returns: {
+          created_at: string
+          currency_code: string
+          description: string | null
+          expected_payment_date: string | null
+          id: string
+          is_archived: boolean
+          last_follow_up_at: string | null
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "receivables"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      liability_native_currency_totals: {
+        Args: never
+        Returns: {
+          currency_code: string
+          total_outstanding: string
+        }[]
+      }
+      liability_outstanding_principal: {
+        Args: { p_liability_id: string }
+        Returns: number
+      }
+      liability_principal_history: {
+        Args: { p_limit?: number }
+        Returns: {
+          amount: string
+          currency_code: string
+          description: string
+          liability_id: string
+          occurred_at: string
+          principal_event_id: string
+          principal_event_type: string
+          voided: boolean
+        }[]
+      }
+      liability_summary: {
+        Args: never
+        Returns: {
+          currency_code: string
+          interest_rate: number
+          is_archived: boolean
+          liability_id: string
+          liability_type: string
+          maturity_date: string
+          name: string
+          opened_at: string
+          outstanding_principal: string
+          principal_repaid: string
+        }[]
+      }
       money_bucket_balances: {
         Args: never
         Returns: {
@@ -632,6 +1068,46 @@ export type Database = {
           received_category_code: string
           spending_category_code: string
           voided_at: string
+        }[]
+      }
+      receivable_ledger_history: {
+        Args: { p_limit?: number }
+        Returns: {
+          amount: string
+          currency_code: string
+          description: string
+          ledger_event_id: string
+          ledger_event_type: string
+          occurred_at: string
+          receivable_id: string
+          voided: boolean
+        }[]
+      }
+      receivable_native_currency_totals: {
+        Args: never
+        Returns: {
+          currency_code: string
+          total_outstanding: string
+        }[]
+      }
+      receivable_outstanding_amount: {
+        Args: { p_receivable_id: string }
+        Returns: number
+      }
+      receivable_summary: {
+        Args: never
+        Returns: {
+          currency_code: string
+          estimated_recoverable_value: string
+          expected_payment_date: string
+          face_amount: string
+          is_archived: boolean
+          last_follow_up_at: string
+          latest_recovery_at: string
+          name: string
+          outstanding_amount: string
+          receivable_id: string
+          recovered_amount: string
         }[]
       }
       record_asset_basis_event: {
@@ -688,6 +1164,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_debt_payment: {
+        Args: {
+          p_bucket_id: string
+          p_description?: string
+          p_fee_amount?: number
+          p_idempotency_key?: string
+          p_interest_amount?: number
+          p_liability_id: string
+          p_occurred_at?: string
+          p_principal_amount?: number
+        }
+        Returns: {
+          created_at: string
+          description: string | null
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          operation_type: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_fx_transfer: {
         Args: {
           p_description?: string
@@ -706,6 +1209,64 @@ export type Database = {
           id: string
           idempotency_key: string | null
           occurred_at: string
+          operation_id: string | null
+          received_category_code: string | null
+          spending_category_code: string | null
+          updated_at: string
+          user_id: string
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_liability_adjustment: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_liability_id: string
+          p_occurred_at?: string
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          financial_event_id: string | null
+          id: string
+          liability_id: string
+          occurred_at: string
+          principal_event_type: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "liability_principal_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_loan_proceeds: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_description?: string
+          p_idempotency_key?: string
+          p_liability_id: string
+          p_occurred_at?: string
+        }
+        Returns: {
+          cash_flow_class: string
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          operation_id: string | null
           received_category_code: string | null
           spending_category_code: string | null
           updated_at: string
@@ -736,6 +1297,7 @@ export type Database = {
           id: string
           idempotency_key: string | null
           occurred_at: string
+          operation_id: string | null
           received_category_code: string | null
           spending_category_code: string | null
           updated_at: string
@@ -766,6 +1328,7 @@ export type Database = {
           id: string
           idempotency_key: string | null
           occurred_at: string
+          operation_id: string | null
           received_category_code: string | null
           spending_category_code: string | null
           updated_at: string
@@ -795,6 +1358,7 @@ export type Database = {
           id: string
           idempotency_key: string | null
           occurred_at: string
+          operation_id: string | null
           received_category_code: string | null
           spending_category_code: string | null
           updated_at: string
@@ -804,6 +1368,87 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_receivable_adjustment: {
+        Args: {
+          p_amount: number
+          p_description?: string
+          p_occurred_at?: string
+          p_receivable_id: string
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          financial_event_id: string | null
+          id: string
+          ledger_event_type: string
+          occurred_at: string
+          receivable_id: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "receivable_ledger_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_receivable_recovery: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_description?: string
+          p_idempotency_key?: string
+          p_occurred_at?: string
+          p_receivable_id: string
+        }
+        Returns: {
+          cash_flow_class: string
+          created_at: string
+          description: string | null
+          event_type: string
+          id: string
+          idempotency_key: string | null
+          occurred_at: string
+          operation_id: string | null
+          received_category_code: string | null
+          spending_category_code: string | null
+          updated_at: string
+          user_id: string
+          voided_at: string | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_recoverable_estimate: {
+        Args: {
+          p_estimated_at?: string
+          p_note?: string
+          p_receivable_id: string
+          p_value: number
+        }
+        Returns: {
+          created_at: string
+          currency_code: string
+          estimated_at: string
+          id: string
+          note: string | null
+          receivable_id: string
+          user_id: string
+          value: number
+        }
+        SetofOptions: {
+          from: "*"
+          to: "receivable_recoverable_estimates"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -825,6 +1470,7 @@ export type Database = {
           id: string
           idempotency_key: string | null
           occurred_at: string
+          operation_id: string | null
           received_category_code: string | null
           spending_category_code: string | null
           updated_at: string

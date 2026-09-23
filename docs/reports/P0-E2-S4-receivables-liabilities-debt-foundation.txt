@@ -1,0 +1,442 @@
+MONATRIQ — PHASE REPORT
+P0-E2-S4 — RECEIVABLES, LIABILITIES & DEBT TRANSACTION FOUNDATION
+========================================================================
+
+1. PHASE
+------------------------------------------------------------------------
+P0-E2-S4 — Receivables, Liabilities & Debt Transaction Foundation.
+
+2. STATUS
+------------------------------------------------------------------------
+COMPLETE. All 51 test-matrix concerns are covered by the 52 new
+assertions across two suites (27 Receivables + 25 Liabilities); all six
+domain suites pass after a fresh `supabase db reset` (148/148 total);
+lint, typecheck, and both production-build modes (with and without
+Supabase config) pass; the migration was deployed to the real remote
+"Monatriq Dev" project and its sync was verified. No code was committed
+or pushed — the working tree is fully unstaged, as instructed.
+
+3. OBJECTIVE
+------------------------------------------------------------------------
+Establish two new user-owned financial domains — Receivables (money owed
+TO the user) and Liabilities/Debt (money owed BY the user) — natively
+multi-currency, exact-decimal, RLS-isolated, and correctly integrated
+with the existing Money domain's cash ledger, including a debt payment's
+principal/interest/fee split as a genuinely atomic, correctly-classified
+compound operation, and a coherent cross-domain voiding-consistency
+strategy.
+
+4. REPOSITORY STATE
+------------------------------------------------------------------------
+Branch: main. Working tree: 8 modified files, 9 new
+directories/files (untracked), all unstaged, nothing committed. Git
+identity: user "maaklin" <maaklinapp@gmail.com> (unchanged from prior
+phases; not used this phase since nothing was committed).
+
+5. SUPABASE ENVIRONMENT
+------------------------------------------------------------------------
+Local: Docker-based Supabase stack (`npm run db:start`), reset multiple
+times this phase via `supabase db reset`, always applying all 5
+migrations from a clean state.
+
+Remote: "monatriq's Project" (ref mvnwrkfcszazqqccmmxq), already linked
+at the start of this phase (confirmed with the user in the prior phase,
+P0-E2-S3 — no new confirmation was required or sought this phase).
+Treated throughout as DEVELOPMENT, never production. `supabase db reset`
+was never run against it.
+
+6. FILES CREATED
+------------------------------------------------------------------------
+supabase/migrations/20260922230750_create_receivables_liabilities_domain.sql
+lib/domain/receivables/types.ts
+lib/domain/receivables/repository.ts
+lib/domain/liabilities/types.ts
+lib/domain/liabilities/repository.ts
+app/(app)/receivables/page.tsx
+app/(app)/liabilities/page.tsx
+components/receivables/ReceivableList.tsx
+components/receivables/CreateReceivableForm.tsx
+components/receivables/RecordRecoveryForm.tsx
+components/liabilities/LiabilityList.tsx
+components/liabilities/CreateLiabilityForm.tsx
+components/liabilities/DebtPaymentForm.tsx
+supabase/tests/receivables/run.ts
+supabase/tests/liabilities/run.ts
+docs/reports/P0-E2-S4-receivables-liabilities-debt-foundation.txt (this file)
+
+7. FILES MODIFIED
+------------------------------------------------------------------------
+components/layout/AppShell.tsx           (+6: Receivables/Liabilities nav links)
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md   (+140: §21-24)
+docs/architecture/MULTI_CURRENCY_MODEL.md     (+51: §15-17)
+docs/architecture/SYSTEM_ARCHITECTURE.md      (updated §2, §4, §5)
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md  (+63: §15)
+docs/project/BUILD_STATE.md                   (rewritten for this phase)
+lib/supabase/database.types.ts                (regenerated, +646)
+package.json                                  (test:receivables/test:liabilities scripts)
+
+8. MIGRATIONS
+------------------------------------------------------------------------
+One new migration this phase:
+supabase/migrations/20260922230750_create_receivables_liabilities_domain.sql
+(1284 lines, 9 sections — see §9-15 below for content summary).
+Fully reproducible from `supabase db reset` — verified fresh this phase.
+Local migration history (5 files) matches remote exactly, confirmed via
+`supabase migration list --linked`.
+
+9. RECEIVABLE SCHEMA
+------------------------------------------------------------------------
+`receivables` (id, user_id, name, description, counterparty, currency_code,
+expected_payment_date, last_follow_up_at, is_archived, created_at,
+updated_at). No `face_amount` column — face is derived (see §10). Currency
+immutable once the receivable has any ledger history
+(`enforce_receivable_currency_immutable()` BEFORE UPDATE trigger). RLS
+enabled, deny-by-default, `auth.uid() = user_id` ownership policies,
+column-level grants (identity/audit columns excluded from UPDATE grant).
+
+10. RECEIVABLE BALANCE MODEL
+------------------------------------------------------------------------
+`receivable_ledger_events` (append-only: opening_face / adjustment /
+recovery, signed amounts, currency must match parent). `face_total` =
+sum(opening_face + adjustment); `recovered_total` = sum(recovery,
+excluding voided); `outstanding_amount = face_total − recovered_total`.
+Computed by shared helper `receivable_outstanding_amount()`, used both
+for the read model and as the validation boundary for recovery amounts.
+No mutable balance column anywhere.
+
+11. RECOVERY MODEL
+------------------------------------------------------------------------
+`record_receivable_recovery()`: validates receivable ownership, bucket
+ownership, not-archived, same-currency, outstanding-not-exceeded,
+idempotency key; then atomically creates one `financial_events` row
+(`event_type = 'receivable_recovery'`, `cash_flow_class = 'other_inflow'`
+— never `income`), one positive `cash_movements` row into the destination
+bucket, and one `recovery` ledger row carrying that event's id. Partial
+recoveries accumulate correctly (verified with exact cumulative math
+across two recoveries). Recovery cannot exceed outstanding. Creating a
+receivable never moves cash — only `create_receivable()`'s
+`opening_face` ledger row is written, no financial_events row.
+
+12. RECOVERABILITY MODEL
+------------------------------------------------------------------------
+`receivable_recoverable_estimates` — append-only, latest-row-wins,
+optional. `record_recoverable_estimate()` inserts a new estimate row;
+`receivable_summary()` surfaces only the latest. Absent, it reads as
+`null` ("Not set") — never defaulted to Outstanding Amount, never
+fabricated. Verified structurally distinct from both Face and Outstanding
+in the test suite.
+
+13. LIABILITY SCHEMA
+------------------------------------------------------------------------
+`liability_types` (generic registry, seeded: loan, credit_facility,
+mortgage, personal_debt, business_debt, other). `liabilities` (id,
+user_id, liability_type_code, name, description, counterparty,
+currency_code, interest_rate numeric(7,4) optional, is_archived,
+created_at, updated_at). Currency immutable once the liability has any
+principal-ledger history (`enforce_liability_currency_immutable()`). RLS
++ grants follow the identical pattern to Receivables.
+
+14. LIABILITY PRINCIPAL MODEL
+------------------------------------------------------------------------
+`liability_principal_events` (append-only: opening_principal / draw /
+repayment / adjustment). `liability_outstanding_principal()` =
+sum(amount) excluding rows whose linked `financial_event_id` is voided.
+Principal cannot go negative — enforced inside `record_debt_payment()`
+before the repayment row is inserted.
+
+15. DEBT-PAYMENT MODEL
+------------------------------------------------------------------------
+`record_debt_payment()` is the compound operation at the center of this
+phase. It validates liability ownership, bucket ownership, same-currency,
+idempotency, and principal-not-exceeding-outstanding, then in one
+transaction: creates a `financial_operations` row (`operation_type =
+'debt_payment'`); creates up to three `financial_events` rows — one each
+for principal, interest, and fee, but only for the components actually
+submitted with a positive amount — all sharing that operation's id; a
+matching `cash_movements` row per component; and one `liability_
+principal_events` `repayment` row for the principal component only,
+linked to its financial_event. Idempotency is checked at the operation
+level (one retried call cannot double any component), verified by
+counting events per `operation_id` after a retried call.
+
+16. PRINCIPAL/INTEREST/FEE CLASSIFICATION
+------------------------------------------------------------------------
+`set_financial_event_classification()` extended:
+  event_type = 'debt_principal_payment'  → cash_flow_class = 'other_outflow'
+  event_type = 'debt_interest'           → cash_flow_class = 'expense'
+  event_type = 'debt_fee'                → cash_flow_class = 'expense'
+  event_type in ('receivable_recovery','loan_proceeds') → 'other_inflow'
+Principal is explicitly never an expense (it is debt-balance movement,
+not consumption); interest and fees explicitly are. Verified per-
+component in the compound-payment test by querying `financial_events`
+filtered by `operation_id` and asserting each row's `cash_flow_class`
+individually.
+
+17. COMPOUND FINANCIAL-OPERATION STRATEGY
+------------------------------------------------------------------------
+The existing `financial_events` table (one `cash_flow_class` per row)
+could not correctly represent a single debt payment with three
+differently-classified components as one row without misclassifying at
+least two of the three. The smallest durable fix: a new
+`financial_operations` grouping table (id, user_id, operation_type,
+occurred_at, description, idempotency_key) plus a nullable
+`financial_events.operation_id` FK. Single-component events (money
+received/spent, transfers, receivable recovery, loan proceeds) are
+entirely unaffected — `operation_id` stays null. `operation_type` is a
+CHECK-constrained, extensible list (currently just `'debt_payment'`),
+designed for reuse by a future compound action (asset sale, asset
+purchase, receivable settlement) without any further schema change.
+
+18. FINANCIAL-EVENT CHANGES
+------------------------------------------------------------------------
+`financial_events.event_type` CHECK extended to add:
+'receivable_recovery', 'debt_principal_payment', 'debt_interest',
+'debt_fee', 'loan_proceeds'. `financial_events_category_matches_type`
+constraint extended accordingly. New nullable `operation_id` column +
+FK (`ON DELETE RESTRICT`) to `financial_operations`. A new additive
+column-level grant, `grant insert (operation_id) ... to authenticated`,
+was required (see §33 for why).
+
+19. IDEMPOTENCY
+------------------------------------------------------------------------
+Receivable recovery: idempotent via the existing per-user
+`idempotency_key` partial unique index on `financial_events`, exactly as
+Money's primitives already work — a retried recovery with the same key
+does not create a second event, cash movement, or ledger row.
+Debt payment: idempotency is checked at the `financial_operations` level
+(one key covers the whole compound operation, not each sub-event
+individually) — a retried debt payment does not double any of principal,
+interest, or fee. Both verified explicitly in their respective suites.
+
+20. CORRECTION/VOIDING STRATEGY
+------------------------------------------------------------------------
+Ledger rows with a real cash effect (`receivable_ledger_events.recovery`,
+`liability_principal_events.draw`/`repayment`) carry a nullable
+`financial_event_id`. Every balance-computing read function
+(`receivable_outstanding_amount()`, `liability_outstanding_principal()`,
+and the summary functions) joins to `financial_events` and excludes rows
+whose `voided_at is not null`. There is no separate void/active flag on
+either ledger table — a single source of truth, derived, never
+independently toggled. Voiding a recovery or a debt principal-payment
+event through the existing, unmodified `voidFinancialEvent()` mechanism
+therefore reverts both cash and the domain-specific outstanding balance
+consistently, by construction. Both suites contain a dedicated test that
+voids an event and asserts both figures move by the exact originating
+amount in the correct direction.
+
+21. MULTI-CURRENCY BEHAVIOR
+------------------------------------------------------------------------
+Both domains are natively multi-currency; NGN is never assumed. Currency
+is fixed once a receivable/liability has ledger history. Recovery and
+debt payments are same-currency-only this phase (destination/source
+bucket currency must equal the receivable's/liability's currency) —
+mismatches are rejected outright at the database layer, mirroring
+Assets' no-cross-currency-appraisal stance rather than Money's
+`fx_transfer` path. Native-currency totals
+(`receivable_native_currency_totals()`, `liability_native_currency_
+totals()`) never sum across currencies and reuse the shared
+`convertToReportingCurrency()` — a missing rate returns `not_calculated`,
+never a guessed blended figure.
+
+22. EXACT-DECIMAL STRATEGY
+------------------------------------------------------------------------
+All amount columns are `numeric(20,6)` (interest_rate is `numeric(7,4)`,
+treated as a plain recorded metadata field, not cash-transport). No
+`real`/`double precision` anywhere. Every currency's `decimal_exponent`
+is enforced via BEFORE INSERT triggers on both new ledger tables (a
+JPY 0-decimal receivable/liability rejects a fractional amount; a KWD
+3-decimal liability accepts one — both tested explicitly). All read
+functions cast amounts to `::text` to avoid PostgREST's JSON-number
+float64 risk. `decimal.js` remains the only arbitrary-precision library;
+the `asNumericParam()`/`asOptionalNumericParam()` helper pattern from
+Money/Assets is reused unchanged in both new repositories.
+
+23. RLS POLICIES
+------------------------------------------------------------------------
+Every new table (`receivables`, `receivable_ledger_events`,
+`receivable_recoverable_estimates`, `liability_types`, `liabilities`,
+`liability_principal_events`, `financial_operations`) has RLS enabled
+immediately, deny-by-default, no policy granting anonymous access.
+`liability_types` is public reference data (like `currencies`) — a
+permissive `USING (true)` SELECT policy, no user-owned rows. All other
+tables use `auth.uid() = user_id` ownership policies plus EXISTS-based
+cross-tenant checks wherever a row references another domain (below).
+
+24. CROSS-DOMAIN REFERENCE PROTECTIONS
+------------------------------------------------------------------------
+Every INSERT policy on a row that references another user-owned table
+checks EXISTS on that reference, scoped to `auth.uid()`:
+  - receivable_ledger_events → receivables
+  - liability_principal_events → liabilities
+  - financial_events.operation_id → financial_operations (new this phase)
+  - financial_events.bucket-adjacent references → cash_buckets (existing,
+    reused unchanged for receivable_recovery/debt_payment/loan_proceeds
+    cash_movements)
+All `record_*` RPCs additionally re-verify ownership of every referenced
+row inside the function body (never trusting RLS alone as the only
+check, never trusting a caller-supplied `user_id`).
+
+25. ADVERSARIAL TESTS
+------------------------------------------------------------------------
+Both suites include: cross-user read isolation (list/by-id), cross-user
+update/archive rejection, forged ownership on create (attempting to set
+user_id = victim), raw-insert forgery bypassing the RPC layer (a ledger
+row with user_id = attacker but receivable_id/liability_id = victim's —
+rejected by the EXISTS-based INSERT policy), anonymous access rejection,
+recovery/payment directed at another user's bucket, recovery/payment
+directed at another user's receivable/liability, and loan-proceeds
+cross-tenant rejection. All pass.
+
+26. FINANCIAL-CORRECTNESS TESTS
+------------------------------------------------------------------------
+Exact cumulative recovery math across two partial recoveries; recovery-
+exceeds-outstanding rejection; recovery classified as `other_inflow`
+never `income`; receivable creation has zero cash effect; principal-only
+debt payment moves cash and principal by the exact same amount and is
+not an expense; compound principal+interest+fee payment deducts the
+exact total cash, reduces principal by the principal component only, and
+classifies each component correctly; principal-cannot-go-negative;
+liability onboarding has zero cash effect; loan proceeds increase cash
+and principal and are not income. All pass with exact-decimal assertions
+(string comparison, no float tolerance).
+
+27. REGRESSION TESTS
+------------------------------------------------------------------------
+All four prior suites re-run against the same fresh database this phase:
+Profile/RLS 20/20, Money 37/37, Currency 11/11, Assets 28/28 — all still
+pass, confirming the new migration (including the `financial_events`
+CHECK-constraint and column-grant changes) did not regress any existing
+domain.
+
+28. APPLICATION INTEGRATION
+------------------------------------------------------------------------
+Minimal, temporary `/receivables` and `/liabilities` routes, both
+following the established `getCurrentUser()` guard-first Server
+Component pattern. Forms: Create Receivable, Record Recovery, Create
+Liability, Debt Payment (three optional numeric inputs: principal/
+interest/fee). No CRM features, no final Stitch design. New users see
+"No receivables yet." / "No liabilities yet." — no seeded or demo
+amounts anywhere in the UI or its data path. Loan Proceeds exists at the
+repository/RPC layer (`recordLoanProceeds()`) but has no dedicated form
+wired into `/liabilities` this phase — documented as an open extension
+point (see BUILD_STATE.md Open Question 9), not a gap in the schema or
+domain logic.
+
+29. GENERATED TYPES
+------------------------------------------------------------------------
+`lib/supabase/database.types.ts` regenerated via `supabase gen types
+typescript --local` after the final migration state (following a fresh
+`db reset`). The AUTO-GENERATED header comment is present. No stray CLI
+output lines in the file.
+
+30. SECURITY REVIEW
+------------------------------------------------------------------------
+All new RPCs are `SECURITY INVOKER`. No new `SECURITY DEFINER` function
+was introduced this phase. Every RPC derives ownership from `auth.uid()`
+exclusively — no function trusts a caller-supplied user id. Service-role
+key usage is unchanged: still confined to `supabase/tests/shared/`, still
+named `SUPABASE_TEST_SERVICE_ROLE_KEY`, still guarded by the localhost-
+only refusal in `supabase/tests/shared/env.ts` (untouched this phase).
+grep across app/components/lib for service-role/service_role strings:
+zero matches outside the test harness.
+
+31. REMOTE MIGRATION STATUS
+------------------------------------------------------------------------
+`supabase db push --linked --dry-run` reviewed (confirmed exactly one new
+migration pending — this phase's), then `supabase db push --linked
+--yes`. `supabase migration list --linked` confirms all 5 local
+migration timestamps match remote exactly. A benign pg-delta catalog-
+caching warning (missing certificate file inside the CLI's own sandbox)
+appeared during the push and did not affect schema application. No
+`supabase db reset` was ever run against remote.
+
+32. VALIDATION RESULTS
+------------------------------------------------------------------------
+- Fresh `supabase db reset`: succeeded, all 5 migrations applied cleanly.
+- Full test suite (6 suites): 148/148 assertions passed
+  (Profile 20, Money 37, Currency 11, Assets 28, Receivables 27,
+  Liabilities 25).
+- Cross-tenant attacks: all rejected at the database layer.
+- Idempotency: both recovery and compound debt payment verified
+  non-duplicating on retry.
+- Void/correction consistency: both domains verified — cash and domain
+  balance move together, in the correct direction, by the exact amount.
+- Multi-currency separation: verified for both domains' native totals.
+- Decimal precision: JPY (0-decimal) rejection and KWD (3-decimal)
+  acceptance both verified for Liabilities; JPY/KWD precision triggers
+  reused unchanged (already proven in Assets/Money) apply identically to
+  Receivables.
+- `npm run lint`: clean, zero warnings.
+- `npx tsc --noEmit`: clean, zero errors.
+- `npm run build`: succeeds with real Supabase config — `/receivables`
+  and `/liabilities` render as dynamic (ƒ) routes.
+- `npm run build` with `.env.local` removed: succeeds — both routes
+  correctly degrade to static (○) routes redirecting to /login.
+- Service-role exposure search (app/components/lib): zero matches.
+- Hardcoded prototype-data search (receivables/liabilities app code):
+  zero matches.
+- Capital Compass production-source search: zero matches (only the
+  pre-existing historical prohibition note in PRODUCT_DEFINITION.md).
+- Remote migration dry-run: reviewed before push, confirmed additive
+  and safe.
+- Final `git status`: clean, fully unstaged, nothing committed.
+
+33. ASSUMPTIONS
+------------------------------------------------------------------------
+- The remote "Monatriq Dev" project identity (confirmed in P0-E2-S3)
+  remains valid and did not need re-confirmation this phase.
+- Same-currency-only recovery/payment is an acceptable scope limit for
+  this phase, per the brief's explicit instruction.
+- Loan Proceeds needed only a repository/RPC-level implementation this
+  phase, with the UI form treated as optional/deferred per the brief's
+  "or document the extension path" allowance.
+- No amortization/interest-schedule calculation was in scope;
+  `interest_rate` is purely a recorded field.
+
+34. OPEN QUESTIONS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Open questions" (10 items) — most
+relevant new ones this phase:
+  - Should Loan Proceeds get a dedicated UI form in a future pass?
+  - Should `financial_operations.operation_type` grow further values
+    (asset sale/purchase, receivable settlement) reusing this phase's
+    grouping construct?
+  - Should a future phase add cross-currency recovery/payment, and if
+    so, does it reuse Money's `fx_rates` table?
+
+35. RISKS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Risks" (5 items) — most notable:
+`financial_operations` is a new grouping construct proven by exactly one
+consumer (`debt_payment`); its intended generality is a design bet, not
+yet validated by a second real use case. Remote schema is deployed but
+genuinely untested there, unchanged posture from every prior phase.
+
+36. GIT DIFF SUMMARY
+------------------------------------------------------------------------
+8 files changed, 1115 insertions(+), 206 deletions(-):
+  components/layout/AppShell.tsx               |   6 +
+  docs/architecture/FINANCIAL_DOMAIN_MODEL.md  | 140 ++++++
+  docs/architecture/MULTI_CURRENCY_MODEL.md    |  51 +++
+  docs/architecture/SYSTEM_ARCHITECTURE.md     |  42 +-
+  docs/project/BUILD_STATE.md                  | 369 ++++++++-------
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md |  63 +++
+  lib/supabase/database.types.ts               | 646 +++++++++++++++++++++++++++
+  package.json                                 |   4 +-
+Plus 9 new untracked paths (migration, 2 domain lib dirs, 2 app routes,
+2 component dirs, 2 test suite dirs) and this report.
+
+37. GIT STATUS
+------------------------------------------------------------------------
+Branch: main. Nothing staged. Nothing committed. Nothing pushed. Working
+tree exactly as listed in §36 plus the untracked additions in §6 — no
+accidental staging occurred.
+
+38. RECOMMENDED NEXT PHASE
+------------------------------------------------------------------------
+P0-E3-S1 — Home aggregation layer, now with four real domains (Money,
+Assets, Receivables, Liabilities) to aggregate: enough breadth for a
+first real Net Worth calculation (assets + receivables − liabilities,
+per-currency, `not_calculated` when reporting-currency rates are
+missing) and the first real proof that "one shared domain calculation,
+multiple consumers" holds at scale.

@@ -240,3 +240,66 @@ being Money-specific accidents. One new lesson:
   adversarial tests, which still target the table directly); it exists
   purely to keep the TypeScript application layer honest about what it's
   allowed to send.
+
+## 15. Established pattern: Receivables/Liabilities domain and compound operations (P0-E2-S4)
+
+`supabase/migrations/*_create_receivables_liabilities_domain.sql` extends
+§13's cross-tenant-reference pattern to two more domains and adds two new
+constructs. Three lessons:
+
+- **A grouping table's ownership check is the same EXISTS pattern as any
+  other cross-domain reference — it does not need a new kind of policy.**
+  `financial_operations` is user-owned exactly like any other table (§2);
+  the interesting check is on `financial_events.operation_id`, whose
+  INSERT policy requires
+  `exists (select 1 from financial_operations o where o.id = operation_id
+  and o.user_id = auth.uid())`, the same shape §13 established for
+  `bucket_id`/`event_id`. `record_debt_payment()` — the only function that
+  writes `financial_operations` rows — derives `user_id` from `auth.uid()`
+  the same way every other `record_*` function does; no caller ever
+  supplies an owner. Tested by `supabase/tests/liabilities/run.ts`'s
+  raw-insert adversarial cases: a forged `financial_events` row pointing
+  `operation_id` at another user's operation is rejected at the database
+  layer, not just hidden in the UI.
+- **Column-level GRANTs are additive, not replaced, when a migration adds
+  a column to an existing table — extending a table's shape means
+  extending its grant, explicitly, in the same migration.** Adding
+  `financial_events.operation_id` in this migration did not automatically
+  make it insertable — P0-E2-S2's original `grant insert (user_id,
+  event_type, ...)` on `financial_events` still only named its original
+  column list, and Postgres column-level grants do not implicitly cover
+  columns added later. `record_debt_payment()`'s inserts (which explicitly
+  list `operation_id`) failed with "permission denied for table
+  financial_events" until this migration added its own `grant insert
+  (operation_id) on public.financial_events to authenticated;` alongside
+  the `ALTER TABLE ... ADD COLUMN`. Caught by running
+  `supabase/tests/liabilities/run.ts` against a real database, the same
+  way §13's missing-grant lesson was caught, not by reasoning about the
+  grant on paper. **Rule going forward: any migration that adds a
+  client-insertable column to a table with an existing column-level INSERT
+  grant must add a corresponding `grant insert (<new column>)` statement
+  in the same migration** — it is easy to update the table and its RLS
+  policy while forgetting the grant is a separate, non-overlapping
+  permission surface.
+- **Correction/voiding consistency across domains is enforced by deriving
+  state from the owning `financial_events` row, never by a second,
+  independently-toggled flag.** A ledger row with a real cash effect
+  (`receivable_ledger_events.recovery`, `liability_principal_events.draw`/
+  `repayment`) carries a nullable `financial_event_id`. Every read model
+  that computes a domain balance (`receivable_outstanding_amount()`,
+  `liability_outstanding_principal()`, and both summary functions) joins
+  to `financial_events` and excludes rows where `voided_at is not null` —
+  exactly the exclusion Money's balance functions already apply (§13).
+  There is deliberately no `is_voided`/`is_active` column anywhere in
+  `receivable_ledger_events` or `liability_principal_events`: a second
+  flag would be a second source of truth that could independently drift
+  from the financial event's actual voided state, which is precisely the
+  failure mode this phase's brief called out as a hard requirement to
+  avoid. Voiding a `receivable_recovery` or `debt_principal_payment` event
+  through the existing, unmodified `voidFinancialEvent()` mechanism (no
+  domain-specific voiding function was added) therefore automatically
+  keeps cash and the domain balance consistent, verified explicitly in
+  both `supabase/tests/receivables/run.ts` and
+  `supabase/tests/liabilities/run.ts`. See
+  [FINANCIAL_DOMAIN_MODEL.md §23](../architecture/FINANCIAL_DOMAIN_MODEL.md#23-compound-financial-operations-and-voiding-consistency-p0-e2-s4)
+  for the architectural rationale.
