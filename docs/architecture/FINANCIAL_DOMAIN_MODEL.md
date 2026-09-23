@@ -173,7 +173,18 @@ interest, and fee components are genuinely separate `financial_events`
 operation — not merged into a single event that would misclassify at
 least two of the three.
 
+**Debt-payoff goal linkage (P0-E2-S5)** — see §27. A `debt_balance_target`
+goal references a liability directly; its progress is always read live
+from `liability_outstanding_principal()`, never a duplicated, manually-
+synced balance inside Goals.
+
 ## 9. Goals domain
+
+**Implemented (P0-E2-S5)** — see §25-28. Goals do not own cash; a goal
+allocation assigns purpose to cash that already exists in a Money bucket.
+Four measurement types (cash_target, debt_balance_target,
+monthly_income_target, milestone — §25) replace the single "current/
+target cash" shape this section originally sketched.
 
 Goals are typed, not force-fit into a single "current/target cash" shape.
 Required goal structures (extensible — future types must not require a
@@ -182,12 +193,29 @@ Savings/Reserve, Purchase/Property, Debt Payoff, Recurring Income, Business
 Capital, Relocation/Milestones, Education, Vehicle, Event, Travel, Custom.
 
 ### 9.1 One naira, one purpose
+
+**Implemented (P0-E2-S5)** as "one unit of money, one purpose" — Monatriq
+is multi-currency, so the rule is not NGN-specific. Enforced by
+construction: every allocate/release/reallocate RPC locks the target
+bucket row before computing available-to-allocate capacity, so the same
+cash can never be read as available by two concurrent allocation attempts
+— see §25.
+
 Goal allocation must avoid double counting. If Main Cash = ₦5M and a House
 Fund allocation = ₦2M, that ₦2M cannot simultaneously be counted as House
 Fund, Relocation Fund, and "safe to deploy" — allocation ownership is
 explicit and singular until the user deliberately reallocates it.
 
 ### 9.2 Protected goals
+
+**Partially implemented (P0-E2-S5).** `is_protected` is a user-controlled
+flag (§25), and `goal_protected_allocation_totals()` exposes the protected
+allocated total per currency so a future rules engine can consume it. The
+five-step override workflow described below (steps 1-5) is explicitly
+**not** built this phase — that is P0-E2-S6's Financial Rules/override
+engine. This phase only makes the flag and its totals exist and be
+queryable; it does not yet intervene in any spending flow.
+
 Protection is a user-defined rule, not a system override of user agency.
 When a user attempts to use protected funds, the product must:
 1. show the financial impact,
@@ -513,3 +541,160 @@ Recoverable Value and Target Value are excluded from every native-total
 calculation, for the same reason target values are excluded from Assets'
 totals (§20): they are not current position, they are estimates or
 aspirations.
+
+## 25. Goals domain implementation summary (P0-E2-S5)
+
+Full detail in `supabase/migrations/*_create_goals_domain.sql`. Core
+principle: **GOALS DO NOT OWN CASH.** Money owns cash; a goal allocation
+assigns PURPOSE to cash that already exists in a bucket. Summary:
+
+- **Four measurement types, one goal record.** `goals.measurement_type` is
+  a CHECK-constrained axis (`cash_target`, `debt_balance_target`,
+  `monthly_income_target`, `milestone`) that drives all progress math.
+  `goals.goal_type_code` (home_property, emergency_reserve, relocation,
+  debt_payoff, ...) is a separate, purely descriptive registry
+  (`goal_types`, seeded with 13 codes) — it only supplies a sensible
+  default measurement_type on the creation form. The two are deliberately
+  decoupled rather than one hard-coded switch statement, so a future goal
+  type never requires a schema change to the measurement axis.
+- **No `target_value`/`current_saved` column on `goals` at all.** The
+  current target is always the latest row in the append-only
+  `goal_target_history` (a new row per change — old targets are never
+  overwritten); current allocated funding is always derived from summing
+  the append-only `goal_allocation_events` ledger. Same "derive, never
+  store a mutable balance" discipline as every prior domain.
+  `target_value` is structurally null for `debt_balance_target` (the
+  target is always "outstanding principal = 0", not a number) and
+  `milestone` (no numeric target at all) goals — enforced by a trigger,
+  not merely a UI convention.
+- **`measurement_type`, `liability_id`, and `currency_code` are
+  effectively immutable after creation.** `measurement_type`/`liability_id`
+  are simply never in the UPDATE grant — there is no legitimate reason to
+  reinterpret what a goal's numbers mean after the fact. `currency_code`
+  IS grant-editable but blocked by a trigger once any allocation exists
+  (identical mechanism to bucket/asset/receivable/liability currency
+  immutability).
+- **Status transitions are always user-driven, never auto-flipped.**
+  Reaching a cash target (remaining = 0) does not silently flip `status`
+  to `completed` — the user confirms it. This applies uniformly across all
+  four measurement types, since `monthly_income_target`'s "current" isn't
+  even calculable this phase (see §26) and `milestone` completion is
+  inherently a judgment call, not a formula.
+- **At most one focus goal**, enforced by a partial unique index
+  (`goals_one_focus_per_user`) that applies regardless of write path — not
+  merely by the `set_focus_goal()` convenience RPC's unset-then-set
+  behavior. The user chooses; Monatriq never auto-selects the largest or
+  nearest goal as focus.
+- **Milestones are lightweight and financially inert.** `goal_milestones`
+  attach to any goal (not measurement-type-restricted — a cash_target goal
+  can have milestones too, alongside the `milestone` measurement type
+  where milestones ARE the whole progress model). Completing one is a
+  plain `completed_at` column update; it can never create cash, income,
+  expense, or goal funding, by construction — no code path connects
+  `goal_milestones` to `financial_events`/`cash_movements`/
+  `goal_allocation_events` at all.
+
+## 26. Cash allocation, capacity, and the allocation ledger (P0-E2-S5)
+
+- **`goal_allocation_events` is a second, independent append-only ledger**
+  alongside Money's `cash_movements` and Receivables/Liabilities' ledgers
+  — but it structurally cannot have a cash effect: it carries no
+  `financial_event_id` column at all (unlike `receivable_ledger_events`/
+  `liability_principal_events`, which do). `allocate` rows are positive,
+  `release` rows are negative; current allocation = `sum(amount)`. No
+  `financial_events`/`cash_movements` row is ever created by
+  `record_goal_allocation()`, `record_goal_release()`, or
+  `record_goal_reallocation()` — allocating, releasing, and reallocating
+  are pure purpose-reassignment, verified explicitly by asserting bucket
+  balances and financial_events row counts are byte-identical before and
+  after each operation.
+- **Allocation capacity is concurrency-safe, not merely client-validated.**
+  `available_to_allocate = bucket balance − sum(existing allocations from
+  that bucket, across ALL goals)`. Every allocate/release/reallocate RPC
+  issues `SELECT ... FOR UPDATE` on the target bucket row before computing
+  this figure, so two concurrent allocation attempts against the same
+  bucket serialize instead of both reading the same available balance and
+  over-allocating it — the actual "one unit of money, one purpose"
+  enforcement mechanism, proven by a dedicated concurrency test
+  (`Promise.allSettled` on two simultaneous over-allocating calls; exactly
+  one succeeds).
+- **Reallocation is one atomic operation, not two client calls.**
+  `record_goal_reallocation()` writes a `release` row on the source goal
+  and an `allocate` row on the destination goal, sharing one bucket, in a
+  single transaction — the same money is never observably assigned to
+  both goals at once. Only the release-side row carries the
+  `idempotency_key` (the allocate-side row's key stays null); since both
+  rows commit together or not at all, a retry is safely detected by the
+  release row's key alone. This avoids needing a `financial_operations`-
+  style grouping table (§23) for a purely-non-cash pair of ledger rows.
+- **Allocation shortfall is reported, never silently rewritten.** If cash
+  later leaves a bucket that has allocations attached (an ordinary Money
+  spend/transfer — Goals has no say over it and does not intercept it),
+  `goal_bucket_shortfalls()` reports `balance`, `allocated_total`, and
+  `shortfall = greatest(allocated_total − balance, 0)` per bucket,
+  honestly. Nothing about the allocation history is ever adjusted to hide
+  the shortfall. The future Financial Rules engine (P0-E2-S6) is expected
+  to consume this figure; Goals itself only exposes it.
+- **Cross-currency allocation is out of scope this phase** — the bucket's
+  currency must equal the goal's currency, mirroring Receivables/
+  Liabilities' same-currency-only recovery/payment rule
+  ([MULTI_CURRENCY_MODEL.md §18](./MULTI_CURRENCY_MODEL.md#18-goals-same-currency-allocation-and-the-shared-currency-stack)).
+
+## 27. Debt-payoff and recurring-income goals (P0-E2-S5)
+
+- **Debt-payoff goals never store a duplicated debt balance.** A
+  `debt_balance_target` goal's `liability_id` is set once at creation
+  (immutable afterward) and its progress is always read live from
+  `liability_outstanding_principal()` — the exact same function
+  Liabilities' own read models use. The one exception is
+  `starting_liability_balance`: a frozen, one-time snapshot taken at goal
+  creation (never updated, never in the UPDATE grant), which exists purely
+  to answer "how much did I owe when I started this goal" and is
+  explicitly NOT the live balance. Verified explicitly: a real debt
+  payment made after goal creation changes `current_outstanding_principal`
+  in `goal_summary()` while `starting_liability_balance` stays frozen.
+- **Debt-payoff funding stays conceptually distinct from an actual
+  payment.** A cash allocation toward a `debt_balance_target` goal is
+  permitted (earmarked future debt-repayment cash) but never automatically
+  treated as reducing the debt — the liability's outstanding principal
+  only ever changes through `record_debt_payment()`/`record_loan_proceeds()`
+  in the Liabilities domain (§22). Allocating money to a debt goal and
+  actually paying down the debt remain two separate, deliberately
+  un-conflated operations.
+- **Recurring-income goals hold no cash at all.** `record_goal_allocation()`
+  and `record_goal_reallocation()` both reject any `monthly_income_target`
+  goal outright — a $5,000/month income target is not a savings pot, and
+  Goals never lets it become one.
+- **Current recurring income is never inferred or fabricated.** No
+  heuristic reads business-income/salary/asset-sale/receivable-recovery/
+  refund/transfer events and guesses a "current recurring income" figure.
+  `goal_summary()` simply has no "current" column for
+  `monthly_income_target` goals at all — `allocatedTotal`/`remaining` are
+  always null and `requiredPaceStatus` is always `not_applicable` for this
+  measurement type, regardless of how much unrelated Money activity exists
+  for the user. The extension path for a future phase is a dedicated
+  recurring-income source-classification layer on `financial_events`/
+  categories; until that exists, "Not calculated" is the only honest
+  answer.
+
+## 28. Required pace (P0-E2-S5)
+
+`goal_required_pace()` computes a mathematical Required Pace — explicitly
+labeled a calculation, not a recommendation — for `cash_target` and
+`debt_balance_target` goals only (`monthly_income_target`/`milestone`
+return `not_applicable`, since neither has a numeric "remaining" this
+phase). Status values: `calculated`, `target_reached`, `no_target_date`,
+`no_target_amount`, `date_passed`, `not_applicable` — never a fabricated
+number when an input is missing, and never a bare `0%`/`$0` standing in
+for "unknown."
+
+Monthly cadence is approximated via average days-per-month
+(365.25 / 12 = 30.4375 days); a partial final period rounds UP to a full
+period (`ceil`), so the required pace is never understated by rounding
+down. "Today" is computed from the caller's `profiles.timezone` where set
+(falls back to UTC) — the one piece of "actual profile timezone" data
+Monatriq has — rather than the database server's own timezone. "At
+Current Pace" forecasting (a predictive, contribution-history-based
+projection) is explicitly deferred: this phase has no contribution-history
+concept beyond the raw allocation ledger, and a real projection needs more
+than that to be honest.

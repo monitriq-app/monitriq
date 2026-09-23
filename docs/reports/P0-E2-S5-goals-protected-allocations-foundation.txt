@@ -1,0 +1,501 @@
+MONATRIQ — PHASE REPORT
+P0-E2-S5 — GOALS, PROTECTED ALLOCATIONS & PROGRESS FOUNDATION
+========================================================================
+
+1. PHASE
+------------------------------------------------------------------------
+P0-E2-S5 — Goals, Protected Allocations & Progress Foundation.
+
+2. STATUS
+------------------------------------------------------------------------
+COMPLETE. All 62 test-matrix items (plus a dedicated allocation-capacity
+concurrency test) are covered by the 56 assertions in the new Goals
+suite; all seven domain suites pass after a fresh `supabase db reset`
+(204/204 total). Lint, typecheck (both the app and the test harness's own
+tsconfig), and both production-build modes (with and without Supabase
+config) pass. The migration was deployed to the real remote "Monatriq
+Dev" project and its sync was verified. No code was committed or
+pushed — the working tree is fully unstaged, as instructed.
+
+3. OBJECTIVE
+------------------------------------------------------------------------
+Build Monatriq's Goals domain so it can answer "what am I working
+toward," "what money have I deliberately assigned to it," "how much
+remains," and "what pace would mathematically be required" — without
+creating fake money, double-counting cash, telling the user what they
+should do, or treating all goal types as identical. Core architectural
+constraint: GOALS DO NOT OWN CASH. A goal allocation assigns purpose to
+cash that already exists in a Money bucket; it never creates a second
+version of the user's money.
+
+4. REPOSITORY STATE
+------------------------------------------------------------------------
+Branch: main. Working tree: 8 modified files, 5 new
+directories/files (untracked), all unstaged, nothing committed. This
+builds on top of P0-E2-S4's still-uncommitted changes (per the standing
+"do not commit, stop for review" instruction that has applied to every
+recent phase) — the working tree now carries both phases' changes
+together. Git identity: user "maaklin" <maaklinapp@gmail.com> (unchanged;
+not used this phase since nothing was committed).
+
+5. SUPABASE ENVIRONMENT
+------------------------------------------------------------------------
+Local: Docker-based Supabase stack (`npm run db:start`), reset twice this
+phase via `supabase db reset`, applying all 6 migrations from a clean
+state both times.
+
+Remote: "monatriq's Project" (ref mvnwrkfcszazqqccmmxq), already linked
+at the start of this phase (confirmed in P0-E2-S3, carried forward
+through P0-E2-S4 — no new confirmation was required or sought this
+phase). Treated throughout as DEVELOPMENT, never production. `supabase
+db reset` was never run against it.
+
+6. FILES CREATED
+------------------------------------------------------------------------
+supabase/migrations/20260923120000_create_goals_domain.sql
+lib/domain/goals/types.ts
+lib/domain/goals/repository.ts
+app/(app)/goals/page.tsx
+components/goals/GoalList.tsx
+components/goals/CreateGoalForm.tsx
+components/goals/AllocateCashForm.tsx
+components/goals/ReleaseReallocateForm.tsx
+components/goals/ShortfallBanner.tsx
+supabase/tests/goals/run.ts
+docs/reports/P0-E2-S5-goals-protected-allocations-foundation.txt (this file)
+
+7. FILES MODIFIED
+------------------------------------------------------------------------
+components/layout/AppShell.tsx           (+3: Goals nav link)
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md   (+185: §9.1/§9.2/§25-28 and pointers)
+docs/architecture/MULTI_CURRENCY_MODEL.md     (+32: §18)
+docs/architecture/SYSTEM_ARCHITECTURE.md      (+55: repository layout, §4, §5)
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md  (+48: §16)
+docs/project/BUILD_STATE.md                   (rewritten for this phase)
+lib/supabase/database.types.ts                (regenerated, +531)
+package.json                                  (test:goals script)
+
+8. MIGRATIONS
+------------------------------------------------------------------------
+One new migration this phase:
+supabase/migrations/20260923120000_create_goals_domain.sql
+(8 sections — see §9-21 below for content summary). Fully reproducible
+from `supabase db reset` — verified fresh twice this phase, applying
+cleanly on the first attempt both times (no mid-phase schema fixes were
+needed, unlike P0-E2-S4's column-grant fix). Local migration history (6
+files) matches remote exactly, confirmed via `supabase migration list
+--linked`.
+
+9. GOAL SCHEMA
+------------------------------------------------------------------------
+`goals` (id, user_id, goal_type_code, measurement_type, name,
+description, currency_code, liability_id, starting_liability_balance,
+status, is_protected, is_focus, priority, created_at, updated_at). No
+`target_value`/`current_saved` column — those are derived (see §11/§13).
+Three CHECK constraints enforce measurement-type-consistent shape:
+currency required unless `milestone`; `liability_id` required iff
+`debt_balance_target`; `starting_liability_balance` required iff
+`debt_balance_target`. A partial unique index
+(`goals_one_focus_per_user`) enforces at most one focus goal per user,
+regardless of write path. RLS enabled, deny-by-default,
+`auth.uid() = user_id` ownership policies; the INSERT policy additionally
+requires an EXISTS check on `liability_id` against the caller's own
+liabilities when set.
+
+10. GOAL-TYPE STRATEGY
+------------------------------------------------------------------------
+`goal_types` is a separate, extensible, public-reference registry (13
+seeded codes: home_property, emergency_reserve, savings_target,
+relocation, recurring_income, debt_payoff, business_capital, education,
+vehicle, event, retirement, travel, custom) — purely descriptive, with a
+`default_measurement_type` column that only pre-fills the creation form.
+It never drives progress math. This deliberately decouples "what kind of
+goal is this, descriptively" from "what mathematics apply to it," so a
+future goal type needs no schema change to the measurement axis.
+
+11. MEASUREMENT MODEL
+------------------------------------------------------------------------
+`goals.measurement_type` is a CHECK-constrained axis with exactly four
+values: `cash_target`, `debt_balance_target`, `monthly_income_target`,
+`milestone`. Every progress calculation (allocated total, remaining,
+percentage, required pace, allocation eligibility) branches on this
+single column, never on `goal_type_code`. The four types are not four
+independent systems — they share the same `goal_target_history` and
+`goal_allocation_events` infrastructure, differing only in which fields
+are populated/permitted for each (enforced by triggers and RPC checks,
+not merely UI convention).
+
+12. TARGET-HISTORY MODEL
+------------------------------------------------------------------------
+`goal_target_history` is append-only: a new row is a new "version" of the
+target (target_value, currency_code, target_date, effective_at, note) —
+old targets are never overwritten. The current target for a goal is
+always the latest row (`goal_current_target()`). `target_value` is
+structurally null for `debt_balance_target` (target is implicitly
+"outstanding principal = 0") and `milestone` (no numeric target at all) —
+enforced by `prepare_goal_target()`'s trigger, not just documented
+convention.
+
+13. CASH-ALLOCATION MODEL
+------------------------------------------------------------------------
+`goal_allocation_events` is append-only: `allocate` rows are positive,
+`release` rows are negative, current allocation = `sum(amount)`. No
+`goal.current_saved`-style mutable column exists. Unlike Receivables/
+Liabilities' ledgers, this table has NO `financial_event_id` column at
+all — it structurally cannot represent a cash effect, which is the
+architectural enforcement of "Goals do not own cash," not merely a
+convention. `record_goal_allocation()`/`record_goal_release()`/
+`record_goal_reallocation()` never write to `financial_events`/
+`cash_movements`, verified explicitly by asserting byte-identical bucket
+balances and financial_events row counts before/after every operation.
+
+14. ONE-UNIT-ONE-PURPOSE ENFORCEMENT
+------------------------------------------------------------------------
+Enforced by construction via allocation capacity (§15), not by convention
+or client-side validation. The same cash can never simultaneously fund
+two goals beyond the bucket's actual balance: `available_to_allocate =
+bucket_balance − sum(existing allocations from that bucket, across ALL
+goals)`, checked before every allocate, and the bucket row is locked for
+the duration of that check (see §15). Verified explicitly: a bucket fully
+allocated across two different goals rejects even a 1-unit further
+allocation to a third goal.
+
+15. ALLOCATION-CAPACITY / CONCURRENCY MODEL
+------------------------------------------------------------------------
+Every allocate/release/reallocate RPC issues `select ... for update` on
+the target `cash_buckets` row before computing available-to-allocate
+capacity. This makes two concurrent allocation attempts against the same
+bucket serialize (the second transaction blocks until the first commits,
+then re-reads the now-current available balance) rather than both reading
+a stale figure and both succeeding. Proven by a dedicated test that fires
+two concurrent 700-unit allocation attempts against a 1000-unit bucket via
+`Promise.allSettled`: exactly one succeeds, and the bucket's allocated
+total is exactly 700 afterward, never 1400.
+
+16. RELEASE/REALLOCATION MODEL
+------------------------------------------------------------------------
+Release inserts a negative `goal_allocation_events` row, reducing a
+goal's allocation from a specific bucket by exactly the released amount;
+rejected if it would exceed the current (goal, bucket) allocation.
+Reallocation (`record_goal_reallocation()`) is one atomic operation: a
+release row on the source goal and an allocate row on the destination
+goal, sharing one bucket, written in a single transaction — the same
+money is never observably assigned to both goals at once. Only the
+release-side row carries the idempotency key (the allocate-side row's key
+stays null); since the pair always commits together, a retry is safely
+detected by the release row's key alone. Neither operation ever touches
+cash.
+
+17. PROTECTION MODEL
+------------------------------------------------------------------------
+`is_protected` is a plain user-controlled boolean, freely toggleable via
+the UPDATE grant — Monatriq never sets it automatically. This phase only
+makes the flag exist and be queryable
+(`goal_protected_allocation_totals()`, grouped by currency); it does not
+itself block or warn about anything. The five-step override workflow
+(show impact, show conflict, allow cancellation, allow override, record
+the override) described in the original conceptual spec is explicitly
+deferred to P0-E2-S6's Financial Rules engine.
+
+18. ALLOCATION-SHORTFALL MODEL
+------------------------------------------------------------------------
+If cash later leaves a bucket that has allocations attached (an ordinary
+Money spend/transfer that Goals has no say over and does not intercept),
+`goal_bucket_shortfalls()` reports `balance`, `allocated_total`, and
+`shortfall = greatest(allocated_total − balance, 0)` per bucket, honestly.
+Allocation history is never rewritten to hide a shortfall — verified
+explicitly: after allocating 1000 from a bucket and then spending 400 via
+Money, the bucket's reported `allocated_total` stays exactly 1000 while
+`shortfall` reports exactly 400.
+
+19. DEBT-PAYOFF GOAL MODEL
+------------------------------------------------------------------------
+A `debt_balance_target` goal's `liability_id` is set once at creation
+(cross-tenant-checked, immutable afterward) and its currency is derived
+from the liability, never independently chosen. Progress is always read
+live from `liability_outstanding_principal()` — the exact function
+Liabilities' own read models use, never a duplicated balance.
+`starting_liability_balance` is a one-time frozen snapshot taken at
+creation (never updated, never in the UPDATE grant) purely to answer "how
+much did I owe when I started this goal." Verified explicitly: a real
+debt payment made after goal creation changes the live
+`current_outstanding_principal` in `goal_summary()` while
+`starting_liability_balance` stays frozen at its original value. Cash
+allocated toward a debt goal (earmarked future repayment) is kept
+conceptually distinct from an actual payment — only
+`record_debt_payment()`/`record_loan_proceeds()` in Liabilities ever
+change outstanding principal.
+
+20. RECURRING-INCOME GOAL MODEL
+------------------------------------------------------------------------
+`monthly_income_target` goals reject cash allocation outright
+(`record_goal_allocation()`/`record_goal_reallocation()` both check this).
+No heuristic reads business-income/salary/asset-sale/receivable-recovery/
+refund/transfer events to infer a "current recurring income" figure —
+`goal_summary()` has no "current" concept for this measurement type at
+all; `allocatedTotal`/`remaining` are always null and
+`requiredPaceStatus` is always `not_applicable`, regardless of how much
+unrelated Money activity exists for the user. Verified explicitly in the
+test suite even after the user has recorded substantial unrelated income
+elsewhere.
+
+21. MILESTONE MODEL
+------------------------------------------------------------------------
+`goal_milestones` (title, due_date, completed_at, sort_order) attach to
+any goal — not restricted to the `milestone` measurement type, since a
+cash_target goal can usefully have sub-steps too. Completion is a plain
+`completed_at` column update with zero code path to
+`financial_events`/`cash_movements`/`goal_allocation_events` — verified
+explicitly (byte-identical bucket balances and financial_events counts
+before/after). Creation goes through `record_goal_milestone()`, a narrow
+SECURITY INVOKER RPC, for the same reason established in Assets §14:
+`user_id` is trigger-derived and grant-excluded, so a direct insert would
+need to supply a column the database will never accept.
+
+22. REQUIRED-PACE CALCULATION
+------------------------------------------------------------------------
+`goal_required_pace()` computes remaining / periods for `cash_target` and
+`debt_balance_target` goals only (`monthly_income_target`/`milestone`
+return `not_applicable`). Status values: `calculated`, `target_reached`,
+`no_target_date`, `no_target_amount`, `date_passed`, `not_applicable` —
+never a fabricated number when an input is missing. Monthly cadence is
+approximated via average days-per-month (365.25/12 = 30.4375); a partial
+final period rounds UP (ceil), so pace is never understated. "Today" is
+computed from the caller's `profiles.timezone` (falls back to UTC).
+Explicitly labeled a calculation, not a recommendation — no "At Current
+Pace" predictive forecasting exists this phase (deferred pending real
+contribution-history data). Verified with an exact worked example: target
+12000, allocated 3000, target_date 91 days out → periods = ceil(91 /
+30.4375) = 3, required pace = (12000-3000)/3 = 3000.000000 — matched the
+SQL function's actual output exactly on the first run.
+
+23. MULTI-CURRENCY BEHAVIOR
+------------------------------------------------------------------------
+Both `currency_code` and `liability_id` are immutable after creation
+(currency via trigger once allocation history exists; liability_id via
+grant exclusion). A debt-payoff goal's currency is derived from its
+liability, never independently chosen. Allocation/release/reallocation
+are same-currency-only (bucket currency must equal goal currency;
+reallocation additionally requires both goals and the bucket to share one
+currency) — cross-currency allocation is rejected outright, mirroring
+Receivables/Liabilities' same-currency-only rule. `goal_native_currency_
+totals()` (scoped to `cash_target` goals only) reuses the shared
+`{currencyCode, amount}[]` shape every other domain's native-totals
+function returns; a missing reporting-currency rate returns
+`not_calculated` via the shared `convertToReportingCurrency()`, verified
+by feeding the function's own output through it with an empty rate map.
+
+24. EXACT-DECIMAL STRATEGY
+------------------------------------------------------------------------
+All amount columns are `numeric(20,6)`. No `real`/`double precision`
+anywhere. Every currency's `decimal_exponent` is enforced via BEFORE
+INSERT triggers on both `goal_target_history` (target_value) and
+`goal_allocation_events` (amount) — a fractional JPY target and a
+3-decimal KWD allocation were both tested explicitly (JPY rejected, KWD
+accepted). All read functions cast monetary amounts to `::text`;
+percentages (a UI ratio, not a transportable monetary amount) are plain
+numeric, matching the precedent set for `interest_rate`. `decimal.js`
+remains the only arbitrary-precision library; the
+`asNumericParam()`/`asOptionalNumericParam()` helper pattern is reused
+unchanged.
+
+25. RLS POLICIES
+------------------------------------------------------------------------
+Every new table (`goal_types`, `goals`, `goal_target_history`,
+`goal_milestones`, `goal_allocation_events`) has RLS enabled immediately,
+deny-by-default, no policy granting anonymous access. `goal_types` is
+public reference data (like `currencies`/`liability_types`) — a
+permissive `USING (true)` SELECT policy, no user-owned rows. All other
+tables use `auth.uid() = user_id` ownership policies plus EXISTS-based
+cross-tenant checks wherever a row references another table.
+
+26. CROSS-DOMAIN REFERENCE PROTECTIONS
+------------------------------------------------------------------------
+`goals` → `liabilities` (INSERT policy EXISTS check when `liability_id`
+is set). `goal_target_history`/`goal_milestones` → `goals` (EXISTS
+check). `goal_allocation_events` → BOTH `goals` and `cash_buckets`
+simultaneously — the critical two-reference policy this domain's brief
+called out explicitly, proven by three dedicated raw-insert tests
+(goal=own/bucket=other's; goal=other's/bucket=own; both other's with a
+forged user_id). All `record_*` RPCs additionally re-verify ownership of
+every referenced row inside the function body (never trusting RLS alone,
+never trusting a caller-supplied `user_id`).
+
+27. ADVERSARIAL TESTS
+------------------------------------------------------------------------
+Cross-user read isolation (list/by-id), cross-user update/archive
+rejection, forged ownership on create, forged ownership reassignment,
+anonymous access rejection, RPC-level rejection of cross-tenant
+bucket/goal allocation, three raw-insert forgery variants on
+`goal_allocation_events`, cross-tenant milestone-creation rejection,
+cross-tenant debt-goal-liability-linking rejection. All pass.
+
+28. FINANCIAL-INVARIANCE TESTS
+------------------------------------------------------------------------
+Goal creation: zero Money events/movements (verified). Target change:
+zero Money events/movements (verified). Allocation: zero bucket-balance
+change, zero new financial_events row (verified). Release: zero
+bucket-balance change (verified). Reallocation: zero bucket-balance
+change (verified). Debt-goal creation: zero liability-balance change,
+zero cash change (verified). Milestone completion: zero bucket-balance
+change, zero new financial_events row (verified). Every one of these is
+asserted by direct before/after comparison against real database state,
+not inferred from the absence of an error.
+
+29. REGRESSION TESTS
+------------------------------------------------------------------------
+All six prior suites re-run against the same fresh database this phase:
+Profile/RLS 20/20, Money 37/37, Currency 11/11, Assets 28/28, Receivables
+27/27, Liabilities 25/25 — all still pass, confirming the new migration
+did not regress any existing domain.
+
+30. APPLICATION INTEGRATION
+------------------------------------------------------------------------
+Minimal, temporary `/goals` route following the established
+`getCurrentUser()` guard-first Server Component pattern. Sections: Goals
+list (target/allocated/remaining/progress for cash_target; starting/
+current/earmarked/progress for debt_balance_target; target/"Not
+calculated" for monthly_income_target; milestone counts and required pace
+where calculable; protected/focus indicators), Add Goal (form fields
+adapt to the selected measurement_type — a debt goal shows a liability
+picker instead of a currency+amount, a milestone goal shows neither),
+Allocate Cash, Release/Reallocate (a single form with a mode toggle,
+since both share goal+bucket+amount inputs). No CRM features, no final
+Stitch design. New users see "No goals yet." — no seeded or demo amounts
+anywhere in the UI or its data path. No dedicated milestone-management UI
+this phase (the domain/RPCs are complete and tested; the foundation-level
+screen stays restrained per the brief's "do not over-design" instruction).
+
+31. GENERATED TYPES
+------------------------------------------------------------------------
+`lib/supabase/database.types.ts` regenerated via `supabase gen types
+typescript --local` after the final migration state (following a fresh
+`db reset`). The AUTO-GENERATED header comment is present. No stray CLI
+output lines in the file.
+
+32. SECURITY REVIEW
+------------------------------------------------------------------------
+All new RPCs are `SECURITY INVOKER`. No new `SECURITY DEFINER` function
+was introduced this phase. Every RPC derives ownership from `auth.uid()`
+exclusively — no function trusts a caller-supplied user id. Service-role
+key usage is unchanged: still confined to `supabase/tests/shared/`, still
+named `SUPABASE_TEST_SERVICE_ROLE_KEY`, still guarded by the localhost-
+only refusal in `supabase/tests/shared/env.ts` (untouched this phase).
+grep across app/components/lib for service-role/service_role strings:
+zero matches outside the test harness.
+
+33. REMOTE MIGRATION STATUS
+------------------------------------------------------------------------
+`supabase db push --linked --dry-run` reviewed (confirmed exactly one new
+migration pending — this phase's), then `supabase db push --linked
+--yes`. `supabase migration list --linked` confirms all 6 local migration
+timestamps match remote exactly. The same benign pg-delta
+catalog-caching warning seen in P0-E2-S4's remote push (missing
+certificate file inside the CLI's own sandbox) appeared again and did not
+affect schema application. No `supabase db reset` was ever run against
+remote.
+
+34. VALIDATION RESULTS
+------------------------------------------------------------------------
+- Fresh `supabase db reset` (x2 this phase): succeeded, all 6 migrations
+  applied cleanly both times, no mid-phase fixes needed.
+- Full test suite (7 suites): 204/204 assertions passed (Profile 20,
+  Money 37, Currency 11, Assets 28, Receivables 27, Liabilities 25, Goals
+  56).
+- Allocation concurrency: verified via a dedicated `Promise.allSettled`
+  test — exactly one of two simultaneous over-allocating attempts
+  succeeds.
+- Cross-tenant attacks: all rejected at the database layer (goal-level,
+  allocation-level with two independent references, milestone-level,
+  debt-linkage-level).
+- Financial-invariance: goal creation, target change, allocation,
+  release, reallocation, debt-goal creation, and milestone completion all
+  verified to cause zero Money events/movements.
+- Multi-currency: native totals separated by currency; missing FX rate
+  verified to return not_calculated rather than blend.
+- Exact-decimal: JPY (0-decimal) target rejection and KWD (3-decimal)
+  allocation acceptance both verified.
+- `npm run lint`: clean, zero warnings.
+- `npx tsc --noEmit` (app) and `npx tsc --noEmit -p
+  supabase/tests/tsconfig.json` (test harness): clean, zero errors.
+- `npm run build`: succeeds with real Supabase config — `/goals` renders
+  as a dynamic (ƒ) route.
+- `npm run build` with `.env.local` removed: succeeds — `/goals`
+  correctly degrades to a static (○) route redirecting to /login.
+- Service-role exposure search (app/components/lib): zero matches.
+- Hardcoded prototype-data search (goals app code): zero matches (only a
+  neutral "Emergency Reserve" form placeholder hint, not seeded data).
+- Capital Compass production-source search: zero matches (only the
+  pre-existing historical prohibition note in PRODUCT_DEFINITION.md).
+- Remote migration dry-run: reviewed before push, confirmed additive and
+  safe (exactly one new migration).
+- Final `git status`: clean, fully unstaged, nothing committed.
+
+35. ASSUMPTIONS
+------------------------------------------------------------------------
+- The remote "Monatriq Dev" project identity (confirmed in P0-E2-S3)
+  remains valid and did not need re-confirmation this phase.
+- Same-currency-only allocation/reallocation is an acceptable scope limit
+  for this phase, per the brief's explicit "reject mismatches" instruction.
+- A milestone can attach to any goal measurement type, not only
+  `milestone` — a deliberate, documented interpretation of "keep it
+  simple" rather than a measurement-type restriction the brief did not
+  explicitly request.
+- `starting_liability_balance` as a one-time frozen snapshot column is a
+  deliberate, documented interpretation of "useful goal information may
+  include starting/outstanding balance at goal creation," distinct from
+  the explicitly prohibited "duplicated, manually-updated debt balance."
+- Required Pace's monthly-cadence approximation (average days-per-month,
+  partial periods round up) is a deliberate, documented choice among
+  several defensible options for "choose a clear initial cadence."
+
+36. OPEN QUESTIONS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Open questions" (11 items) — most
+relevant new ones this phase:
+  - When P0-E2-S6 builds Financial Rules, does it consume
+    goal_protected_allocation_totals()/goal_bucket_shortfalls() directly,
+    or does it need a richer combined read model?
+  - Should a future phase add a dedicated milestone-management UI?
+  - Should cross-currency allocation ever be supported, and if so, via
+    Money's existing fx_rates table?
+
+37. RISKS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Risks" (5 items) — most notable: the
+allocation-capacity row-locking mechanism is proven correct under the
+test suite's concurrency test but has not been load-tested under
+realistic production concurrency levels. Remote schema is deployed but
+genuinely untested there, unchanged posture from every prior phase.
+
+38. GIT DIFF SUMMARY
+------------------------------------------------------------------------
+8 files changed, 1001 insertions(+), 177 deletions(-):
+  components/layout/AppShell.tsx               |   3 +
+  docs/architecture/FINANCIAL_DOMAIN_MODEL.md  | 185 +++++++
+  docs/architecture/MULTI_CURRENCY_MODEL.md    |  32 ++
+  docs/architecture/SYSTEM_ARCHITECTURE.md     |  55 ++-
+  docs/project/BUILD_STATE.md                  | 321 ++++++-------
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md |  48 +++
+  lib/supabase/database.types.ts               | 531 +++++++++++++++++++++
+  package.json                                 |   3 +-
+Plus 5 new untracked paths (migration, one domain lib dir, one app route,
+one component dir, one test suite dir) and this report. This diff is
+layered on top of P0-E2-S4's still-uncommitted changes, per the standing
+"do not commit" instruction across recent phases.
+
+39. GIT STATUS
+------------------------------------------------------------------------
+Branch: main. Nothing staged. Nothing committed. Nothing pushed. Working
+tree exactly as listed in §38 plus the untracked additions in §6 (and
+P0-E2-S4's carried-forward uncommitted changes) — no accidental staging
+occurred.
+
+40. RECOMMENDED NEXT PHASE
+------------------------------------------------------------------------
+P0-E2-S6 — Financial Rules & Protected-Fund Override Engine, the natural
+next step now that Goals exposes is_protected,
+goal_protected_allocation_totals(), and goal_bucket_shortfalls()
+specifically for a future rules engine to consume. Alternatively, P0-E3-S1
+— Home aggregation layer, now with five real domains (Money, Assets,
+Receivables, Liabilities, Goals) to aggregate.

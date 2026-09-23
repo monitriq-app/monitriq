@@ -490,6 +490,262 @@ export type Database = {
           },
         ]
       }
+      goal_allocation_events: {
+        Row: {
+          amount: number
+          bucket_id: string
+          created_at: string
+          currency_code: string
+          event_type: string
+          goal_id: string
+          id: string
+          idempotency_key: string | null
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          bucket_id: string
+          created_at?: string
+          currency_code: string
+          event_type: string
+          goal_id: string
+          id?: string
+          idempotency_key?: string | null
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          bucket_id?: string
+          created_at?: string
+          currency_code?: string
+          event_type?: string
+          goal_id?: string
+          id?: string
+          idempotency_key?: string | null
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_allocation_events_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "cash_buckets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "goal_allocation_events_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "goal_allocation_events_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_milestones: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          due_date: string | null
+          goal_id: string
+          id: string
+          sort_order: number
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          goal_id: string
+          id?: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          due_date?: string | null
+          goal_id?: string
+          id?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_milestones_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_target_history: {
+        Row: {
+          created_at: string
+          currency_code: string | null
+          effective_at: string
+          goal_id: string
+          id: string
+          note: string | null
+          target_date: string | null
+          target_value: number | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency_code?: string | null
+          effective_at?: string
+          goal_id: string
+          id?: string
+          note?: string | null
+          target_date?: string | null
+          target_value?: number | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency_code?: string | null
+          effective_at?: string
+          goal_id?: string
+          id?: string
+          note?: string | null
+          target_date?: string | null
+          target_value?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goal_target_history_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "goal_target_history_goal_id_fkey"
+            columns: ["goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      goal_types: {
+        Row: {
+          code: string
+          created_at: string
+          default_measurement_type: string
+          display_name: string
+          sort_order: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          default_measurement_type: string
+          display_name: string
+          sort_order?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          default_measurement_type?: string
+          display_name?: string
+          sort_order?: number
+        }
+        Relationships: []
+      }
+      goals: {
+        Row: {
+          created_at: string
+          currency_code: string | null
+          description: string | null
+          goal_type_code: string
+          id: string
+          is_focus: boolean
+          is_protected: boolean
+          liability_id: string | null
+          measurement_type: string
+          name: string
+          priority: number | null
+          starting_liability_balance: number | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency_code?: string | null
+          description?: string | null
+          goal_type_code: string
+          id?: string
+          is_focus?: boolean
+          is_protected?: boolean
+          liability_id?: string | null
+          measurement_type: string
+          name: string
+          priority?: number | null
+          starting_liability_balance?: number | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency_code?: string | null
+          description?: string | null
+          goal_type_code?: string
+          id?: string
+          is_focus?: boolean
+          is_protected?: boolean
+          liability_id?: string | null
+          measurement_type?: string
+          name?: string
+          priority?: number | null
+          starting_liability_balance?: number | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "goals_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "goals_goal_type_code_fkey"
+            columns: ["goal_type_code"]
+            isOneToOne: false
+            referencedRelation: "goal_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "goals_liability_id_fkey"
+            columns: ["liability_id"]
+            isOneToOne: false
+            referencedRelation: "liabilities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       liabilities: {
         Row: {
           counterparty: string | null
@@ -937,6 +1193,42 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_goal: {
+        Args: {
+          p_currency_code?: string
+          p_description?: string
+          p_goal_type_code: string
+          p_is_protected?: boolean
+          p_liability_id?: string
+          p_measurement_type: string
+          p_name: string
+          p_target_date?: string
+          p_target_value?: number
+        }
+        Returns: {
+          created_at: string
+          currency_code: string | null
+          description: string | null
+          goal_type_code: string
+          id: string
+          is_focus: boolean
+          is_protected: boolean
+          liability_id: string | null
+          measurement_type: string
+          name: string
+          priority: number | null
+          starting_liability_balance: number | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "goals"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_liability: {
         Args: {
           p_counterparty?: string
@@ -998,6 +1290,112 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      goal_allocated_total: { Args: { p_goal_id: string }; Returns: number }
+      goal_allocation_history: {
+        Args: { p_goal_id: string; p_limit?: number }
+        Returns: {
+          amount: string
+          bucket_id: string
+          created_at: string
+          currency_code: string
+          event_type: string
+          id: string
+          note: string
+        }[]
+      }
+      goal_bucket_allocated_total: {
+        Args: { p_bucket_id: string }
+        Returns: number
+      }
+      goal_bucket_available_to_allocate: {
+        Args: { p_bucket_id: string }
+        Returns: number
+      }
+      goal_bucket_shortfalls: {
+        Args: never
+        Returns: {
+          allocated_total: string
+          balance: string
+          bucket_id: string
+          bucket_name: string
+          currency_code: string
+          shortfall: string
+        }[]
+      }
+      goal_current_target: {
+        Args: { p_goal_id: string }
+        Returns: {
+          currency_code: string
+          effective_at: string
+          target_date: string
+          target_value: number
+        }[]
+      }
+      goal_native_currency_totals: {
+        Args: never
+        Returns: {
+          currency_code: string
+          total_allocated: string
+        }[]
+      }
+      goal_protected_allocation_totals: {
+        Args: never
+        Returns: {
+          currency_code: string
+          total_protected_allocated: string
+        }[]
+      }
+      goal_required_pace: {
+        Args: { p_goal_id: string }
+        Returns: {
+          amount: string
+          currency_code: string
+          periods_remaining: number
+          status: string
+        }[]
+      }
+      goal_summary: {
+        Args: never
+        Returns: {
+          allocated_total: string
+          created_at: string
+          currency_code: string
+          current_outstanding_principal: string
+          debt_progress_percentage: number
+          description: string
+          goal_id: string
+          goal_type_code: string
+          goal_type_label: string
+          is_focus: boolean
+          is_protected: boolean
+          liability_id: string
+          measurement_type: string
+          milestone_completed_count: number
+          milestone_total_count: number
+          name: string
+          percentage: number
+          priority: number
+          remaining: string
+          required_pace_amount: string
+          required_pace_periods_remaining: number
+          required_pace_status: string
+          starting_liability_balance: string
+          status: string
+          target_date: string
+          target_value: string
+        }[]
+      }
+      goal_target_history_list: {
+        Args: { p_goal_id: string; p_limit?: number }
+        Returns: {
+          currency_code: string
+          effective_at: string
+          id: string
+          note: string
+          target_date: string
+          target_value: string
+        }[]
       }
       liability_native_currency_totals: {
         Args: never
@@ -1219,6 +1617,138 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "financial_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_goal_allocation: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_goal_id: string
+          p_idempotency_key?: string
+          p_note?: string
+        }
+        Returns: {
+          amount: number
+          bucket_id: string
+          created_at: string
+          currency_code: string
+          event_type: string
+          goal_id: string
+          id: string
+          idempotency_key: string | null
+          note: string | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "goal_allocation_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_goal_milestone: {
+        Args: {
+          p_due_date?: string
+          p_goal_id: string
+          p_sort_order?: number
+          p_title: string
+        }
+        Returns: {
+          completed_at: string | null
+          created_at: string
+          due_date: string | null
+          goal_id: string
+          id: string
+          sort_order: number
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "goal_milestones"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_goal_reallocation: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_from_goal_id: string
+          p_idempotency_key?: string
+          p_note?: string
+          p_to_goal_id: string
+        }
+        Returns: {
+          amount: number
+          bucket_id: string
+          created_at: string
+          currency_code: string
+          event_type: string
+          goal_id: string
+          id: string
+          idempotency_key: string | null
+          note: string | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "goal_allocation_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_goal_release: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_goal_id: string
+          p_idempotency_key?: string
+          p_note?: string
+        }
+        Returns: {
+          amount: number
+          bucket_id: string
+          created_at: string
+          currency_code: string
+          event_type: string
+          goal_id: string
+          id: string
+          idempotency_key: string | null
+          note: string | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "goal_allocation_events"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_goal_target: {
+        Args: {
+          p_goal_id: string
+          p_note?: string
+          p_target_date?: string
+          p_target_value?: number
+        }
+        Returns: {
+          created_at: string
+          currency_code: string | null
+          effective_at: string
+          goal_id: string
+          id: string
+          note: string | null
+          target_date: string | null
+          target_value: number | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "goal_target_history"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -1484,6 +2014,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_focus_goal: { Args: { p_goal_id?: string }; Returns: undefined }
     }
     Enums: {
       [_ in never]: never

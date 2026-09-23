@@ -294,3 +294,35 @@ function ever sums across currencies, and a missing reporting-currency
 rate for any currency present means `convertToReportingCurrency()` (§10)
 returns `not_calculated` — identical behavior to Money and Assets, no
 domain-specific exception.
+
+## 18. Goals: same-currency allocation, and the shared currency stack
+
+A goal's `currency_code` is immutable once it has any allocation history
+(§4/§12's pattern, applied a fourth time). For a `debt_balance_target`
+goal, currency is not independently chosen at all — it is derived from
+the linked liability at creation (`create_goal()` overwrites whatever
+currency the caller might have sent), so a debt-payoff goal and its
+liability can never disagree about currency.
+
+**Allocation is same-currency-only this phase**, mirroring Receivables/
+Liabilities' same-currency-only recovery/payment rule (§15): the bucket's
+`currency_code` must equal the goal's `currency_code`, checked both by the
+`record_goal_allocation()`/`record_goal_release()`/
+`record_goal_reallocation()` RPCs and, as the real database-level
+guarantee, by `prepare_goal_allocation_event()`'s trigger. Reallocation
+additionally requires the bucket and BOTH goals to share one currency —
+cross-currency reallocation is rejected outright, not silently converted.
+
+Goals imports `formatCurrencyAmount()`, the exact-decimal discipline (§6),
+and `convertToReportingCurrency()` from `lib/domain/currency/` exclusively
+— no Goals-specific currency logic exists anywhere.
+`goal_native_currency_totals()` returns the same `{currencyCode,
+amount}[]` shape every other domain's native-totals function does (scoped
+to `cash_target` goals only — see
+[FINANCIAL_DOMAIN_MODEL.md §26](./FINANCIAL_DOMAIN_MODEL.md#26-cash-allocation-capacity-and-the-allocation-ledger-p0-e2-s5)
+for why `debt_balance_target`'s earmarked cash is deliberately excluded
+from this particular total), and a missing reporting-currency rate means
+`not_calculated`, never a blended guess — verified explicitly by feeding
+`goal_native_currency_totals()`'s own output into
+`convertToReportingCurrency()` with an empty rate map in
+`supabase/tests/goals/run.ts`.

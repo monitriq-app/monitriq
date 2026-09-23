@@ -303,3 +303,51 @@ constructs. Three lessons:
   `supabase/tests/liabilities/run.ts`. See
   [FINANCIAL_DOMAIN_MODEL.md §23](../architecture/FINANCIAL_DOMAIN_MODEL.md#23-compound-financial-operations-and-voiding-consistency-p0-e2-s4)
   for the architectural rationale.
+
+## 16. Established pattern: Goals domain and allocation-capacity concurrency (P0-E2-S5)
+
+`supabase/migrations/*_create_goals_domain.sql` applies §13's cross-
+tenant-reference pattern to a fifth domain and adds one new lesson about
+concurrency, plus two applications of already-established patterns worth
+calling out explicitly:
+
+- **Row locking is required when a capacity check and a write must be
+  atomic across concurrent callers — RLS and CHECK constraints alone
+  don't provide this.** `record_goal_allocation()` computes
+  `available_to_allocate = bucket balance − existing allocations` and
+  must reject any amount exceeding it. Without locking, two concurrent
+  calls against the same bucket could both read the same "available"
+  figure before either commits, and both succeed — over-allocating the
+  bucket (the same cash counted for two goals, exactly what "one unit of
+  money, one purpose" forbids). Every allocate/release/reallocate RPC
+  therefore issues `select ... for update` on the target `cash_buckets`
+  row before computing capacity: the second concurrent transaction blocks
+  until the first commits, then re-reads the now-current available
+  balance and correctly rejects if it no longer fits. Proven by a
+  dedicated test in `supabase/tests/goals/run.ts` that fires two
+  concurrent over-allocating calls via `Promise.allSettled` and asserts
+  exactly one succeeds — this is a concurrency property that a
+  single-threaded sequential test cannot demonstrate by accident, so the
+  test deliberately runs both calls in parallel.
+- **The two-EXISTS-checks-in-one-policy pattern (§13) now governs a
+  table with two independent cross-tenant references in a single row.**
+  `goal_allocation_events`' INSERT policy checks EXISTS on both `goal_id`
+  (against `goals`) and `bucket_id` (against `cash_buckets`), each scoped
+  to `auth.uid()`. This is the same shape as `cash_movements` checking
+  `bucket_id`/`event_id`, just with two references from a genuinely new
+  domain (Goals) into two different existing domains (itself and Money)
+  simultaneously — confirming the pattern generalizes to cross-domain
+  references, not just within one domain's own tables.
+- **A trigger-derived, grant-excluded `user_id` column composes cleanly
+  with a direct client insert here (unlike Assets §14) precisely because
+  the parent `goals` row does NOT require atomic creation with a child
+  row the way `receivables`/`liabilities` do.** `goals` itself keeps
+  `user_id` in its INSERT grant (like `receivables`/`liabilities`) because
+  its owning RPC (`create_goal()`) explicitly supplies `auth.uid()` as the
+  value and a raw direct insert remains safe too (the table's CHECK
+  constraints enforce every measurement-type invariant regardless of
+  insert path). `goal_milestones`, by contrast, repeats the Assets §14
+  lesson exactly: `user_id` is trigger-derived and grant-excluded, so
+  `record_goal_milestone()` exists as a narrow wrapper purely to keep the
+  generated TypeScript `Insert` type honest about what the database will
+  actually accept — not because the underlying grant+policy needed fixing.

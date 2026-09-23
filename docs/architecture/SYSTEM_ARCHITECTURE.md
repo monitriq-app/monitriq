@@ -30,18 +30,20 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E2-S4,
+This is a target layout to build toward incrementally. As of P0-E2-S5,
 `lib/supabase/`, `lib/domain/{profile,money,assets,currency,receivables,
-liabilities}/`, `supabase/migrations/`, and
-`supabase/tests/{shared,rls,money,currency,assets,receivables,liabilities}/`
-exist for real. `lib/domain/currency/` (types, repository, format,
-conversion) is the one shared currency stack Profile/Money/Assets/
-Receivables/Liabilities all import from — never duplicated per domain, per
-[MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one)
+liabilities,goals}/`, `supabase/migrations/`, and
+`supabase/tests/{shared,rls,money,currency,assets,receivables,liabilities,
+goals}/` exist for real. `lib/domain/currency/` (types, repository,
+format, conversion) is the one shared currency stack Profile/Money/
+Assets/Receivables/Liabilities/Goals all import from — never duplicated
+per domain, per
+[MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one),
+[§16](./MULTI_CURRENCY_MODEL.md#16-receivables-and-liabilities-reuse-the-same-currency-stack),
 and
-[§16](./MULTI_CURRENCY_MODEL.md#16-receivables-and-liabilities-reuse-the-same-currency-stack).
-`lib/types/` and the rest of `lib/domain/` (Goals, Decisions, Financial
-Rules) remain future work, created when their owning phase needs them:
+[§18](./MULTI_CURRENCY_MODEL.md#18-goals-same-currency-allocation-and-the-shared-currency-stack).
+`lib/types/` and the rest of `lib/domain/` (Decisions, Financial Rules)
+remain future work, created when their owning phase needs them:
 
 ```
 app/                    Next.js routes (Home, Money, Quick Add, Assets,
@@ -100,8 +102,8 @@ data-loading functions backed by them) for at least:
   FINANCIAL_DOMAIN_MODEL §4)
 - Safe to Deploy (per FINANCIAL_DOMAIN_MODEL §12 — returns "Not calculated"
   when inputs are incomplete, rather than a partial guess)
-- Goal allocation state (per FINANCIAL_DOMAIN_MODEL §9.1 — enforces "one
-  naira, one purpose")
+- Goal allocation state (per FINANCIAL_DOMAIN_MODEL §9.1/§26 — enforces
+  "one unit of money, one purpose")
 - Upcoming obligations summary
 - Recurring income summary
 
@@ -114,14 +116,20 @@ constraint for future implementation phases.
 is `asset_summary()`/`asset_native_currency_totals()`/
 `asset_current_basis()`; receivables/liabilities position (P0-E2-S4) is
 `receivable_summary()`/`receivable_native_currency_totals()`/
-`liability_summary()`/`liability_native_currency_totals()` (all SQL
-functions, `lib/domain/{money,assets,receivables,liabilities}/
-repository.ts`'s thin wrappers) — `/money`, `/assets`, `/receivables`,
-`/liabilities`, and any future consumer (Home, Decisions) call these, none
+`liability_summary()`/`liability_native_currency_totals()`; goal
+allocation state (P0-E2-S5) is `goal_summary()`/
+`goal_native_currency_totals()`/`goal_protected_allocation_totals()`/
+`goal_bucket_shortfalls()`/`goal_required_pace()` (all SQL functions,
+`lib/domain/{money,assets,receivables,liabilities,goals}/repository.ts`'s
+thin wrappers) — `/money`, `/assets`, `/receivables`, `/liabilities`,
+`/goals`, and any future consumer (Home, Decisions) call these, none
 re-sums `cash_movements`, `asset_valuations`/`asset_basis_events`,
-`receivable_ledger_events`, or `liability_principal_events` independently.
-Net worth, Safe to Deploy, goal allocation, obligations, and recurring
-income remain future work — no Goals/Financial Rules schema exists yet.
+`receivable_ledger_events`, `liability_principal_events`, or
+`goal_allocation_events` independently. Net worth, Safe to Deploy,
+obligations, and recurring income remain future work — no Financial Rules
+schema exists yet, and Goals' own recurring-income measurement type
+deliberately returns "not calculated" rather than fabricating a Recurring
+Income summary this phase (see FINANCIAL_DOMAIN_MODEL.md §27).
 
 ## 5. Financial event / audit layer
 
@@ -147,6 +155,15 @@ principal/interest/fee split). Simple single-component events still write
 one `financial_events` row directly, `operation_id` null — the grouping
 table is additive, not a restructuring of the event log. See
 [FINANCIAL_DOMAIN_MODEL.md §23](./FINANCIAL_DOMAIN_MODEL.md#23-compound-financial-operations-and-voiding-consistency-p0-e2-s4).
+
+**Deliberately NOT extended for Goals (P0-E2-S5).** Allocating, releasing,
+and reallocating goal funding never write to `financial_events`/
+`cash_movements` at all — Goals' own `goal_allocation_events` ledger has
+no `financial_event_id` column and cannot have a cash effect by
+construction. This is the one domain so far that stays entirely outside
+this layer, which is the correct outcome for a domain whose core principle
+is "does not own cash." See
+[FINANCIAL_DOMAIN_MODEL.md §26](./FINANCIAL_DOMAIN_MODEL.md#26-cash-allocation-capacity-and-the-allocation-ledger-p0-e2-s5).
 
 ## 6. Multi-currency posture
 
