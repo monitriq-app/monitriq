@@ -252,6 +252,11 @@ judging the user — no shaming language, no fabricated history.
 
 ## 11. Financial rules
 
+**Implemented (P0-E2-S6)** — see §29-30. Only `minimum_cash_floor` actively
+participates in Safe to Deploy this phase; the rule/rule-version split
+(identity + append-only threshold history) is designed to extend to the
+other potential rule types below without restructuring.
+
 Rules are explicitly user-configured; nothing is invented on their behalf.
 Potential rule types: Minimum Protected Cash, Emergency Reserve Protection,
 Protected Goal Funds, Maximum Capital Per Asset, Maximum Capital Per Asset
@@ -261,6 +266,12 @@ configured" — never a guessed threshold.
 
 ## 12. Safe to Deploy
 
+**Implemented (P0-E2-S6)** — see §31-33. `safe_to_deploy_by_currency()` is
+the one authoritative formula: `required_retained_cash = MAX(minimum_cash_
+floor, protected_commitments)`, `safe_to_deploy = MAX(liquid_cash -
+required_retained_cash, 0)`. Deliberately MAX, not SUM — see §31 for why
+summing would double-count retained cash.
+
 Safe to Deploy is not simply the cash balance. Once inputs exist, it may
 consider: liquid cash, protected cash, protected goal allocations, hard
 upcoming obligations, emergency reserve rules, and other explicitly
@@ -269,6 +280,12 @@ configured constraints. The formula must be transparent and inspectable
 is incomplete, the value is "Not calculated" — never guessed.
 
 ## 13. Upcoming obligations
+
+**Implemented (P0-E2-S6)** — see §29. `obligations` is a plain user-owned
+record — never scraped or inferred from Money transactions.
+`upcoming_obligations()` defaults to a documented 30-day horizon but
+accepts an explicit start/end from any caller. "Overdue" is always derived
+(active status + due_date < today), never a stored flag.
 
 Obligations (rent, school fees, insurance, loan payments, tax,
 subscriptions, business commitments, etc.) must be user-entered or produced
@@ -698,3 +715,173 @@ Current Pace" forecasting (a predictive, contribution-history-based
 projection) is explicitly deferred: this phase has no contribution-history
 concept beyond the raw allocation ledger, and a real projection needs more
 than that to be honest.
+
+## 29. Financial Rules & Obligations implementation summary (P0-E2-S6)
+
+Full detail in `supabase/migrations/*_create_rules_obligations_domain.sql`.
+Summary:
+
+- **"Rule + rule versions," applied a second time.** `financial_rules` is
+  the identity/slot for one (user, rule_type, currency) configuration;
+  `financial_rule_versions` is append-only history of its threshold — a
+  new row is a new version, old thresholds are never overwritten. This is
+  the exact same pattern §25/`goal_target_history` already established,
+  reused rather than reinvented. `rule_type` is a CHECK-constrained,
+  extensible list (currently just `'minimum_cash_floor'`) so a future rule
+  (`maximum_capital_per_asset`, `maximum_debt_payment_ratio`, ...) can be
+  added without restructuring the table.
+- **Explicit zero is structurally distinct from "no rule."** A currency
+  with no `financial_rules` row at all (or only an `inactive` one) is
+  `not_configured`; a currency with an active rule whose latest version's
+  `threshold_value` is exactly `0` is `calculated` with a real zero floor.
+  Deactivating a rule (`status = 'inactive'`) preserves all of its version
+  history rather than deleting it — reactivating later
+  (`create_financial_rule()`) reuses the same identity row and appends a
+  new version, it never creates a duplicate.
+- **Obligations are a plain, user-owned record — never inferred.** No
+  code path reads Money transactions to guess an obligation exists.
+  "Overdue" is always derived (`status = 'active' and due_date < today`),
+  never a stored `is_overdue` column that could drift out of sync.
+  Marking an obligation `'paid'` is organizational metadata only — it
+  never fabricates a `financial_events`/`cash_movements` row (a real
+  payment still goes through Money, exactly like a debt payment or
+  recovery does for their own domains).
+- **`is_protected` defaults to `false` at the database level** on both
+  `obligations` and (already, since P0-E2-S5) `goals` — an obligation is
+  only counted toward retained cash when the user explicitly says so, per
+  the phase's "never auto-mark protected" instruction.
+- **Goal-linked obligations validate three things, not just ownership**:
+  the goal belongs to `auth.uid()`, the obligation's currency matches the
+  goal's currency exactly, and the goal's `measurement_type` is one that
+  actually accepts monetary funding (`cash_target`/`debt_balance_target` —
+  the same two types Goals itself allows cash allocation into, per §26).
+  All three are enforced by `prepare_obligation()`'s trigger, not merely
+  application-layer validation.
+
+## 30. Backed protected cash and obligation-coverage double-counting (P0-E2-S6)
+
+The two hardest correctness requirements this phase, both solved with one
+consistent idea: **only count real cash once, for its most specific
+purpose.**
+
+- **Backed vs. nominal allocation.** A goal allocation can nominally
+  exceed the real cash left in its bucket after later spending (§26's
+  allocation-shortfall concept, now consumed here). `protected_goal_cash`
+  in the Safe-to-Deploy formula never uses the nominal allocation — it
+  uses `LEAST(protected_allocation_total_in_bucket, bucket_balance)`,
+  summed across the user's buckets in that currency. Protected allocations
+  have first claim on whatever real cash a bucket holds, ahead of
+  non-protected allocations in the same bucket, because "protected" is
+  specifically the signal for a higher-priority claim — a deliberate,
+  documented precedence choice (the phase brief explicitly asked for one
+  rather than an arbitrary/undocumented ordering).
+- **When multiple protected goals share one underfunded bucket**, the
+  bucket-level formula above already reports the correct AGGREGATE backed
+  total honestly (matches the phase brief's own worked example exactly:
+  balance 5,000 against two protected goals totaling 7,000 nominal ->
+  backed 5,000, shortfall 2,000). Splitting that aggregate back down to
+  each INDIVIDUAL goal (needed only for obligation-coverage math, not for
+  the currency-level formula) uses a pro-rata split —
+  `goal_backed_protected_allocation()` — rather than an invented priority
+  order between the goals themselves, per the brief's explicit "avoid
+  inventing priority where possible" instruction. The pro-rata shares
+  always sum back to exactly the bucket's real backed total, never more.
+- **Goal-linked obligation coverage is computed PER GOAL, not per
+  obligation.** If two protected obligations both link to the same
+  protected goal, they are aggregated together first
+  (`rules_uncovered_protected_obligations()`'s `linked_totals` CTE) and
+  compared once against that goal's backed protected allocation —
+  otherwise each obligation could independently claim up to the goal's
+  full backing, double-counting it. Only the amount by which the
+  AGGREGATE linked obligation total exceeds the goal's backing becomes an
+  additional retained-cash requirement (`uncovered_protected_obligations`).
+  An obligation with no `funding_goal_id` has no goal backing to draw on
+  at all, so its full amount is always uncovered.
+- **A subtle Postgres formatting lesson, worth recording**: `coalesce(sum(x),
+  0)` where `x` is a `numeric(20,6)` column loses NUMERIC's display scale
+  when the fallback fires — `0::text` renders `"0"`, not `"0.000000"`,
+  breaking the exact-decimal string-transport contract every read
+  function in this codebase depends on
+  ([MULTI_CURRENCY_MODEL.md §6](./MULTI_CURRENCY_MODEL.md#6-decimal-precision--no-floating-point-anywhere)).
+  Every bare-zero fallback in this migration (`coalesce`, `greatest`,
+  `least`) is explicitly cast `0::numeric(20, 6)` instead — caught by
+  running the test suite against a real database (multiple assertions
+  expecting `"0.000000"` instead received bare `"0"`), not by reasoning
+  about the SQL on paper.
+
+## 31. Safe to Deploy formula (P0-E2-S6)
+
+`safe_to_deploy_by_currency()` computes, per currency:
+
+```
+protected_commitments   = protected_goal_cash + uncovered_protected_obligations
+required_retained_cash  = MAX(minimum_cash_floor, protected_commitments)
+safe_to_deploy           = MAX(liquid_cash - required_retained_cash, 0)
+retained_deficit         = MAX(required_retained_cash - liquid_cash, 0)
+```
+
+MAX, never SUM: the floor and protected_commitments describe the SAME
+"how much must stay untouched" requirement from two different angles (a
+blanket threshold vs. specific accounted-for purposes) — the larger one
+governs, since the smaller one is already satisfied whenever the larger
+is. Summing them would double-count retained cash (verified explicitly:
+a scenario with protected commitments 5,000 and floor 3,000 correctly
+retains 5,000, not 8,000). `safe_to_deploy` is always clamped at zero —
+it never reports a negative deployable figure — but `retained_deficit` is
+exposed separately and is never hidden just because the deployable amount
+floors at zero (verified: cash 3,000 against required 5,000 reports
+`safe_to_deploy = 0` and `retained_deficit = 2,000` simultaneously, both
+present and accurate).
+
+Every relevant currency (one with cash, a configured rule, or both) gets
+its own row; nothing is ever blended across currencies. A currency with
+cash but no active rule reports `status = 'not_configured'` and every
+floor-dependent figure (`minimumCashFloor`, `requiredRetainedCash`,
+`safeToDeploy`, `retainedDeficit`) is `null` — `liquidCash`/
+`protectedGoalCash`/`uncoveredProtectedObligations` are still populated
+(they don't depend on a floor existing), so the panel can still show
+partial, honest information rather than nothing at all.
+
+## 32. Reporting-currency Safe to Deploy and the proposed cash-use evaluator (P0-E2-S6)
+
+`lib/domain/rules/aggregate.ts`'s `aggregateSafeToDeployToReportingCurrency()`
+consolidates per-currency results into one reporting-currency figure —
+reusing `convertToReportingCurrency()` from `lib/domain/currency`, no
+second FX implementation — but only when EVERY relevant currency is
+itself `'calculated'` (a `'not_configured'` currency's true contribution
+is unknown, not just unconverted, so its presence alone forces
+`not_calculated`) AND every required rate is supplied. Never a guess.
+
+`evaluate_proposed_cash_use(bucket_id, amount)` answers "what happens to
+protected liquidity if I use this cash" with neutral, non-advisory labels
+(`aligned`/`attention`/`conflict`/`not_configured`/
+`insufficient_information`) across three independent dimensions (minimum-
+cash-floor, protected-goal, protected-obligation) — never
+approve/reject/recommend semantics, verified by an explicit test asserting
+none of the returned labels appear in an approval/rejection vocabulary.
+It is a pure read: calling it writes nothing. **Documented scope
+limitation**: the "after" recomputation faithfully reflects the proposed
+bucket's own contribution to protected backing and to the currency's
+liquid cash, but does not recursively re-derive obligation coverage that
+depends on OTHER buckets funding the same goal — a genuine second-order
+effect deliberately left out of this phase's evaluator (see "Do not turn
+this into a reservation system" in the phase brief) rather than silently
+approximated. A future phase may extend this if the coarse signal proves
+insufficient in practice.
+
+## 33. Override audit (P0-E2-S6)
+
+`cash_use_overrides` records "the user acknowledged these conflicts" —
+nothing more. Recording one calls `evaluate_proposed_cash_use()` for a
+fresh snapshot, freezes its conflict labels into an immutable `jsonb`
+column (`conflicts_snapshot`), and stores the before/after Safe-to-Deploy
+figures alongside. No `UPDATE`/`DELETE` grant exists on this table at
+all — override rows are append-only and immutable under every normal user
+flow, verified explicitly (a direct `UPDATE` attempt is rejected by grant
+absence, not merely by a policy). Recording an override **never** creates
+a `financial_events`/`cash_movements` row, never alters a goal, and never
+alters an obligation — actual execution of a real spend still belongs to
+Money, and still gets evaluated fresh against whatever the state looks
+like at that later moment (Safe to Deploy is a read model, not a
+reservation system — see the phase brief's explicit instruction not to
+turn this phase into one).

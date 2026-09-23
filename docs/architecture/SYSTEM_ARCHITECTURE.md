@@ -30,20 +30,20 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E2-S5,
+This is a target layout to build toward incrementally. As of P0-E2-S6,
 `lib/supabase/`, `lib/domain/{profile,money,assets,currency,receivables,
-liabilities,goals}/`, `supabase/migrations/`, and
+liabilities,goals,rules,obligations}/`, `supabase/migrations/`, and
 `supabase/tests/{shared,rls,money,currency,assets,receivables,liabilities,
-goals}/` exist for real. `lib/domain/currency/` (types, repository,
-format, conversion) is the one shared currency stack Profile/Money/
-Assets/Receivables/Liabilities/Goals all import from — never duplicated
-per domain, per
+goals,rules}/` exist for real. `lib/domain/currency/` (types, repository,
+format, conversion) is the one shared currency stack every domain imports
+from — never duplicated per domain, per
 [MULTI_CURRENCY_MODEL.md §13](./MULTI_CURRENCY_MODEL.md#13-assets-reuse-the-same-currency-stack--one-shared-domain-not-a-second-one),
 [§16](./MULTI_CURRENCY_MODEL.md#16-receivables-and-liabilities-reuse-the-same-currency-stack),
+[§18](./MULTI_CURRENCY_MODEL.md#18-goals-same-currency-allocation-and-the-shared-currency-stack),
 and
-[§18](./MULTI_CURRENCY_MODEL.md#18-goals-same-currency-allocation-and-the-shared-currency-stack).
-`lib/types/` and the rest of `lib/domain/` (Decisions, Financial Rules)
-remain future work, created when their owning phase needs them:
+[§21](./MULTI_CURRENCY_MODEL.md#21-obligations-and-overrides-currency-handling-reuses-the-same-stack).
+`lib/types/` and the rest of `lib/domain/` (Decisions) remain future work,
+created when their owning phase needs them:
 
 ```
 app/                    Next.js routes (Home, Money, Quick Add, Assets,
@@ -119,17 +119,20 @@ is `asset_summary()`/`asset_native_currency_totals()`/
 `liability_summary()`/`liability_native_currency_totals()`; goal
 allocation state (P0-E2-S5) is `goal_summary()`/
 `goal_native_currency_totals()`/`goal_protected_allocation_totals()`/
-`goal_bucket_shortfalls()`/`goal_required_pace()` (all SQL functions,
-`lib/domain/{money,assets,receivables,liabilities,goals}/repository.ts`'s
-thin wrappers) — `/money`, `/assets`, `/receivables`, `/liabilities`,
-`/goals`, and any future consumer (Home, Decisions) call these, none
-re-sums `cash_movements`, `asset_valuations`/`asset_basis_events`,
-`receivable_ledger_events`, `liability_principal_events`, or
-`goal_allocation_events` independently. Net worth, Safe to Deploy,
-obligations, and recurring income remain future work — no Financial Rules
-schema exists yet, and Goals' own recurring-income measurement type
-deliberately returns "not calculated" rather than fabricating a Recurring
-Income summary this phase (see FINANCIAL_DOMAIN_MODEL.md §27).
+`goal_bucket_shortfalls()`/`goal_required_pace()`; Safe to Deploy and
+upcoming obligations (P0-E2-S6) are `safe_to_deploy_by_currency()`/
+`evaluate_proposed_cash_use()`/`obligation_summary()`/
+`upcoming_obligations()` (all SQL functions,
+`lib/domain/{money,assets,receivables,liabilities,goals,rules,
+obligations}/repository.ts`'s thin wrappers) — `/money`, `/assets`,
+`/receivables`, `/liabilities`, `/goals`, `/rules`, and any future
+consumer (Home, Decisions) call these, none re-sums `cash_movements`,
+`asset_valuations`/`asset_basis_events`, `receivable_ledger_events`,
+`liability_principal_events`, `goal_allocation_events`, or `obligations`
+independently. Net worth and recurring income remain future work; Goals'
+own recurring-income measurement type deliberately returns "not
+calculated" rather than fabricating a Recurring Income summary (see
+FINANCIAL_DOMAIN_MODEL.md §27).
 
 ## 5. Financial event / audit layer
 
@@ -164,6 +167,15 @@ construction. This is the one domain so far that stays entirely outside
 this layer, which is the correct outcome for a domain whose core principle
 is "does not own cash." See
 [FINANCIAL_DOMAIN_MODEL.md §26](./FINANCIAL_DOMAIN_MODEL.md#26-cash-allocation-capacity-and-the-allocation-ledger-p0-e2-s5).
+
+**Also NOT extended for Financial Rules & Obligations (P0-E2-S6).**
+Configuring a rule, recording an obligation, and recording a cash-use
+override all leave `financial_events`/`cash_movements` untouched — Safe
+to Deploy is a derived read model over existing state, not a new source
+of financial events. Even `cash_use_overrides` (an audit record) never
+writes here: it records that the user acknowledged a conflict, not that
+money moved. See
+[FINANCIAL_DOMAIN_MODEL.md §33](./FINANCIAL_DOMAIN_MODEL.md#33-override-audit-p0-e2-s6).
 
 ## 6. Multi-currency posture
 

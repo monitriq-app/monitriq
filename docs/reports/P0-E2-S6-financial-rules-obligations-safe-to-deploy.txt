@@ -1,0 +1,575 @@
+MONATRIQ — PHASE REPORT
+P0-E2-S6 — FINANCIAL RULES, OBLIGATIONS, PROTECTED-FUND EVALUATION &
+SAFE-TO-DEPLOY ENGINE
+========================================================================
+
+1. PHASE
+------------------------------------------------------------------------
+P0-E2-S6 — Financial Rules, Obligations, Protected-Fund Evaluation &
+Safe-to-Deploy Engine.
+
+2. STATUS
+------------------------------------------------------------------------
+COMPLETE. All 63 test-matrix items are covered by the 69 assertions in
+the new Rules/Obligations suite; all eight domain suites pass after a
+fresh `supabase db reset` (273/273 total). Lint, typecheck (app and test
+harness), and both production-build modes pass. The migration was
+deployed to the real remote "Monatriq Dev" project and its sync was
+verified. No code was committed or pushed — the working tree is fully
+unstaged, as instructed.
+
+3. OBJECTIVE
+------------------------------------------------------------------------
+Build Monatriq's first Financial Rules and Obligations engine, able to
+answer: what commitments has the user explicitly recorded; what cash has
+the user explicitly protected; what liquidity floor has the user
+explicitly configured; what would a proposed use of cash conflict with;
+and how much cash, by native currency, remains potentially deployable
+after those constraints — without ever inventing a financial threshold.
+Until a rule is explicitly configured, every dependent calculation
+reports "Not configured," never a silently-assumed heuristic.
+
+4. REPOSITORY STATE
+------------------------------------------------------------------------
+Branch: main. Working tree: 8 modified files, 7 new
+directories/files (untracked), all unstaged, nothing committed. This
+builds on top of P0-E2-S4 and P0-E2-S5's still-uncommitted changes, per
+the standing "do not commit, stop for review" instruction across recent
+phases. Git identity: user "maaklin" <maaklinapp@gmail.com> (unchanged;
+not used this phase since nothing was committed).
+
+5. SUPABASE ENVIRONMENT
+------------------------------------------------------------------------
+Local: Docker-based Supabase stack (`npm run db:start`), reset twice this
+phase via `supabase db reset`, applying all 7 migrations from a clean
+state both times.
+
+Remote: "monatriq's Project" (ref mvnwrkfcszazqqccmmxq), already linked
+at the start of this phase (confirmed in P0-E2-S3, carried forward
+through P0-E2-S4/S5 — no new confirmation was required or sought this
+phase). Treated throughout as DEVELOPMENT, never production. `supabase
+db reset` was never run against it.
+
+6. FILES CREATED
+------------------------------------------------------------------------
+supabase/migrations/20260923180000_create_rules_obligations_domain.sql
+lib/domain/rules/types.ts
+lib/domain/rules/repository.ts
+lib/domain/rules/aggregate.ts
+lib/domain/obligations/types.ts
+lib/domain/obligations/repository.ts
+app/(app)/rules/page.tsx
+components/rules/SafeToDeployPanel.tsx
+components/rules/MinimumCashFloorList.tsx
+components/rules/MinimumCashFloorForm.tsx
+components/rules/CashUseEvaluatorForm.tsx
+components/obligations/ObligationList.tsx
+components/obligations/CreateObligationForm.tsx
+components/obligations/UpcomingObligationsList.tsx
+supabase/tests/rules/run.ts
+docs/reports/P0-E2-S6-financial-rules-obligations-safe-to-deploy.txt (this file)
+
+7. FILES MODIFIED
+------------------------------------------------------------------------
+components/layout/AppShell.tsx           (+3: Rules nav link)
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md   (+187: §11-13 pointers, §29-33)
+docs/architecture/MULTI_CURRENCY_MODEL.md     (+41: §19-21)
+docs/architecture/SYSTEM_ARCHITECTURE.md      (+52: repository layout, §4, §5)
+docs/security/SECURITY_AND_RLS_PRINCIPLES.md  (+57: §17)
+docs/project/BUILD_STATE.md                   (rewritten for this phase)
+lib/supabase/database.types.ts                (regenerated, +384)
+package.json                                  (test:rules script)
+
+8. MIGRATIONS
+------------------------------------------------------------------------
+One new migration this phase:
+supabase/migrations/20260923180000_create_rules_obligations_domain.sql
+(8 sections — see §9-23 below for content summary). Reproducible from
+`supabase db reset` — applied cleanly at the schema level on both fresh
+resets this phase. Two real logic/formatting bugs were caught and fixed
+via the test suite before the migration reached its final state (see
+§35 Assumptions and the Architecture changes section of BUILD_STATE.md):
+an ambiguous-column-reference bug in the evaluator function, and a
+NUMERIC display-scale bug affecting roughly a dozen expressions across
+four functions. Local migration history (7 files) matches remote
+exactly, confirmed via `supabase migration list --linked`.
+
+9. FINANCIAL-RULE ARCHITECTURE
+------------------------------------------------------------------------
+`financial_rules` (id, user_id, rule_type, currency_code, status,
+created_at, updated_at) is the identity/slot for one (user, rule_type,
+currency) configuration. `rule_type` is a CHECK-constrained, extensible
+list — only `'minimum_cash_floor'` this phase — so future rule types
+(maximum_capital_per_asset, maximum_debt_payment_ratio,
+maximum_active_ventures, ...) can be added without restructuring the
+table. A unique index on (user_id, rule_type, currency_code) means each
+currency has at most one identity row per rule type ever; deactivating
+(status='inactive') preserves it rather than deleting it, and
+reactivating (`create_financial_rule()`) reuses the same identity row.
+
+10. RULE-HISTORY/VERSION STRATEGY
+------------------------------------------------------------------------
+`financial_rule_versions` is append-only: a new row is a new version of
+the threshold — old thresholds are never overwritten. The current
+threshold for a rule is always its latest version (by effective_at). This
+is the exact same "identity + append-only versioned value" pattern
+P0-E2-S5's `goals`/`goal_target_history` established, reused rather than
+reinvented — proving the pattern generalizes. Verified explicitly:
+recording three successive threshold changes (2000 -> 2500 -> 3000, the
+middle one via reactivation) preserves all three as separately-readable
+history rows.
+
+11. MINIMUM-CASH-FLOOR MODEL
+------------------------------------------------------------------------
+A minimum cash floor is an absolute, per-currency retained-cash
+threshold — never a single cross-currency figure. It is purely a
+calculation constraint: `create_financial_rule()`/
+`record_financial_rule_version()` never move or lock cash, never touch
+`financial_events`/`cash_movements`. An explicit zero floor
+(`threshold_value = 0`) is structurally distinct from "no rule
+configured" — a currency with no active rule row (with at least one
+version) reports `not_configured`; a currency with an active rule whose
+latest version is exactly 0 reports `calculated` with a real zero
+requirement. Verified explicitly with a dedicated NZD scenario: cash
+existed with no rule (not_configured), then an explicit zero floor was
+set (calculated, safe_to_deploy = full liquid cash).
+
+12. OBLIGATION MODEL
+------------------------------------------------------------------------
+`obligations` (id, user_id, name, description, currency_code, amount,
+due_date, status, is_protected, funding_goal_id, created_at, updated_at)
+— a plain user-owned record, never inferred or scraped from Money
+activity. Status is restrained to active/paid/cancelled/archived; there
+is no stored urgency label. "Overdue" is always derived
+(`obligation_summary()`: status='active' and due_date < today in the
+caller's profile timezone) — no `is_overdue` column exists anywhere to
+drift out of sync. Marking an obligation "paid" is organizational
+metadata only: `updateObligation()` never creates a
+`financial_events`/`cash_movements` row (verified explicitly); a future
+phase may add an optional link to a real Money event, but none is
+fabricated this phase. `is_protected` defaults to `false` at the database
+level on every insert path — an explicit, visible, user-editable choice,
+never auto-true.
+
+13. GOAL-LINKED OBLIGATION MODEL
+------------------------------------------------------------------------
+An obligation may optionally set `funding_goal_id`. `prepare_obligation()`
+(a BEFORE INSERT OR UPDATE trigger) validates three things on every
+write, not just at creation: the goal belongs to the same user, the
+obligation's currency exactly equals the goal's currency, and the goal's
+`measurement_type` is one that actually accepts monetary funding
+(`cash_target`/`debt_balance_target` — the same two types Goals itself
+allows allocation into). The `obligations_insert_own`/
+`obligations_update_own` RLS policies independently re-check the
+cross-tenant EXISTS condition, so even a raw insert bypassing
+`create_obligation()` cannot link to another user's goal. Verified
+explicitly: currency mismatch rejected, cross-tenant goal link rejected.
+
+14. OBLIGATION COVERAGE / DOUBLE-COUNT PREVENTION
+------------------------------------------------------------------------
+`rules_uncovered_protected_obligations()` aggregates ALL protected,
+active, linked obligations PER GOAL first (grouping by
+(currency_code, funding_goal_id)) before comparing the combined total
+against that goal's backed protected allocation
+(`goal_backed_protected_allocation()`) — only the amount by which the
+AGGREGATE exceeds the backing becomes an additional retained-cash
+requirement. This specifically prevents two obligations sharing one goal
+from each independently claiming the goal's full backing. Verified with
+a worked CHF scenario: a Tuition Goal backed at 8,000, first a 6,000
+linked obligation (fully covered, uncovered=0, no double-count against
+the goal's own 8,000 protected_goal_cash), then a second 5,000 linked
+obligation added (combined 11,000 vs backing 8,000 -> uncovered
+correctly reports 3,000, not 0 or 5,000). An obligation with no
+`funding_goal_id` has no goal backing to draw on at all — its full
+amount is always uncovered.
+
+15. BACKED-PROTECTED-CASH MODEL
+------------------------------------------------------------------------
+A goal allocation can nominally exceed the real cash left in its bucket
+after later spending (the allocation-shortfall concept established in
+P0-E2-S5). `protected_goal_cash` (the currency-level Safe-to-Deploy term)
+never uses the nominal allocation: per bucket, backed = LEAST(protected
+allocation total in that bucket, bucket's actual balance), summed across
+the user's buckets in that currency. Protected allocations have first
+claim on real cash ahead of non-protected allocations in the same
+bucket — a deliberate, documented precedence choice (protection signals
+the higher-priority claim). When splitting a bucket's backed total back
+down to INDIVIDUAL competing protected goals (needed only for
+per-goal obligation-coverage math, not the currency-level formula),
+`goal_backed_protected_allocation()` uses a pro-rata split by each goal's
+share of the bucket's total protected allocation — a deterministic,
+priority-free rule chosen specifically per the brief's "avoid inventing
+priority where possible" instruction, rather than an arbitrary ordering.
+Verified against the phase brief's own worked example exactly: two
+protected goals (4,000 + 3,000 = 7,000 nominal) sharing one bucket funded
+to 7,000, then spent down to 5,000 real balance via ordinary Money
+activity -> backed protected cash for the currency correctly reports
+5,000, never the imaginary 7,000.
+
+16. ALLOCATION-SHORTFALL INTEGRATION
+------------------------------------------------------------------------
+The Goals domain's `goal_bucket_shortfalls()` (P0-E2-S5) is reused
+directly on `/rules` via the existing `ShortfallBanner` component —
+unmodified, confirming it was genuinely domain-agnostic. Within the
+Safe-to-Deploy formula itself, shortfall integration is implicit in the
+backed-protected-cash calculation (§15): a bucket's shortfall is exactly
+why its contribution to `protected_goal_cash` is capped at its real
+balance rather than the nominal allocation.
+
+17. SAFE-TO-DEPLOY FORMULA
+------------------------------------------------------------------------
+`safe_to_deploy_by_currency()` computes, per currency, exactly the
+specified formula:
+  protected_commitments   = protected_goal_cash + uncovered_protected_obligations
+  required_retained_cash  = MAX(minimum_cash_floor, protected_commitments)
+  safe_to_deploy           = MAX(liquid_cash - required_retained_cash, 0)
+  retained_deficit         = MAX(required_retained_cash - liquid_cash, 0)
+MAX, never SUM — verified explicitly with the brief's own worked example
+(cash 10,000, protected goal cash 4,000, uncovered obligations 1,000,
+floor 3,000 -> protected_commitments 5,000, required_retained MAX(3000,
+5000)=5000, safe_to_deploy 5,000 — not 8,000, which a SUM would
+incorrectly produce) and its floor-dominant variant (floor 7,000 ->
+required_retained 7,000, safe_to_deploy 3,000). `safe_to_deploy` always
+clamps at zero; `retained_deficit` is exposed separately and is never
+hidden by the clamp (verified: cash 3,000 against required 5,000 reports
+both `safe_to_deploy=0` and `retained_deficit=2,000` simultaneously).
+
+18. NOT-CONFIGURED BEHAVIOR
+------------------------------------------------------------------------
+A currency with cash but no active minimum_cash_floor rule reports
+`status='not_configured'`; every floor-dependent field
+(minimumCashFloor, requiredRetainedCash, safeToDeploy, retainedDeficit)
+is null — never a fabricated zero floor. `liquidCash`/`protectedGoalCash`/
+`uncoveredProtectedObligations` remain populated regardless (they don't
+depend on a floor existing), so the UI can still show honest partial
+information. Verified explicitly across the whole suite: multiple
+currencies coexist in one `safe_to_deploy_by_currency()` result set with
+some `calculated` and others `not_configured` simultaneously.
+
+19. RETAINED-DEFICIT MODEL
+------------------------------------------------------------------------
+Computed inline as part of `safe_to_deploy_by_currency()`'s single query
+(§17) — `MAX(required_retained_cash - liquid_cash, 0)` — rather than a
+separate function, since it shares every input the main formula already
+computes. Present as its own column, always populated when a currency is
+`calculated` (0 when there is no deficit), so the UI can surface it
+distinctly from the deployable figure without re-deriving it.
+
+20. MULTI-CURRENCY BEHAVIOR
+------------------------------------------------------------------------
+Every rule, obligation, and Safe-to-Deploy row is scoped to one explicit
+currency — never a blended cross-currency figure. A user may configure
+entirely independent floors across as many currencies as they hold cash
+in (verified: separate USD/NGN/EUR/GBP/NZD/CAD/JPY/SGD/CHF/SEK/HKD/DKK/
+KWD/CZK/PLN configurations coexist independently across this suite's own
+test data, each with correct, uncontaminated figures). A reporting-
+currency consolidated figure
+(`aggregateSafeToDeployToReportingCurrency()` in
+`lib/domain/rules/aggregate.ts`) is available only when every relevant
+currency's Safe to Deploy is itself `calculated` AND every required FX
+rate is supplied, reusing `convertToReportingCurrency()` — no second FX
+implementation. Verified explicitly: an unconfigured currency present in
+the input set forces `not_calculated` even when a rate would have been
+available for it; a missing rate alone (all currencies calculated) also
+forces `not_calculated`; a complete rate set produces an exact converted
+total.
+
+21. PROPOSED-CASH-USE EVALUATOR
+------------------------------------------------------------------------
+`evaluate_proposed_cash_use(bucket_id, amount)` returns factual before/
+after figures (current/post-use balance, current/post-use protected
+allocation shortfall, currency Safe to Deploy before/after, retained
+deficit after) plus three neutral relationship labels — never
+approve/reject/recommend semantics (verified by an explicit test against
+an advisory-vocabulary blocklist). It is a pure read: calling it writes
+nothing. Documented scope limitation: the "after" recomputation reflects
+the proposed bucket's own contribution to protected backing and currency
+liquid cash, but does not recursively re-derive obligation coverage that
+depends on OTHER buckets funding the same goal — a genuine second-order
+effect deliberately left out per the brief's explicit "do not turn this
+into a reservation system" instruction. Any bucket ID is explicitly
+verified to belong to `auth.uid()` before any figure is computed or
+returned (verified: cross-tenant bucket evaluation rejected; anonymous
+invocation rejected via missing EXECUTE grant).
+
+22. RULE CONFLICT SEMANTICS
+------------------------------------------------------------------------
+Five statuses used across the domain: `aligned`, `attention`, `conflict`,
+`not_configured`, `insufficient_information` — describing a relationship,
+never deciding for the user. `minimum_cash_floor_status`: `conflict` when
+the post-use liquid cash would fall below the configured floor,
+`attention` when Safe to Deploy would decrease without an outright floor
+breach, `aligned` otherwise. `protected_goal_status`: `conflict` when the
+proposed use would newly impair or worsen this bucket's own protected
+allocation shortfall. `protected_obligation_status`: `attention` when the
+proposed use reduces this bucket's protected backing AND the bucket funds
+a goal with a linked protected obligation (the coarse, honest signal
+described in §21's scope limitation). All three report
+`not_configured`/`insufficient_information` when the currency has no
+active floor rule, since a full evaluation isn't meaningfully possible
+without it.
+
+23. OVERRIDE AUDIT MODEL
+------------------------------------------------------------------------
+`cash_use_overrides` (id, user_id, bucket_id, currency_code,
+proposed_amount, conflicts_snapshot jsonb, safe_to_deploy_before,
+safe_to_deploy_after, context_type, note, created_at). Recording one
+(`record_cash_use_override()`) calls `evaluate_proposed_cash_use()` for a
+fresh snapshot at that moment, freezes its conflict labels/figures into
+the immutable `conflicts_snapshot` JSONB column, and stores the before/
+after Safe-to-Deploy figures as real NUMERIC columns (not parsed from the
+JSON for any further arithmetic — the JSONB is a frozen record, never an
+authoritative amount store). No `UPDATE`/`DELETE` grant exists on this
+table at all — append-only and immutable under every normal user flow,
+verified by a direct-update rejection test (denied by grant absence, not
+merely a policy). Recording an override never creates a
+`financial_events`/`cash_movements` row, never alters a goal, never
+alters an obligation — verified explicitly for all three. Cross-tenant
+override recording against another user's bucket is rejected.
+
+24. EXACT-DECIMAL STRATEGY
+------------------------------------------------------------------------
+All threshold/amount/snapshot columns are `numeric(20,6)`. No
+`real`/`double precision` anywhere. `financial_rule_versions.threshold_
+value` and `obligations.amount` both enforce their currency's
+`decimal_exponent` via BEFORE INSERT (and, for obligations, BEFORE
+UPDATE too) triggers — a fractional JPY threshold and a 4-decimal KWD
+obligation amount were both tested explicitly and rejected; a 3-decimal
+KWD amount was tested and accepted. All read functions cast monetary
+amounts to `::text`. A real bug was found and fixed this phase (see §35):
+bare-integer `0` fallbacks in `coalesce`/`greatest`/`least` lose NUMERIC's
+display scale once cast to text (`"0"` instead of `"0.000000"`) — every
+such fallback across the new migration is now explicitly cast
+`0::numeric(20, 6)`.
+
+25. RLS POLICIES
+------------------------------------------------------------------------
+Every new table (`financial_rules`, `financial_rule_versions`,
+`obligations`, `cash_use_overrides`) has RLS enabled immediately,
+deny-by-default, no policy granting anonymous access. All use
+`auth.uid() = user_id` ownership policies plus EXISTS-based cross-tenant
+checks wherever a row references another table.
+
+26. CROSS-DOMAIN REFERENCE PROTECTIONS
+------------------------------------------------------------------------
+`financial_rule_versions` -> `financial_rules` (EXISTS check). `obligations`
+-> `goals` via `funding_goal_id` (EXISTS check on both INSERT and UPDATE
+policies, plus trigger-level currency/measurement-type validation —
+tested with three angles: currency mismatch, cross-tenant goal, and via
+the trigger re-validating on every UPDATE too). `cash_use_overrides` ->
+`cash_buckets` via `bucket_id` (EXISTS check). Every evaluation/override
+RPC accepting a bucket ID explicitly re-verifies ownership via
+`auth.uid()` inside the function body before computing or returning
+anything — never trusting RLS alone as the only check, consistent with
+every prior domain's discipline.
+
+27. ADVERSARIAL TESTS
+------------------------------------------------------------------------
+Cross-user read/mutate isolation on rules and obligations, forged
+ownership rejection, anonymous access rejection (both table-level and
+RPC-level via missing EXECUTE grant), cross-tenant goal-linkage
+rejection, cross-tenant bucket evaluation rejection, cross-tenant
+override rejection, immutable-override-update rejection. All pass.
+
+28. FORMULA / FINANCIAL-CORRECTNESS TESTS
+------------------------------------------------------------------------
+Both of the phase brief's own worked examples reproduced exactly (§17);
+the underfunded-bucket backing example reproduced exactly (§15); the
+multi-obligation-per-goal double-count-prevention scenario (§14);
+MAX-not-SUM verified explicitly; zero-clamp and deficit-exposure verified
+simultaneously; multiple buckets in one currency aggregating correctly;
+multiple currencies remaining completely separate within one result set;
+reporting-currency aggregation both blocked (missing rate/unconfigured
+currency) and successful (exact converted total) cases. All pass with
+exact string-decimal assertions, no float tolerance.
+
+29. FINANCIAL-INVARIANCE TESTS
+------------------------------------------------------------------------
+Rule creation/version change, obligation creation, marking an obligation
+paid, and recording an override are all verified to cause zero
+`financial_events`/`cash_movements` change (direct before/after bucket-
+balance comparison). Recording an override is additionally verified to
+cause zero goal-allocation-event change and zero obligation mutation.
+Every one of these is asserted by direct before/after comparison against
+real database state, not inferred from the absence of an error.
+
+30. REGRESSION TESTS
+------------------------------------------------------------------------
+All seven prior suites re-run against the same fresh database this
+phase: Profile/RLS 20/20, Money 37/37, Currency 11/11, Assets 28/28,
+Receivables 27/27, Liabilities 25/25, Goals 56/56 — all still pass,
+confirming the new migration did not regress any existing domain.
+
+31. APPLICATION INTEGRATION
+------------------------------------------------------------------------
+Minimal, temporary `/rules` route following the established
+`getCurrentUser()` guard-first Server Component pattern. Sections:
+allocation-shortfall banner (reused unmodified from Goals), Safe to
+Deploy (an inspectable breakdown table — Cash / Protected Commitments /
+Minimum Cash Floor / Required Retained / Safe to Deploy, per currency,
+per the brief's explicit "make the calculation inspectable" instruction),
+Minimum Cash Floor by Currency (list + set/update form), Upcoming
+Obligations, All Obligations, Add Obligation (with an explicit,
+unchecked-by-default Protected checkbox and an optional funding-goal
+picker filtered to compatible goal types/currency), Cash Use Evaluator
+(bucket + amount -> factual before/after breakdown with neutral labels,
+plus a "Continue Anyway" override-recording action shown only when a
+conflict exists). No CRM/final-Stitch features. New users see "No
+minimum cash floor configured yet." / "No obligations yet." — no seeded
+or demo amounts anywhere in the UI or its data path. Copy uses plain
+financial language throughout (Minimum Cash Floor, Protected Cash,
+Safe to Deploy, Not configured, Conflict, Continue Anyway) — no
+"Financial Intelligence Score"/"Optimal Capital"-style language anywhere.
+
+32. GENERATED TYPES
+------------------------------------------------------------------------
+`lib/supabase/database.types.ts` regenerated via `supabase gen types
+typescript --local` after the final migration state (following a fresh
+`db reset`). The AUTO-GENERATED header comment is present. No stray CLI
+output lines in the file.
+
+33. SECURITY REVIEW
+------------------------------------------------------------------------
+All new RPCs are `SECURITY INVOKER`. No new `SECURITY DEFINER` function
+was introduced this phase. Every RPC derives ownership from `auth.uid()`
+exclusively — no function trusts a caller-supplied user id. Service-role
+key usage is unchanged: still confined to `supabase/tests/shared/`, still
+named `SUPABASE_TEST_SERVICE_ROLE_KEY`, still guarded by the localhost-
+only refusal in `supabase/tests/shared/env.ts` (untouched this phase).
+grep across app/components/lib for service-role/service_role strings:
+zero matches outside the test harness.
+
+34. REMOTE MIGRATION STATUS
+------------------------------------------------------------------------
+`supabase db push --linked --dry-run` reviewed (confirmed exactly one new
+migration pending — this phase's), then `supabase db push --linked
+--yes`. `supabase migration list --linked` confirms all 7 local migration
+timestamps match remote exactly. The same benign pg-delta
+catalog-caching warning seen in every prior remote push (missing
+certificate file inside the CLI's own sandbox) appeared again and did not
+affect schema application. No `supabase db reset` was ever run against
+remote.
+
+35. VALIDATION RESULTS
+------------------------------------------------------------------------
+- Fresh `supabase db reset` (x2 this phase): succeeded, all 7 migrations
+  applied cleanly both times.
+- Full test suite (8 suites): 273/273 assertions passed (Profile 20,
+  Money 37, Currency 11, Assets 28, Receivables 27, Liabilities 25,
+  Goals 56, Rules/Obligations 69).
+- Two real bugs were found and fixed via the FIRST test run against this
+  migration (before it was considered final), both confirmed absent on
+  every subsequent run: (1) an ambiguous "currency_code" column reference
+  inside `evaluate_proposed_cash_use()` caused by `RETURNS TABLE`'s
+  implicit output-column variables colliding with an inner query's
+  column of the same name — fixed by aliasing; (2) bare-integer `0`
+  fallbacks in `coalesce`/`greatest`/`least` losing NUMERIC's display
+  scale once cast to text, affecting ~12 expressions across
+  `goal_backed_protected_allocation()`, `rules_uncovered_protected_
+  obligations()`, `safe_to_deploy_by_currency()`, and
+  `evaluate_proposed_cash_use()` — fixed by explicit `0::numeric(20, 6)`
+  casts everywhere. Both are documented in
+  `docs/security/SECURITY_AND_RLS_PRINCIPLES.md §17` as rules for future
+  migrations.
+- Double-counting tests: goal-linked obligation coverage (single and
+  multiple obligations sharing one goal) both verified exact.
+- Multi-currency tests: separation and reporting-currency aggregation
+  both verified.
+- Cross-tenant tests: rules, obligations, goal linkage, bucket
+  evaluation, and overrides all verified rejected.
+- Override audit tests: immutability, zero side effects on Money/Goals/
+  Obligations, all verified.
+- Exact-decimal tests: JPY floor precision, KWD obligation precision (3
+  accepted, 4 rejected), both verified.
+- `npm run lint`: clean, zero warnings.
+- `npx tsc --noEmit` (app) and `npx tsc --noEmit -p
+  supabase/tests/tsconfig.json` (test harness): clean, zero errors.
+- `npm run build`: succeeds with real Supabase config — `/rules` renders
+  as a dynamic (ƒ) route.
+- `npm run build` with `.env.local` removed: succeeds — `/rules`
+  correctly degrades to a static (○) route redirecting to /login.
+- Service-role exposure search (app/components/lib): zero matches.
+- Hardcoded prototype-data / invented-heuristic-threshold search
+  (rules/obligations app code, searching for common generic percentages
+  and "months of expenses" language): zero matches.
+- Capital Compass production-source search: zero matches (only the
+  pre-existing historical prohibition note in PRODUCT_DEFINITION.md).
+- Remote migration dry-run: reviewed before push, confirmed additive and
+  safe (exactly one new migration).
+- Final `git status`: clean, fully unstaged, nothing committed.
+
+36. ASSUMPTIONS
+------------------------------------------------------------------------
+- The remote "Monatriq Dev" project identity (confirmed in P0-E2-S3)
+  remains valid and did not need re-confirmation this phase.
+- Every rule this phase is currency-scoped (matches the brief's explicit
+  "Rules are per currency. Do not use a single cross-currency floor");
+  a future currency-independent rule type would need schema revisited
+  (recorded as Open Question 11).
+- The pro-rata split for backed protected allocation across multiple
+  competing protected goals sharing one underfunded bucket is a
+  deliberate, documented interpretation of "avoid inventing priority
+  where possible" — a defensible choice among several, not the only
+  possible one.
+- The evaluator's documented second-order scope limitation (not
+  recursively re-deriving obligation coverage across a goal's other
+  buckets) is a deliberate, documented interpretation of "do not turn
+  this into a reservation system," not an oversight.
+- `minimum_cash_floor_status`'s `attention` tier (Safe to Deploy
+  decreases without an outright floor breach) is a factual, non-
+  fabricated-threshold signal — it does not invent a numeric percentage
+  or margin, only reports a true directional effect.
+
+37. OPEN QUESTIONS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Open questions" (12 items) — most
+relevant new ones this phase:
+  - Should the evaluator's second-order scope limitation be extended in
+    a future phase?
+  - Should `rule_type` grow additional values, and would any need a
+    currency-independent variant?
+  - When Decisions is built, does it consume the evaluator directly or
+    need a richer, decision-context-aware variant?
+
+38. RISKS
+------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md "Risks" (5 items) — most notable: the
+evaluator's documented second-order scope limitation means a proposed
+cash use that would impair a goal's backing via a DIFFERENT bucket than
+the one being spent from is not fully reflected in its conflict labels —
+a coarse, honest, but incomplete signal. Remote schema is deployed but
+genuinely untested there, unchanged posture from every prior phase.
+
+39. GIT DIFF SUMMARY
+------------------------------------------------------------------------
+8 files changed, 878 insertions(+), 176 deletions(-):
+  components/layout/AppShell.tsx               |   3 +
+  docs/architecture/FINANCIAL_DOMAIN_MODEL.md  | 187 +++++++++
+  docs/architecture/MULTI_CURRENCY_MODEL.md    |  41 +++
+  docs/architecture/SYSTEM_ARCHITECTURE.md     |  52 ++--
+  docs/project/BUILD_STATE.md                  | 327 ++++++++-------
+  docs/security/SECURITY_AND_RLS_PRINCIPLES.md |  57 +++
+  lib/supabase/database.types.ts               | 384 +++++++++++++++++++
+  package.json                                 |   3 +-
+Plus 7 new untracked paths (migration, two domain lib dirs, one app
+route, two component dirs, one test suite dir) and this report. This
+diff is layered on top of P0-E2-S4 and P0-E2-S5's still-uncommitted
+changes, per the standing "do not commit" instruction across recent
+phases.
+
+40. GIT STATUS
+------------------------------------------------------------------------
+Branch: main. Nothing staged. Nothing committed. Nothing pushed. Working
+tree exactly as listed in §39 plus the untracked additions in §6 (and
+prior phases' carried-forward uncommitted changes) — no accidental
+staging occurred.
+
+41. RECOMMENDED NEXT PHASE
+------------------------------------------------------------------------
+P0-E3-S1 — Home aggregation layer, now with six real domains (Money,
+Assets, Receivables, Liabilities, Goals, Rules/Obligations/Safe-to-
+Deploy) to aggregate — the first phase where Home can show a genuinely
+complete financial position, including Safe to Deploy, without inventing
+a new calculation of its own. Alternatively, Decisions, now that Safe to
+Deploy and the proposed cash-use evaluator exist for it to consume
+rather than reimplement.

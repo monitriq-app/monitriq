@@ -308,6 +308,63 @@ export type Database = {
           },
         ]
       }
+      cash_use_overrides: {
+        Row: {
+          bucket_id: string
+          conflicts_snapshot: Json
+          context_type: string | null
+          created_at: string
+          currency_code: string
+          id: string
+          note: string | null
+          proposed_amount: number
+          safe_to_deploy_after: number | null
+          safe_to_deploy_before: number | null
+          user_id: string
+        }
+        Insert: {
+          bucket_id: string
+          conflicts_snapshot: Json
+          context_type?: string | null
+          created_at?: string
+          currency_code: string
+          id?: string
+          note?: string | null
+          proposed_amount: number
+          safe_to_deploy_after?: number | null
+          safe_to_deploy_before?: number | null
+          user_id: string
+        }
+        Update: {
+          bucket_id?: string
+          conflicts_snapshot?: Json
+          context_type?: string | null
+          created_at?: string
+          currency_code?: string
+          id?: string
+          note?: string | null
+          proposed_amount?: number
+          safe_to_deploy_after?: number | null
+          safe_to_deploy_before?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_use_overrides_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "cash_buckets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_use_overrides_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       currencies: {
         Row: {
           code: string
@@ -431,6 +488,82 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      financial_rule_versions: {
+        Row: {
+          created_at: string
+          effective_at: string
+          id: string
+          note: string | null
+          rule_id: string
+          threshold_value: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          effective_at?: string
+          id?: string
+          note?: string | null
+          rule_id: string
+          threshold_value: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          effective_at?: string
+          id?: string
+          note?: string | null
+          rule_id?: string
+          threshold_value?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_rule_versions_rule_id_fkey"
+            columns: ["rule_id"]
+            isOneToOne: false
+            referencedRelation: "financial_rules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      financial_rules: {
+        Row: {
+          created_at: string
+          currency_code: string
+          id: string
+          rule_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency_code: string
+          id?: string
+          rule_type: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency_code?: string
+          id?: string
+          rule_type?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_rules_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
       }
       fx_rates: {
         Row: {
@@ -927,6 +1060,66 @@ export type Database = {
         }
         Relationships: []
       }
+      obligations: {
+        Row: {
+          amount: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          due_date: string | null
+          funding_goal_id: string | null
+          id: string
+          is_protected: boolean
+          name: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency_code: string
+          description?: string | null
+          due_date?: string | null
+          funding_goal_id?: string | null
+          id?: string
+          is_protected?: boolean
+          name: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency_code?: string
+          description?: string | null
+          due_date?: string | null
+          funding_goal_id?: string | null
+          id?: string
+          is_protected?: boolean
+          name?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "obligations_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "obligations_funding_goal_id_fkey"
+            columns: ["funding_goal_id"]
+            isOneToOne: false
+            referencedRelation: "goals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
@@ -1193,6 +1386,29 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_financial_rule: {
+        Args: {
+          p_currency_code: string
+          p_note?: string
+          p_rule_type: string
+          p_threshold_value: number
+        }
+        Returns: {
+          created_at: string
+          currency_code: string
+          id: string
+          rule_type: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_rules"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_goal: {
         Args: {
           p_currency_code?: string
@@ -1262,6 +1478,37 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      create_obligation: {
+        Args: {
+          p_amount: number
+          p_currency_code: string
+          p_description?: string
+          p_due_date?: string
+          p_funding_goal_id?: string
+          p_is_protected?: boolean
+          p_name: string
+        }
+        Returns: {
+          amount: number
+          created_at: string
+          currency_code: string
+          description: string | null
+          due_date: string | null
+          funding_goal_id: string | null
+          id: string
+          is_protected: boolean
+          name: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "obligations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       create_receivable: {
         Args: {
           p_currency_code: string
@@ -1291,6 +1538,45 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      evaluate_proposed_cash_use: {
+        Args: { p_amount: number; p_bucket_id: string }
+        Returns: {
+          bucket_id: string
+          currency_code: string
+          currency_safe_to_deploy_after: string
+          currency_safe_to_deploy_before: string
+          current_allocation_shortfall: string
+          current_balance: string
+          current_protected_allocation: string
+          minimum_cash_floor_status: string
+          post_use_allocation_shortfall: string
+          post_use_balance: string
+          proposed_amount: string
+          protected_goal_status: string
+          protected_obligation_status: string
+          retained_deficit_after: string
+        }[]
+      }
+      financial_rule_history: {
+        Args: { p_limit?: number; p_rule_id: string }
+        Returns: {
+          effective_at: string
+          id: string
+          note: string
+          threshold_value: string
+        }[]
+      }
+      financial_rule_summary: {
+        Args: never
+        Returns: {
+          currency_code: string
+          current_threshold: string
+          effective_at: string
+          rule_id: string
+          rule_type: string
+          status: string
+        }[]
+      }
       goal_allocated_total: { Args: { p_goal_id: string }; Returns: number }
       goal_allocation_history: {
         Args: { p_goal_id: string; p_limit?: number }
@@ -1303,6 +1589,10 @@ export type Database = {
           id: string
           note: string
         }[]
+      }
+      goal_backed_protected_allocation: {
+        Args: { p_goal_id: string }
+        Returns: number
       }
       goal_bucket_allocated_total: {
         Args: { p_bucket_id: string }
@@ -1468,6 +1758,22 @@ export type Database = {
           voided_at: string
         }[]
       }
+      obligation_summary: {
+        Args: never
+        Returns: {
+          amount: string
+          created_at: string
+          currency_code: string
+          description: string
+          due_date: string
+          funding_goal_id: string
+          is_overdue: boolean
+          is_protected: boolean
+          name: string
+          obligation_id: string
+          status: string
+        }[]
+      }
       receivable_ledger_history: {
         Args: { p_limit?: number }
         Returns: {
@@ -1562,6 +1868,33 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_cash_use_override: {
+        Args: {
+          p_amount: number
+          p_bucket_id: string
+          p_context_type?: string
+          p_note?: string
+        }
+        Returns: {
+          bucket_id: string
+          conflicts_snapshot: Json
+          context_type: string | null
+          created_at: string
+          currency_code: string
+          id: string
+          note: string | null
+          proposed_amount: number
+          safe_to_deploy_after: number | null
+          safe_to_deploy_before: number | null
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "cash_use_overrides"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       record_debt_payment: {
         Args: {
           p_bucket_id: string
@@ -1585,6 +1918,24 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "financial_operations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      record_financial_rule_version: {
+        Args: { p_note?: string; p_rule_id: string; p_threshold_value: number }
+        Returns: {
+          created_at: string
+          effective_at: string
+          id: string
+          note: string | null
+          rule_id: string
+          threshold_value: number
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "financial_rule_versions"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2014,7 +2365,40 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      rules_uncovered_protected_obligations: {
+        Args: never
+        Returns: {
+          currency_code: string
+          uncovered_amount: number
+        }[]
+      }
+      safe_to_deploy_by_currency: {
+        Args: never
+        Returns: {
+          currency_code: string
+          liquid_cash: string
+          minimum_cash_floor: string
+          protected_commitments: string
+          protected_goal_cash: string
+          required_retained_cash: string
+          retained_deficit: string
+          safe_to_deploy: string
+          status: string
+          uncovered_protected_obligations: string
+        }[]
+      }
       set_focus_goal: { Args: { p_goal_id?: string }; Returns: undefined }
+      upcoming_obligations: {
+        Args: { p_end?: string; p_start?: string }
+        Returns: {
+          amount: string
+          currency_code: string
+          due_date: string
+          is_protected: boolean
+          name: string
+          obligation_id: string
+        }[]
+      }
     }
     Enums: {
       [_ in never]: never

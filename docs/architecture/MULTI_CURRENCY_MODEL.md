@@ -326,3 +326,44 @@ from this particular total), and a missing reporting-currency rate means
 `goal_native_currency_totals()`'s own output into
 `convertToReportingCurrency()` with an empty rate map in
 `supabase/tests/goals/run.ts`.
+
+## 19. Financial Rules are per-currency, never a single cross-currency threshold
+
+A `minimum_cash_floor` rule always names an explicit `currency_code` — "a
+minimum cash floor" is meaningless without saying which currency, and
+Monatriq never collapses a USD floor and an NGN floor into one blended
+number. A user may configure entirely independent floors for as many
+currencies as they hold cash in (verified: separate USD/NGN/EUR/GBP/...
+configurations coexist, each with its own threshold and independent
+version history).
+
+## 20. Safe to Deploy is calculated per native currency, never blended
+
+`safe_to_deploy_by_currency()` returns one row per relevant currency —
+never a single summed figure. A currency with cash but no configured
+floor reports `status = 'not_configured'` and sits alongside other,
+`'calculated'` currencies in the very same result set (verified
+explicitly: USD `calculated`, CHF `not_configured`, in one call). See
+[FINANCIAL_DOMAIN_MODEL.md §31](./FINANCIAL_DOMAIN_MODEL.md#31-safe-to-deploy-formula-p0-e2-s6).
+
+A **reporting-currency** consolidated figure
+(`aggregateSafeToDeployToReportingCurrency()` in `lib/domain/rules/
+aggregate.ts`) is available only when every relevant currency's Safe to
+Deploy is itself `'calculated'` and every required FX rate is supplied —
+reusing `convertToReportingCurrency()` (§10), not a second conversion
+path. If even one relevant currency is `not_configured`, or one rate is
+missing, the reporting total is `not_calculated` — its true contribution
+is unknown, not merely unconverted, so guessing zero would be dishonest.
+See
+[FINANCIAL_DOMAIN_MODEL.md §32](./FINANCIAL_DOMAIN_MODEL.md#32-reporting-currency-safe-to-deploy-and-the-proposed-cash-use-evaluator-p0-e2-s6).
+
+## 21. Obligations and overrides: currency handling reuses the same stack
+
+`obligations.currency_code` follows the same registry, precision
+(BEFORE INSERT/UPDATE trigger checking `decimal_exponent`), and no-cross-
+currency-blending discipline as every other domain — a goal-linked
+obligation's currency must exactly equal its funding goal's currency
+(§18), enforced by trigger. `cash_use_overrides.currency_code` is derived
+server-side from the bucket at override time, never client-supplied.
+Neither table defines its own currency logic; both import from
+`lib/domain/currency/` exclusively.

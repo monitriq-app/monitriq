@@ -351,3 +351,60 @@ calling out explicitly:
   `record_goal_milestone()` exists as a narrow wrapper purely to keep the
   generated TypeScript `Insert` type honest about what the database will
   actually accept — not because the underlying grant+policy needed fixing.
+
+## 17. Established pattern: Financial Rules, Obligations & Safe to Deploy (P0-E2-S6)
+
+`supabase/migrations/*_create_rules_obligations_domain.sql` reuses every
+established pattern from §10-16 (rule+version history, EXISTS-based
+cross-tenant checks, SECURITY INVOKER throughout, column-grant discipline)
+across a sixth domain, and surfaces two new lessons plus one deliberate
+design choice worth recording:
+
+- **A `RETURNS TABLE(...)` plpgsql function's own output-column names are
+  implicitly in scope as variables inside its body — and can silently
+  collide with an identically-named column from a query in that body.**
+  `evaluate_proposed_cash_use()` declares `currency_code` as one of its
+  output columns; inside the function, `select * from safe_to_deploy_by_
+  currency() where currency_code = v_bucket.currency_code` raised
+  "column reference \"currency_code\" is ambiguous" — Postgres could not
+  tell whether the bare `currency_code` in the `WHERE` clause meant the
+  function's own implicit output variable or the called function's result
+  column of the same name. Caught by running the new test suite against a
+  real database (four evaluator tests failed with this exact error), fixed
+  by aliasing the inner query (`... s where s.currency_code = ...`).
+  **Rule going forward: any `RETURNS TABLE` plpgsql function that queries
+  another relation sharing one of its own output-column names must alias
+  that relation and qualify the reference explicitly** — the ambiguity is
+  invisible in a `LANGUAGE SQL` function (no implicit variables exist
+  there) and only appears in `LANGUAGE plpgsql` functions with a `RETURNS
+  TABLE` signature.
+- **A bare-integer fallback in `coalesce`/`greatest`/`least` silently
+  loses NUMERIC's display scale, and this only ever surfaces once the
+  result is cast to text.** `coalesce(sum(numeric_20_6_column), 0)`
+  returns exactly `0` (not `0.000000`) whenever the fallback fires,
+  because the literal `0` carries no scale information the way a value
+  computed from a `numeric(20,6)` column does — breaking the exact-decimal
+  string-transport contract (§ established throughout
+  `MULTI_CURRENCY_MODEL.md §6`) the instant that result is `::text`-cast
+  and compared against an expected `"0.000000"`. This affected roughly a
+  dozen expressions across `goal_backed_protected_allocation()`,
+  `rules_uncovered_protected_obligations()`, `safe_to_deploy_by_currency()`,
+  and `evaluate_proposed_cash_use()` simultaneously — caught the same way,
+  by running the real test suite rather than reasoning about the SQL on
+  paper. Fixed by casting every such fallback explicitly:
+  `coalesce(..., 0::numeric(20, 6))`. **Rule going forward: any bare `0`
+  literal used as a fallback/floor/ceiling in an expression that will be
+  `::text`-cast for monetary display must be written `0::numeric(20, 6)`,
+  never a bare literal.**
+- **Deterministic, documented precedence instead of an invented one, for
+  a genuinely underdetermined case.** When a cash bucket cannot fully back
+  all of its protected goal allocations, `goal_backed_protected_
+  allocation()` splits the bucket's actually-backed total across the
+  competing protected goals by pro-rata share, not by an arbitrary
+  priority order — a deliberate response to the phase brief's explicit
+  "avoid inventing priority where possible" instruction. This is a
+  product/financial-modeling decision, not a security control, but it is
+  recorded here because it is exactly the kind of "smallest strong
+  foundation, no invented heuristic" discipline this document's Financial
+  Rules sections (§ established pattern list) already expect of RLS/grant
+  design, applied to calculation design instead.
