@@ -5,23 +5,50 @@ Do not mark future phases complete ahead of time.
 
 ## Current phase
 
-P0-E3-S2 — Home / Command Center: Production UI, Responsive System &
-Theming.
+P0-E3-S3 — Money + Quick Add: Production UI.
 
 ## Current status
 
-**Complete**, with one explicitly documented limitation: no browser
-automation tool was available in this environment, so pixel-level visual/
-viewport/theme validation (does Light mode actually render correctly,
-does 320px actually avoid overflow, are touch targets actually 48px on
-screen) could not be executed and is not claimed as passed — see
-"Browser validation" below and the phase report's §45. Everything that
-COULD be verified without a browser (production build success in both
-Supabase-configured and unconfigured modes, dev-server boot + HTTP
-response inspection, compiled-CSS bundle inspection confirming the
-light-mode token block and next-themes' anti-flash script are present,
-and a comprehensive real-Postgres data-layer test suite covering Home's
-exact dependencies) was verified and is reported as such.
+**Complete**, with the same class of limitation as P0-E3-S2: no browser
+automation tool was available in this environment, so pixel-level
+visual/viewport/theme rendering could not be observed directly — see the
+phase report's §53. Everything verifiable without a browser (production
+build success both Supabase-configured and unconfigured, lint, both
+typecheck configs, and a real-Postgres regression suite covering every
+Money/Quick Add code path including two brand-new canonical read
+functions) was verified and is reported as such.
+
+Money (`app/(app)/money/page.tsx`) and Quick Add
+(`components/quick-add/`) are now Monatriq's production cash-flow
+screen and the shared bottom nav's central `+` destination, built
+against the approved references at `docs/reference/02-money/` and
+`docs/reference/03-quick-add/`. Every figure is read from Money's own
+canonical functions — `money_period_summary()`, `money_bucket_
+balances()`, `money_currency_totals()`, `money_recent_activity()`, and
+two new narrow additions this phase added the canonical way (see
+Migrations below): `money_weekly_summary()` (backs the real weekly Cash
+Flow chart — the reference's own chart, reproduced with real data
+instead of omitted, unlike Home's This Month chart in P0-E3-S2, because
+this phase's brief explicitly pre-authorized adding the smallest
+necessary read capability) and `money_category_breakdown()` (backs
+"Where Money Went"/"Cash In by Source", deliberately scoped to plain
+money_received/money_spent events only — receivable recovery, debt
+payments, and loan proceeds are real linked Receivables/Liabilities
+events with their own record and are structurally excluded from ever
+appearing as a generic category, proven by two dedicated tests). Quick
+Add's four flows call only pre-existing canonical mutations
+(record_money_received/spent, record_transfer/fx_transfer) or route to
+the real, already-existing linked domain function for the three special
+cases the phase brief called out: Receivable Recovery uses `record
+Recovery()` (Receivables) with a real receivable picker, Debt Payment
+uses `recordDebtPayment()` (Liabilities) with a real liability picker
+and a genuine principal/interest/fee split, and Asset Sale — which has
+no canonical mutation anywhere in Assets — is honestly deferred with a
+message and a link to `/assets`, never faked as generic income. A real,
+canonically-backed Undo (voidFinancialEvent, the same append-only
+correction used everywhere else) follows every successful Quick Add
+submission with a 5-second window, matching the approved reference's
+own "5s Undo" pattern.
 
 This is the first phase to build a real production screen. Home
 (`app/(app)/home/page.tsx`) is now Monatriq's production Command Center,
@@ -380,6 +407,42 @@ the way: a doc comment had quoted the reference's own prototype figure
 as a formatting example, caught by the automated prototype-data source
 audit and reworded).
 
+## Post-completion fix: theme provider React 19 / Next 16 compatibility
+
+After P0-E3-S3, `npm run dev` reported "Encountered a script tag while
+rendering React component" from `components/theme/ThemeProvider.tsx`.
+Confirmed as `next-themes@0.4.6`'s (the current latest stable release)
+unresolved React 19.2 bug — no fixed stable version exists upstream (its
+only newer tag, `1.0.0-beta.0`, was published in 2022, years before
+React 19). Migrated to `@teispace/next-themes@^3.0.2`, an actively
+maintained fork whose README explicitly documents and fixes this exact
+issue (its own issue #397/#387/#385) by injecting the anti-FOUC script
+via Next's `useServerInsertedHTML` instead of returning `<script>` JSX
+from a component. `attribute="data-theme"`/`defaultTheme="system"`/
+`enableSystem` are unchanged (source-compatible props); `storage="local"`
+was added explicitly since this fork defaults to hybrid cookie+
+localStorage, and `local` is required to preserve the exact prior
+device-local-only, no-cookie persistence the original P0-E3-S2 brief
+mandated. While verifying this fix in a real dev server, a genuine,
+separate, pre-existing crash was also found and fixed:
+`components/layout/AppShell.tsx`'s `QuickAddProvider` (added in
+P0-E3-S3) only wrapped `<main>`, not the `<header>`, so `DesktopNav`'s
+own Quick Add trigger threw "useQuickAdd must be used within
+QuickAddProvider" on every page render — invisible to lint/typecheck/
+build/the Postgres suite (none render this tree against a live request),
+caught only because starting a real dev server surfaced it in the
+server log. Fixed by moving the provider to wrap the whole shell. `npm
+run lint`/`npx tsc --noEmit`/`npm run build`: all clean. Browser
+verification of the absence of the specific console warning was NOT
+performed — no connected browser tool was available in this session
+(the built-in browser pane cannot reach a `localhost` server Claude
+starts itself; the Claude-in-Chrome extension was not connected) — the
+raw SSR HTML was inspected directly instead, confirming the new
+library's script is present, correctly configured, and injected outside
+the React tree exactly as its own documented fix describes. Full detail:
+the addendum appended to `docs/reports/P0-E3-S3-money-quick-add-
+production-ui.txt`.
+
 ## Files modified
 
 `app/(app)/home/page.tsx` (full production rewrite — was placeholder
@@ -420,7 +483,7 @@ introduced this phase.
 
 ## Migrations
 
-One new migration:
+**P0-E3-S2**:
 `supabase/migrations/20260927090000_add_asset_value_by_type.sql`. Zero
 new tables. One new function, `asset_value_by_type()` — `security
 invoker`, `stable`, the same "latest `estimated_current_value`,
@@ -428,6 +491,24 @@ non-archived" subquery `asset_native_currency_totals()` (P0-E2-S3) already
 uses, grouped by `(asset_type, currency_code)` instead of `currency_code`
 alone. `financial_position_by_currency()` (P0-E3-S1) is completely
 untouched. Applied cleanly on all three resets this phase.
+
+**P0-E3-S3**:
+`supabase/migrations/20260928090000_create_money_period_breakdowns.sql`.
+Zero new tables. Two new `security invoker`, `stable` functions,
+`money_weekly_summary(p_start, p_end)` and `money_category_breakdown
+(p_start, p_end)` — both reuse `money_period_summary()`'s own exact
+`cash_flow_class`-based classification (P0-E3-S1A) unchanged, grouping
+the SAME already-correct classification by week or by category instead
+of summing it across the whole period. Neither is a second source of
+financial truth. `money_period_summary()`/`resolve_period_bounds()`
+themselves are completely untouched. Both new functions `revoke ... from
+public, anon` / `grant execute ... to authenticated`, matching every
+other Money RPC. 9 new tests added to `supabase/tests/money/run.ts`
+(weekly bucketing, opening-balance/transfer exclusion, multi-currency
+separation, empty-period honesty, category labels, real Receivable
+Recovery/Debt Payment exclusion via the actual linked domain functions,
+cross-user isolation, anonymous denial) — applied cleanly on every reset
+this phase, 48/48 Money-suite assertions passing.
 
 ## Architecture changes
 
@@ -447,6 +528,23 @@ untouched. Applied cleanly on all three resets this phase.
   `docs/product/PRODUCT_DEFINITION.md` §3 — Financial Position, Rules,
   Receivables, and Liabilities remain fully real, working routes, just
   relocated to the account menu rather than deleted or hidden.
+- **Quick Add is a global overlay, not a Money-page feature (P0-E3-S3).**
+  `QuickAddProvider` is mounted once in `AppShell` (a small, bounded
+  amount of real Money data — buckets/balances/categories — is now
+  fetched on every authenticated page load, not just Money's own), so
+  the shared bottom nav's central `+` opens the real sheet from any
+  screen, matching the reference's own behavior of intercepting that
+  button globally. Desktop/tablet (where the mobile bottom nav is
+  `md:hidden`) got its own equivalent trigger in `DesktopNav`, since
+  Quick Add would otherwise be completely unreachable above the `md`
+  breakpoint.
+- **Special financial semantics are enforced by ROUTING, not by copy.**
+  Quick Add's Money Received/Money Spent forms don't just avoid
+  mislabeling Receivable Recovery/Asset Sale/Debt Payment — selecting
+  any of the three structurally switches the form to a different code
+  path (a real receivable/liability picker calling the real linked
+  mutation, or an honest deferred message) rather than relying on a
+  disclaimer next to a generic category dropdown.
 - **One genuinely missing read capability, added the canonical way.**
   `asset_value_by_type()` reuses Assets' own established valuation
   semantics with one more `GROUP BY` key — verified against
@@ -593,10 +691,12 @@ push, never `supabase db reset` against it.
 
 ## Next approved step
 
-Do not begin automatically. Home / Money / Quick Add redesign is
-explicitly NOT started. Recommended next phase (pending user review):
-either (a) real browser/device QA of Home before building further UI on
-an unverified visual foundation, or (b) continuing the production-UI
-rollout to Money (which already has the domain layer and would reuse the
-exact same AppShell/theme/responsive foundation this phase established)
-— or the user's own priority.
+Do not begin automatically. Assets production UI is explicitly NOT
+started (P0-E3-S3's own phase boundary forbids it). Recommended next
+phase (pending user review): either (a) real browser/device QA of Home
+AND Money before building further UI on an unverified visual foundation,
+or (b) continuing the production-UI rollout to Assets (which already has
+the domain layer and would reuse the exact same AppShell/theme/
+responsive/QuickAdd foundation these two phases established, including
+wiring the "Asset / Investment" Quick Add option's deferred Asset Sale
+path to a real mutation once one exists) — or the user's own priority.

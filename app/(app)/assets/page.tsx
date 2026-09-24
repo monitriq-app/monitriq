@@ -50,7 +50,7 @@ export default async function AssetsPage() {
         <AssetList assets={assets} assetTypes={assetTypesByCode} currencies={currenciesByCode} />
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section id="add-asset" className="flex flex-col gap-3 scroll-mt-20">
         <h2 className="text-sm font-medium text-text-secondary">Add Asset</h2>
         <AddAssetForm assetTypes={assetTypes} currencies={currencies} />
       </section>

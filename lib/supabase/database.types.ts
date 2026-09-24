@@ -1,7 +1,3 @@
-// AUTO-GENERATED — do not hand-edit.
-// Regenerate after any migration: supabase db reset && npm run db:types
-// (or, against a linked remote project: supabase gen types typescript --linked)
-
 export type Json =
   | string
   | number
@@ -2241,6 +2237,16 @@ export type Database = {
           currency_code: string
         }[]
       }
+      money_category_breakdown: {
+        Args: { p_end?: string; p_start?: string }
+        Returns: {
+          amount: string
+          category_code: string
+          category_label: string
+          currency_code: string
+          direction: string
+        }[]
+      }
       money_currency_totals: {
         Args: never
         Returns: {
@@ -2276,6 +2282,15 @@ export type Database = {
           received_category_code: string
           spending_category_code: string
           voided_at: string
+        }[]
+      }
+      money_weekly_summary: {
+        Args: { p_end?: string; p_start?: string }
+        Returns: {
+          cash_in: string
+          cash_out: string
+          currency_code: string
+          week_start: string
         }[]
       }
       obligation_summary: {

@@ -77,3 +77,35 @@ export interface MoneyPeriodSummary {
   periodEnd: string;
   currencies: MoneyPeriodCurrencySummary[];
 }
+
+/**
+ * One (week, native currency) pair's real cash_in/cash_out within a
+ * requested period — see money_weekly_summary() in the migration. Same
+ * classification as MoneyPeriodCurrencySummary, just grouped by week
+ * instead of summed across the whole period; never a second source of
+ * financial truth.
+ */
+export interface MoneyWeeklyBucket {
+  weekStart: string;
+  currencyCode: string;
+  cashIn: string;
+  cashOut: string;
+}
+
+export type MoneyCategoryDirection = "received" | "spent";
+
+/**
+ * One (direction, category, native currency) total within a requested
+ * period — see money_category_breakdown() in the migration. Deliberately
+ * scoped to plain money_received/money_spent events only; receivable
+ * recovery, debt payments, and loan proceeds are linked Receivables/
+ * Liabilities events with their own real record and are never folded
+ * into this generic category breakdown.
+ */
+export interface MoneyCategoryBreakdownItem {
+  direction: MoneyCategoryDirection;
+  categoryCode: string;
+  categoryLabel: string;
+  currencyCode: string;
+  amount: string;
+}

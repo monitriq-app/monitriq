@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Home, Wallet, PieChart, Compass, Target, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useQuickAdd } from "@/components/quick-add/QuickAddContext";
 
 const ITEMS = [
   { href: "/home", label: "Home", Icon: Home },
@@ -26,6 +27,7 @@ const ITEMS_AFTER = [
  */
 export function MobileBottomNav() {
   const pathname = usePathname();
+  const { open: openQuickAdd } = useQuickAdd();
 
   function isActive(href: string) {
     return pathname === href || pathname?.startsWith(`${href}/`);
@@ -53,13 +55,14 @@ export function MobileBottomNav() {
         ))}
 
         <div className="flex flex-1 items-center justify-center">
-          <Link
-            href="/money#record-money"
-            aria-label="Add money"
+          <button
+            type="button"
+            onClick={openQuickAdd}
+            aria-label="Add activity"
             className="relative -top-5 flex h-12 w-12 items-center justify-center rounded-full bg-accent-primary text-background shadow-md transition-transform active:scale-95"
           >
             <Plus size={23} aria-hidden="true" />
-          </Link>
+          </button>
         </div>
 
         {ITEMS_AFTER.map(({ href, label, Icon }) => (

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, PieChart, Compass, Target } from "lucide-react";
+import { Home, Wallet, PieChart, Compass, Target, Plus } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
+import { useQuickAdd } from "@/components/quick-add/QuickAddContext";
 
 const ITEMS = [
   { href: "/home", label: "Home", Icon: Home },
@@ -13,9 +14,16 @@ const ITEMS = [
   { href: "/goals", label: "Goals", Icon: Target },
 ] as const;
 
-/** Tablet/desktop primary navigation — the same conceptual five items as the mobile bottom nav (see MobileBottomNav.tsx). */
+/**
+ * Tablet/desktop primary navigation — the same conceptual five items as
+ * the mobile bottom nav (see MobileBottomNav.tsx), plus a real Quick Add
+ * trigger (P0-E3-S3): MobileBottomNav's central `+` is `md:hidden`, so
+ * without an equivalent control here, Quick Add would be completely
+ * unreachable at tablet/desktop widths.
+ */
 export function DesktopNav() {
   const pathname = usePathname();
+  const { open: openQuickAdd } = useQuickAdd();
 
   function isActive(href: string) {
     return pathname === href || pathname?.startsWith(`${href}/`);
@@ -37,6 +45,15 @@ export function DesktopNav() {
           {label}
         </Link>
       ))}
+      <button
+        type="button"
+        onClick={openQuickAdd}
+        aria-label="Add activity"
+        className="ml-1 flex items-center gap-1.5 rounded-full bg-accent-primary px-3 py-2 text-sm font-semibold text-background transition-opacity hover:opacity-90"
+      >
+        <Plus size={16} aria-hidden="true" />
+        Add
+      </button>
     </nav>
   );
 }

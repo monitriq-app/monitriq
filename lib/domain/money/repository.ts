@@ -9,9 +9,12 @@ import type {
   CurrencyAmount,
   FinancialEvent,
   MoneyActivityItem,
+  MoneyCategoryBreakdownItem,
+  MoneyCategoryDirection,
   MoneyPeriodSummary,
   MoneyReceivedCategory,
   MoneySpendingCategory,
+  MoneyWeeklyBucket,
 } from "./types.ts";
 
 type Client = SupabaseClient<Database>;
@@ -314,6 +317,42 @@ export async function getMoneyPeriodSummary(client: Client, start?: string, end?
       transferOut: row.transfer_out,
     })),
   };
+}
+
+/**
+ * Real per-week, per-native-currency cash_in/cash_out within [start, end]
+ * (defaults to the current calendar month) — backs the Money screen's
+ * Cash Flow chart. Never fabricated: absent weeks simply have no row,
+ * matching every other per-currency read model's zero-activity convention.
+ */
+export async function getMoneyWeeklySummary(client: Client, start?: string, end?: string): Promise<MoneyWeeklyBucket[]> {
+  const { data, error } = await client.rpc("money_weekly_summary", { p_start: start, p_end: end });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    weekStart: row.week_start,
+    currencyCode: row.currency_code,
+    cashIn: row.cash_in,
+    cashOut: row.cash_out,
+  }));
+}
+
+/**
+ * Real per-category, per-native-currency totals within [start, end] —
+ * backs "Where Money Went" / "Cash In by Source". Scoped to plain
+ * money_received/money_spent events only — see money_category_
+ * breakdown()'s comment in the migration for why receivable recovery,
+ * debt payments, and loan proceeds are deliberately excluded.
+ */
+export async function getMoneyCategoryBreakdown(client: Client, start?: string, end?: string): Promise<MoneyCategoryBreakdownItem[]> {
+  const { data, error } = await client.rpc("money_category_breakdown", { p_start: start, p_end: end });
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    direction: row.direction as MoneyCategoryDirection,
+    categoryCode: row.category_code,
+    categoryLabel: row.category_label,
+    currencyCode: row.currency_code,
+    amount: row.amount,
+  }));
 }
 
 export async function getRecentActivity(client: Client, limit = 25): Promise<MoneyActivityItem[]> {

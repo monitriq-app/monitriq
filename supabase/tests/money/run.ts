@@ -25,7 +25,11 @@ import {
   getBucketBalances,
   getCurrencyTotals,
   getRecentActivity,
+  getMoneyWeeklySummary,
+  getMoneyCategoryBreakdown,
 } from "../../../lib/domain/money/repository.ts";
+import { createReceivable, recordRecovery } from "../../../lib/domain/receivables/repository.ts";
+import { createLiability, recordDebtPayment } from "../../../lib/domain/liabilities/repository.ts";
 import { convertToReportingCurrency } from "../../../lib/domain/currency/conversion.ts";
 import { randomUUID } from "node:crypto";
 
@@ -493,6 +497,91 @@ async function main() {
         threw = true;
       }
       assert(threw, "KWD has decimal_exponent 3 — a 4-decimal amount should be rejected");
+    });
+
+    // --- money_weekly_summary() / money_category_breakdown() (P0-E3-S3) ----
+    const wkBucket = await runner.runValue("Setup: User A creates a CHF bucket for weekly/category breakdown tests", () =>
+      createBucket(userA.client, { name: "Weekly Test CHF", currencyCode: "CHF", bucketType: "bank_account" }),
+    );
+    if (!wkBucket) throw new Error("weekly-summary bucket setup failed — aborting remaining tests.");
+
+    await runner.run("Setup: User A funds and moves real CHF activity", async () => {
+      await recordOpeningBalance(userA.client, { bucketId: wkBucket.id, amount: "10000" });
+      await recordMoneyReceived(userA.client, { bucketId: wkBucket.id, amount: "400", categoryCode: "salary" });
+      await recordMoneySpent(userA.client, { bucketId: wkBucket.id, amount: "150", categoryCode: "food" });
+      const wkBucket2 = await createBucket(userA.client, { name: "Weekly Test CHF 2", currencyCode: "CHF", bucketType: "cash_wallet" });
+      await recordTransfer(userA.client, { sourceBucketId: wkBucket.id, destinationBucketId: wkBucket2.id, amount: "50" });
+    });
+
+    await runner.run("money_weekly_summary: real Money In/Out appear, opening balance and transfer excluded from every week's totals", async () => {
+      const weeks = await getMoneyWeeklySummary(userA.client);
+      const chfWeeks = weeks.filter((w) => w.currencyCode === "CHF");
+      assert(chfWeeks.length > 0, "expected at least one CHF week bucket for this period");
+      const totalIn = chfWeeks.reduce((sum, w) => sum + Number(w.cashIn), 0);
+      const totalOut = chfWeeks.reduce((sum, w) => sum + Number(w.cashOut), 0);
+      assert(totalIn === 400, `expected total weekly cash_in 400 (salary only, opening balance excluded), got ${totalIn}`);
+      assert(totalOut === 150, `expected total weekly cash_out 150 (food only, transfer excluded), got ${totalOut}`);
+    });
+
+    await runner.run("money_weekly_summary: multiple native currencies remain separate rows, never blended", async () => {
+      const eurBucket = await createBucket(userA.client, { name: "Weekly Test EUR", currencyCode: "EUR", bucketType: "bank_account" });
+      await recordMoneyReceived(userA.client, { bucketId: eurBucket.id, amount: "77", categoryCode: "gift" });
+      const weeks = await getMoneyWeeklySummary(userA.client);
+      const currencies = new Set(weeks.map((w) => w.currencyCode));
+      assert(currencies.has("CHF") && currencies.has("EUR"), "expected both CHF and EUR week rows present, never combined into one");
+    });
+
+    await runner.run("money_weekly_summary: an explicit period outside any real activity returns zero rows, not fabricated ones", async () => {
+      const weeks = await getMoneyWeeklySummary(userA.client, "2019-01-01", "2019-01-31");
+      assert(weeks.length === 0, `expected zero weeks for an activity-free historical period, got ${weeks.length}`);
+    });
+
+    await runner.run("Anonymous cannot call money_weekly_summary", async () => {
+      const { error } = await anonClient.rpc("money_weekly_summary", {});
+      assert(Boolean(error), "expected anonymous RPC call to be denied");
+    });
+
+    await runner.run("money_category_breakdown: real category totals with real display labels, correct direction", async () => {
+      const breakdown = await getMoneyCategoryBreakdown(userA.client);
+      const salaryRow = breakdown.find((r) => r.direction === "received" && r.categoryCode === "salary" && r.currencyCode === "CHF");
+      const foodRow = breakdown.find((r) => r.direction === "spent" && r.categoryCode === "food" && r.currencyCode === "CHF");
+      assert(salaryRow?.amount === "400.000000", `expected salary total 400, got ${salaryRow?.amount}`);
+      assert(salaryRow?.categoryLabel === "Salary", `expected real category label "Salary", got ${salaryRow?.categoryLabel}`);
+      assert(foodRow?.amount === "150.000000", `expected food total 150, got ${foodRow?.amount}`);
+    });
+
+    await runner.run("money_category_breakdown: a real linked Receivable Recovery is excluded (it is not a generic category)", async () => {
+      const receivable = await createReceivable(userA.client, { name: "Breakdown Test Debtor", currencyCode: "CHF", faceAmount: "1000" });
+      await recordRecovery(userA.client, { receivableId: receivable.id, bucketId: wkBucket.id, amount: "600" });
+      const breakdown = await getMoneyCategoryBreakdown(userA.client);
+      const leaked = breakdown.find((r) => r.categoryCode === "receivable_recovery");
+      assert(!leaked, "a real receivable_recovery event must never appear as a generic category-breakdown row");
+    });
+
+    await runner.run("money_category_breakdown: a real linked Debt Payment is excluded (principal/interest/fee are not a generic category)", async () => {
+      const liability = await createLiability(userA.client, {
+        name: "Breakdown Test Loan",
+        liabilityType: "loan",
+        currencyCode: "CHF",
+        openingPrincipal: "2000",
+      });
+      await recordDebtPayment(userA.client, { liabilityId: liability.id, bucketId: wkBucket.id, principalAmount: "100", interestAmount: "20" });
+      const breakdown = await getMoneyCategoryBreakdown(userA.client);
+      const leaked = breakdown.find((r) => r.categoryCode === "debt_payment");
+      assert(!leaked, "a real debt-payment event must never appear as a generic category-breakdown row");
+    });
+
+    await runner.run("money_category_breakdown: User A never sees User B's category totals", async () => {
+      const bBucket = await createBucket(userB.client, { name: "B Category Test", currencyCode: "CHF", bucketType: "cash_wallet" });
+      await recordMoneyReceived(userB.client, { bucketId: bBucket.id, amount: "999999", categoryCode: "gift" });
+      const breakdown = await getMoneyCategoryBreakdown(userA.client);
+      const total = breakdown.filter((r) => r.categoryCode === "gift" && r.currencyCode === "CHF").reduce((sum, r) => sum + Number(r.amount), 0);
+      assert(total < 999999, "User A's gift-category total must not include User B's own real amount");
+    });
+
+    await runner.run("Anonymous cannot call money_category_breakdown", async () => {
+      const { error } = await anonClient.rpc("money_category_breakdown", {});
+      assert(Boolean(error), "expected anonymous RPC call to be denied");
     });
   } finally {
     await fixtures.cleanup();

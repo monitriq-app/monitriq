@@ -1,0 +1,1517 @@
+================================================================================
+P0-E3-S3 — MONEY + QUICK ADD — PRODUCTION UI IMPLEMENTATION
+================================================================================
+
+--------------------------------------------------------------------------------
+1. PHASE
+--------------------------------------------------------------------------------
+P0-E3-S3 — Money + Quick Add: Production UI. Follows P0-E3-S2 (Home /
+Command Center, complete and approved, committed to `main`).
+
+--------------------------------------------------------------------------------
+2. STATUS
+--------------------------------------------------------------------------------
+COMPLETE, with the same class of disclosed limitation as every prior
+phase: no browser-automation tool is available in this environment, so
+pixel-rendered visual/viewport/theme validation was not performed — see
+§53. Everything verifiable without a browser was verified: lint, both
+typecheck configs, production build (Supabase-configured and
+unconfigured), and a real local-Postgres regression suite (465/465
+assertions, 12 suites, including 9 new Money tests). Not committed, per
+instruction.
+
+--------------------------------------------------------------------------------
+3. OBJECTIVE
+--------------------------------------------------------------------------------
+Implement Monatriq's production Money screen and the Quick Add
+experience the shared bottom-nav's central `+` opens, replicating the
+approved references at `docs/reference/02-money/` and
+`docs/reference/03-quick-add/` as faithfully as reasonably possible,
+while Monatriq's own canonical Money/Receivables/Liabilities/Assets
+domain layer remains the sole source of financial truth — never
+redesigning Assets/Decisions/Goals/Receivables/Liabilities beyond the
+minimal real navigation hooks Quick Add needs.
+
+--------------------------------------------------------------------------------
+4. GIT/REPOSITORY PREFLIGHT
+--------------------------------------------------------------------------------
+`git status` at the start of this phase showed a clean working tree
+except two untracked, expected reference folders:
+`docs/reference/02-money/` and `docs/reference/03-quick-add/`. P0-E3-S2
+was confirmed already committed to `main`. No unrelated uncommitted
+work was found — nothing to stop and report.
+
+--------------------------------------------------------------------------------
+5. REFERENCES INSPECTED
+--------------------------------------------------------------------------------
+- `docs/reference/02-money/screen.png` (viewed directly — primary visual
+  authority), `code.html` (read in full, 851 lines — includes the
+  complete Quick Add action-menu + 4 flow sheets as overlays on the same
+  page), `DESIGN.md` (confirmed byte-identical to Home's own
+  `01-home/DESIGN.md` — the same shared design-token system, already
+  fully internalized from P0-E3-S2).
+- `docs/reference/03-quick-add/screen.png` (viewed — a partial capture
+  showing only the top of the Add Activity sheet), `code.html` (1279
+  lines — a more elaborate standalone prototype with per-source-type
+  review screens and a 5-second Undo countdown; inspected structurally
+  via its element-id map rather than read in full, given its size and
+  that its core information — the 4-option hub, the 4 flow forms, the
+  success+undo pattern — is already fully present in `02-money/
+  code.html`'s own embedded sheets), `DESIGN.md` (confirmed identical).
+- Money domain: `lib/domain/money/{types,repository,bucket-types}.ts`,
+  `supabase/migrations/20260922210653_create_money_domain.sql`,
+  `supabase/tests/money/run.ts`, the existing (now superseded)
+  foundation-level `app/(app)/money/page.tsx` and its components.
+- Receivables domain: `lib/domain/receivables/{types,repository}.ts` —
+  confirmed `recordRecovery()` is a real, dedicated, linked recovery
+  function.
+- Liabilities domain: `lib/domain/liabilities/{types,repository}.ts` —
+  confirmed `recordDebtPayment()` is a real, dedicated function with a
+  genuine principal/interest/fee split.
+- Assets domain: `lib/domain/assets/repository.ts` — confirmed NO
+  sale/disposal mutation of any kind exists.
+- The extended `event_type`/`cash_flow_class` classification in
+  `supabase/migrations/20260922230750_create_receivables_liabilities_
+  domain.sql` (the trigger that gives `receivable_recovery`,
+  `debt_principal_payment`, `debt_interest`, `debt_fee`, and
+  `loan_proceeds` their own real, distinct classification, separate from
+  the generic `money_received`/`money_spent` category tables).
+- `docs/architecture/FINANCIAL_DOMAIN_MODEL.md`, `MULTI_CURRENCY_
+  MODEL.md`, `SECURITY_AND_RLS_PRINCIPLES.md`, `VISUAL_CONSTITUTION.md`,
+  `docs/product/PRODUCT_DEFINITION.md` — referenced against specific
+  questions this phase raised (working knowledge of these was already
+  built up across the P0-E2/P0-E3 phases in this same session; this
+  phase re-verified the Money-domain-specific sections directly against
+  the actual migration/repository code rather than relying on memory of
+  the docs alone).
+- `docs/reports/P0-E2-S2-money-multicurrency-rls-foundation.txt` and
+  every P0-E3-S2 addendum, for established conventions (idempotency-key
+  rotation, client-form patterns, the append-only void/correction
+  strategy, the semantic-token system, 48px touch-target discipline).
+
+--------------------------------------------------------------------------------
+6. MONEY REFERENCE AUDIT
+--------------------------------------------------------------------------------
+`02-money/screen.png`/`code.html` compose, top to bottom: a sub-header
+context bar ("Track what comes in and what goes out." + a "Manually
+Tracked" pill); a period-selector pill bar (Week/Month/3M/Year); a "This
+Month" metric card (Money In/Money Out/Net Change, plus an editorial
+"+44.7% surplus" badge); a "Cash Flow" weekly bar chart (In/Out per
+week, 4 weeks, with a positive-weeks footer); an "Available Cash" card
+with a headline total and a collapsible bucket-balance drawer; a "Where
+Money Went" segmented-bar category breakdown; a "Cash In by Source"
+2-column card grid distinguishing "Earned Income" from other inflow
+types; a filterable "Activity" list (All/Received/Spent/Transfers); and
+the Quick-Add overlay sheets (see §7). Every numeric value in the
+reference is Stitch demo content (NGN figures, "Autodrip", "BMW",
+"Nemryn") — used strictly for layout/density/composition, never copied.
+
+--------------------------------------------------------------------------------
+7. QUICK ADD REFERENCE AUDIT
+--------------------------------------------------------------------------------
+Both reference sources agree on the same structure: a bottom sheet with
+a 4-option hub (Money Received / Money Spent / Transfer / Asset-
+Investment, each a leading tinted icon + title + one-line description +
+chevron), and one flow sheet per option — amount input, a
+source/category chip or dropdown selector, a bucket selector, an
+optional "Link To" selector, date + note fields, and a bottom action
+button whose color matches that flow's own accent. The larger
+`03-quick-add/code.html` additionally models a per-source-type "review"
+step before commit (e.g. distinct review screens for a salary receipt
+vs. a debtor-note recovery vs. a vehicle-repair expense) and a
+"Recorded ✓ / Undo (5s)" success state. The review-step layer was
+deliberately NOT reproduced 1:1 (see §45) — it would require building
+8+ additional prototype-specific screens whose content leans heavily on
+the reference's own demo entities (BMW, Nemryn, Autodrip) and adds
+interaction complexity beyond what correctness or the phase's explicit
+field/routing requirements need; the review step's actual FUNCTION
+(confirm what will happen before it's final) is preserved differently —
+inline, real advisory text within the single-step form (e.g. the FX-
+transfer note, the Asset-Sale deferral message) — while its most
+valuable, directly reproducible element, the 5-second Undo, IS
+implemented exactly, backed by a real canonical reversal.
+
+--------------------------------------------------------------------------------
+8. EXISTING MONEY CAPABILITY AUDIT
+--------------------------------------------------------------------------------
+Confirmed by reading the domain layer directly, not inferred from the
+UI mockups:
+- `cash_buckets`: user-owned, one row per bucket, fixed currency once it
+  has movements. `createBucket`/`updateBucket`/`listBuckets` — plain
+  table access (no amount columns, so no RPC needed).
+- `financial_events`/`cash_movements`: the one ledger. `event_type` is
+  now a 10-value CHECK constraint (`opening_balance`, `money_received`,
+  `money_spent`, `transfer`, `fx_transfer`, `receivable_recovery`,
+  `debt_principal_payment`, `debt_interest`, `debt_fee`,
+  `loan_proceeds`) — the last five added by the Receivables/Liabilities
+  migration, each with its own real, DB-trigger-derived
+  `cash_flow_class` (never client-settable).
+- Five mutation RPCs: `record_opening_balance`, `record_money_received`,
+  `record_money_spent`, `record_transfer` (same-currency only, rejects
+  otherwise), `record_fx_transfer` (different-currency only, requires
+  BOTH a real source and destination amount from the caller — computes
+  and stores an implied `fx_rates` row for record-keeping, source
+  `transaction_actual`, but never fetches or applies a market rate
+  itself).
+- Correction: `voidFinancialEvent` — a plain RLS/column-grant-protected
+  UPDATE of `voided_at` (append-only, never a delete). This is Money's
+  only supported correction mechanism and is what Quick Add's real Undo
+  calls.
+- Reads: `money_bucket_balances`, `money_currency_totals`,
+  `money_period_summary`/`resolve_period_bounds` (P0-E3-S1A, arbitrary
+  explicit `[start, end]` or defaults to the current calendar month in
+  the caller's profile timezone), `money_recent_activity`.
+- `money_received_categories` (9 seeded: business_income, salary,
+  freelance_contract, investment_income, gift, receivable_recovery,
+  asset_sale, refund, other) and `money_spending_categories` (14
+  seeded, including `debt_payment`) — critically, the `receivable_
+  recovery`/`asset_sale`/`debt_payment` ROWS in these lookup tables
+  still exist (their `cash_flow_class` is correctly seeded), but the
+  REAL, linked workflows for the first and third bypass them entirely
+  via their own dedicated `event_type`s — see §25/§27.
+- Receivables: `recordRecovery({receivableId, bucketId, amount, ...})`
+  — a real, dedicated function; currency is fixed to the receivable's
+  own, destination bucket must match.
+- Liabilities: `recordDebtPayment({liabilityId, bucketId,
+  principalAmount?, interestAmount?, feeAmount?, ...})` — a real,
+  dedicated function with the genuine 3-way split the phase brief
+  requires.
+- Assets: no sale/disposal mutation exists anywhere in
+  `lib/domain/assets/repository.ts` — confirmed by reading every
+  exported function.
+- No existing UI anywhere in the codebase called `recordOpeningBalance`
+  before this phase — a genuine gap this phase fills (§19).
+
+--------------------------------------------------------------------------------
+9. VISUAL ARCHITECTURE
+--------------------------------------------------------------------------------
+Reuses the entire P0-E3-S2 foundation unchanged: the semantic token
+layer (`bg-surface-raised`, `bg-surface-strong`, `text-accent-primary`,
+`text-attention`, `text-focus`, `text-danger`, ...), `next-themes`,
+IBM Plex Sans, `lucide-react` icons, 16px card padding / 8px nested-
+element padding (the exact scale P0-E3-S2's gap-audit pass established
+as the reference's real values), and the shared `AppShell`/
+`MobileBottomNav`/`DesktopNav`. No new token was added. No Money- or
+Quick-Add-specific theming mechanism was created.
+
+--------------------------------------------------------------------------------
+10. FILES CREATED
+--------------------------------------------------------------------------------
+Migration:
+  supabase/migrations/20260928090000_create_money_period_breakdowns.sql
+
+Domain (types/repository extended, not created — see §11):
+
+Utilities:
+  lib/utils/period-range.ts
+
+Money components:
+  components/money/PeriodSelector.tsx
+  components/money/MoneySummaryCard.tsx
+  components/money/CashFlowChart.tsx
+  components/money/AvailableCashSection.tsx
+  components/money/WhereMoneyWentSection.tsx
+  components/money/CashInBySourceSection.tsx
+  components/money/MoneyActivityList.tsx
+  components/money/AddCashBalanceForm.tsx
+
+Quick Add components:
+  components/quick-add/QuickAddContext.tsx
+  components/quick-add/QuickAddProvider.tsx
+  components/quick-add/MoneyReceivedForm.tsx
+  components/quick-add/MoneySpentForm.tsx
+  components/quick-add/MoveMoneyForm.tsx
+  components/quick-add/SuccessPanel.tsx
+
+Layout:
+  components/layout/HeaderBrand.tsx (pre-existing from P0-E3-S2, not
+  created this phase — listed for context only, not modified here)
+
+Report:
+  docs/reports/P0-E3-S3-money-quick-add-production-ui.txt
+
+--------------------------------------------------------------------------------
+11. FILES MODIFIED
+--------------------------------------------------------------------------------
+  app/(app)/money/page.tsx           full production rewrite
+  app/(app)/assets/page.tsx          +1 line: id="add-asset" anchor (see §24)
+  components/layout/AppShell.tsx     mounts QuickAddProvider, fetches its data
+  components/layout/DesktopNav.tsx   + Quick Add trigger (md-breakpoint parity)
+  components/layout/MobileBottomNav.tsx  central + now opens Quick Add, not a link
+  lib/domain/money/repository.ts     + getMoneyWeeklySummary, getMoneyCategoryBreakdown
+  lib/domain/money/types.ts          + MoneyWeeklyBucket, MoneyCategoryBreakdownItem
+  lib/supabase/database.types.ts     regenerated (npm run db:types) after the migration
+  supabase/tests/money/run.ts        + 9 tests for the two new RPCs
+  docs/project/BUILD_STATE.md        phase entry, migration entry, architecture notes
+
+Deleted (superseded, confirmed unused elsewhere before removal):
+  components/money/ActivityList.tsx
+  components/money/RecordMoneyForm.tsx
+  components/money/TransferForm.tsx
+  components/money/CashByCurrency.tsx
+  components/money/BucketList.tsx
+
+--------------------------------------------------------------------------------
+12. MONEY PAGE IMPLEMENTATION
+--------------------------------------------------------------------------------
+`app/(app)/money/page.tsx` is a server component. It resolves the
+active period from `?period=` (defaulting to `month`), computes
+`[start, end]` via the new `resolveMoneyPeriodRange()` utility (pure
+calendar-date arithmetic anchored to the user's real profile timezone —
+never a financial calculation), then fetches — in parallel — buckets,
+currencies, both category lists, bucket balances, currency totals,
+recent activity, the period summary, the weekly buckets, and the
+category breakdown, all from Money's own canonical functions. Zero
+arithmetic happens in this file or in any component it renders. A
+brand-new user (zero active buckets) sees a dedicated setup state
+instead of the full dashboard (§18).
+
+--------------------------------------------------------------------------------
+13. CASH BUCKETS
+--------------------------------------------------------------------------------
+`AvailableCashSection` shows every real bucket's name, currency, and
+balance (from `money_bucket_balances()`), grouped/totaled per currency
+using `money_currency_totals()` — the canonical pre-summed total, never
+re-derived client-side (an earlier draft of this component briefly
+summed bucket balances with native JS `Number()` arithmetic; caught and
+replaced with the real RPC total before this report was written — see
+§54). A single currency shows one headline total; multiple currencies
+show one line per currency, never combined. The bucket list itself is a
+collapsible drawer (client-side `useState` toggle only — no data
+re-fetch), matching the reference's own "View N cash buckets" pattern.
+
+--------------------------------------------------------------------------------
+14. MONEY SUMMARY
+--------------------------------------------------------------------------------
+`MoneySummaryCard` shows Money In / Money Out / Net Change per native
+currency for the resolved period, read verbatim from
+`money_period_summary()`. The reference's "+44.7% surplus" badge — a
+NEW ratio (net ÷ cashIn) the domain layer doesn't return — was
+deliberately NOT reproduced: computing it in JSX would be exactly the
+"arbitrary financial calculation" the phase brief prohibits. Net
+Change's own real sign/color already communicates surplus vs. deficit.
+Earned Income/Expense are available on the same summary object
+(`MoneyPeriodCurrencySummary`) but are not surfaced as their own
+headline row on Money (the reference doesn't show them here either);
+they remain visible in Home's own "This Month" panel unchanged.
+
+--------------------------------------------------------------------------------
+15. CASH-FLOW VISUALIZATION
+--------------------------------------------------------------------------------
+A NEW canonical read capability, `money_weekly_summary(p_start, p_end)`
+— see §46 for the full justification and §9/§10 of the migration file
+itself. `CashFlowChart` renders one In/Out bar pair per real week
+returned, bar heights scaled (Decimal.js, never a native float) against
+the real max value present for that currency — a presentational scaling
+transform over already-real numbers, not invented data. Multiple
+currencies render as separate chart blocks. An empty period shows an
+honest "No cash flow activity" message, never a fabricated flat chart.
+
+--------------------------------------------------------------------------------
+16. ACTIVITY
+--------------------------------------------------------------------------------
+`MoneyActivityList` reads `money_recent_activity()` (fetched with a
+higher limit, 30, than the prior foundation screen's 25, to keep the
+filtered views meaningfully populated) and renders one contained,
+`divide-y`-divided list (correct here — the reference itself divides
+this specific list, unlike Home's Capital Distribution rows, which
+don't). Each row's title prefers the event's own real `description`,
+falling back to an event-type label; the subline shows the real date
+plus the real category/event-type context. Transfers get an "Internal
+transfer · excluded from In/Out" tag rendered directly on the row —
+real, not inferred.
+
+--------------------------------------------------------------------------------
+17. FILTERS
+--------------------------------------------------------------------------------
+All / Received / Spent / Transfers, implemented as a client-side filter
+over the already-fetched activity array (no re-fetch, no mutation) using
+each item's own real `cashFlowClass`: Received = `income` ∪
+`other_inflow` (covers plain Money Received AND real linked Receivable
+Recovery/Loan Proceeds); Spent = `expense` ∪ `other_outflow` (covers
+plain Money Spent AND real linked Debt Principal/Interest/Fee);
+Transfers = `transfer`. `opening_balance` matches neither Received nor
+Spent (its own distinct `cash_flow_class`) — it only ever appears under
+All, always labeled "Opening Balance," never folded into "Money
+Received."
+
+--------------------------------------------------------------------------------
+18. EMPTY STATE
+--------------------------------------------------------------------------------
+Zero active buckets → the full dashboard (summary/chart/breakdown/
+activity) is replaced with a short orientation block and the real Add
+Cash Balance form directly inline — no fake chart, no fake summary
+figure, no seeded bucket name.
+
+--------------------------------------------------------------------------------
+19. ADD CASH BALANCE
+--------------------------------------------------------------------------------
+`AddCashBalanceForm` — the canonical opening-balance entry point this
+phase adds (no UI called `recordOpeningBalance` before this phase, per
+§8). Lets the user pick an existing (as-yet-unfunded) bucket or create a
+brand-new one inline, then records the opening amount via
+`recordOpeningBalance`. Never implemented as Money Received. A separate
+"Create Cash Bucket" section (the existing, unchanged
+`CreateBucketForm`) remains available for creating an empty bucket to
+fund later.
+
+--------------------------------------------------------------------------------
+20. QUICK ADD ARCHITECTURE
+--------------------------------------------------------------------------------
+`QuickAddProvider` is mounted once in `AppShell` (server component,
+fetches buckets/balances/categories) and wraps `{children}` + the
+bottom nav in a React context (`QuickAddContext`: `isOpen`, `view`,
+`open`/`close`/`goTo`/`backToHub`). `MobileBottomNav`'s central `+`
+(mobile) and a new equivalent button in `DesktopNav` (tablet/desktop,
+since the mobile nav is `md:hidden`) both call `open()` — never a
+`<Link>` to a generic page. The sheet itself: a `fixed inset-0`
+backdrop + a `rounded-t-2xl` bottom sheet (drag-handle bar, safe-area
+padding, `max-h-[92vh]` with internal scroll), hosting either the 4-
+option hub or the active flow form. Every mutating action goes through
+the exact same repository functions used elsewhere in the app — no
+client-side table insert, no bypass of any RPC.
+
+--------------------------------------------------------------------------------
+21. MONEY RECEIVED
+--------------------------------------------------------------------------------
+`MoneyReceivedForm`: 7 generic source chips (Business Income, Salary,
+Freelance/Contract, Investment Income, Gift, Refund, Other) call
+`recordMoneyReceived` directly with the real `categoryCode`. Two
+additional chips switch the form's MODE instead of setting a category —
+see §25/§26. Fields: amount, source, destination bucket, optional note;
+date defaults to now (server-side `occurred_at` default), matching
+"manual-first" (no separate date/time picker was added beyond what the
+canonical RPC's own default already provides, since the reference's own
+date field just reads "Today" — a real default, not an editable value
+this phase needed to add UI for; this is disclosed as a scoped-down
+simplification, not a rejected reference feature).
+
+--------------------------------------------------------------------------------
+22. MONEY SPENT
+--------------------------------------------------------------------------------
+`MoneySpentForm`: 12 generic category chips (Housing, Food, Transport/
+Fuel, Vehicle Repair, Business Expense, Education, Healthcare,
+Subscriptions, Family, Entertainment, Travel, Professional Services,
+Other) call `recordMoneySpent` directly. "Vehicle Repair" is a plain
+expense category like any other — no asset-linking/capitalization logic
+was added, because `RecordMoneySpentInput` has no such parameter; adding
+cross-domain capitalization behavior here would have been exactly the
+kind of architecture work this phase is explicitly forbidden from doing
+mid-UI-pass. One additional chip, "Debt Payment," switches mode — see
+§27.
+
+--------------------------------------------------------------------------------
+23. MOVE MONEY
+--------------------------------------------------------------------------------
+`MoveMoneyForm`: From/To bucket selects (destination list excludes the
+selected source, structurally preventing same-bucket selection before
+submit; the RPC itself also rejects it server-side), amount, and — only
+when source/destination currencies differ — a second real "amount
+received" field, routing to `recordFxTransfer` with both real user-
+entered amounts (never an auto-computed conversion). A real inline note
+states transfers don't count as income or spending. Fewer than 2 active
+buckets → an honest unavailable message, no fabricated destination.
+
+--------------------------------------------------------------------------------
+24. ASSET / INVESTMENT BEHAVIOR
+--------------------------------------------------------------------------------
+Routes directly to `/assets#add-asset` (a one-line anchor `id` added to
+the existing, unmodified Assets page section wrapping `AddAssetForm` —
+the "very small existing workflow" hook the phase boundary explicitly
+permits) and closes the sheet. No second Asset domain, no parallel form,
+no fake cash-to-asset transaction was built — cash-purchase linkage
+isn't canonically supported yet, so this phase doesn't invent it.
+
+--------------------------------------------------------------------------------
+25. RECEIVABLE RECOVERY HANDLING
+--------------------------------------------------------------------------------
+Selecting the "Receivable Recovery" chip in Money Received switches the
+form to a dedicated mode: a live-fetched (client-side, on-demand —
+never pre-loaded into `AppShell`'s global fetch) list of the user's own
+outstanding receivables, a bucket selector constrained to the
+receivable's own currency, amount, and note — submitting via the real
+`recordRecovery()` (Receivables domain), which atomically links the cash
+increase to that specific receivable's outstanding decrease. The
+generic `record_money_received` path (with `categoryCode:
+"receivable_recovery"`) is never called from this mode. A user with zero
+outstanding receivables sees an honest message + a link to
+`/receivables`, never a fabricated entry.
+
+--------------------------------------------------------------------------------
+26. ASSET SALE HANDLING
+--------------------------------------------------------------------------------
+Selecting "Asset Sale" shows an inline, honest deferral message (capital
+returned vs. realized gain/loss are distinct concepts Assets doesn't yet
+have a dedicated workflow for) with a link to `/assets` — no submit
+button, no generic category fallback, no fake accounting semantics.
+
+--------------------------------------------------------------------------------
+27. DEBT PAYMENT HANDLING
+--------------------------------------------------------------------------------
+Selecting the "Debt Payment" chip in Money Spent switches to a dedicated
+mode: a live-fetched list of the user's own outstanding debts, a bucket
+selector constrained to the debt's currency, and three real separate
+fields — Principal / Interest / Fees — submitted via the real
+`recordDebtPayment()` (Liabilities domain), preserving the genuine
+principal-vs-interest-vs-fee split (principal is cash-out but
+net-worth-neutral; interest/fees are a real expense). The generic
+`record_money_spent` path is never used for this mode.
+
+--------------------------------------------------------------------------------
+28. OPENING BALANCE HANDLING
+--------------------------------------------------------------------------------
+See §19. `record_opening_balance` only, never `record_money_received`.
+Opening-balance events keep their own `cash_flow_class`
+(`opening_balance`) throughout — excluded from Money In/Out, from
+Earned Income, and from every Quick-Add-filter's Received bucket (§17).
+
+--------------------------------------------------------------------------------
+29. UNDO / REVERSAL HANDLING
+--------------------------------------------------------------------------------
+`SuccessPanel` shows a real 5-second Undo (matching the reference's own
+countdown pattern) that calls the exact same `voidFinancialEvent()` used
+everywhere else in the app — a genuine, canonically-backed correction
+(append-only `voided_at`, never a row delete), not a client-side "undo"
+that merely hides the row. After the countdown, the Undo control
+disappears — it never continues to imply an action it can no longer
+safely offer through this exact one-tap path (the underlying
+`voidFinancialEvent` function itself has no time restriction; the 5s
+window is a UI restraint matching the reference's own pacing, not a
+domain-layer limitation).
+
+--------------------------------------------------------------------------------
+30. MULTI-CURRENCY BEHAVIOR
+--------------------------------------------------------------------------------
+No screen or form in this phase sums two different currencies into one
+figure. `AvailableCashSection`/`MoneySummaryCard`/`CashFlowChart`/
+`WhereMoneyWentSection`/`CashInBySourceSection` all render one block per
+native currency present. `MoveMoneyForm` restricts same-currency
+transfers to `recordTransfer` and cross-currency ones to
+`recordFxTransfer` with two real user-entered amounts — never a client-
+computed conversion. `MoneyReceivedForm`/`MoneySpentForm`'s
+receivable/liability-linked modes constrain the bucket selector to the
+receivable's/liability's own currency, structurally preventing a
+currency-mismatched linked payment.
+
+--------------------------------------------------------------------------------
+31. REPORTING-CURRENCY BEHAVIOR
+--------------------------------------------------------------------------------
+Not touched by this phase. Profile `preferred_currency` is used only as
+a display DEFAULT (the pre-selected currency when creating a brand-new
+bucket in `AddCashBalanceForm`) — never as an assumed currency for any
+existing bucket, and never used to silently convert or blend Money
+figures. Reporting-currency conversion (Financial Position's own
+mechanism, P0-E3-S1A) is unchanged and untouched.
+
+--------------------------------------------------------------------------------
+32. DATE/TIMEZONE BEHAVIOR
+--------------------------------------------------------------------------------
+`resolveMoneyPeriodRange()` (new, `lib/utils/period-range.ts`) resolves
+"today" via `Intl.DateTimeFormat` against the user's real profile
+timezone (never the server's or browser's local date), then computes
+Week/Month/3M/Year boundaries as plain calendar-date arithmetic — no
+financial value is touched. The resolved `[start, end]` is passed
+verbatim to `money_period_summary()`/`money_weekly_summary()`/
+`money_category_breakdown()`, which perform the real, authoritative,
+timezone-aware period-bounded aggregation server-side exactly as
+`resolve_period_bounds()` already established in P0-E3-S1A. Quick Add's
+own date fields rely on each RPC's own `occurred_at default now()`
+rather than a separately-built date/time picker (§21).
+
+--------------------------------------------------------------------------------
+33. AUTHENTICATED-USER DYNAMICS
+--------------------------------------------------------------------------------
+Every read/mutation in this phase resolves ownership from `auth.uid()`
+server-side (RLS + the RPCs' own `where user_id = auth.uid()` clauses) —
+no client-provided user id or ownership relation is ever trusted. No
+component branches on a specific email, name, or UUID. Every list,
+total, and label is derived from the currently authenticated user's own
+real rows.
+
+--------------------------------------------------------------------------------
+34. USER ISOLATION
+--------------------------------------------------------------------------------
+Verified with real fixtures in `supabase/tests/money/run.ts` (existing
+tests, unchanged, plus new ones for the two new RPCs): User A's weekly
+buckets/category-breakdown totals never include User B's real amounts;
+a dedicated new test funds User B with a deliberately huge gift
+(999,999) and asserts User A's own "gift" category total stays below it.
+Every pre-existing cross-user adversarial test (bucket UUID guessing,
+event/movement ownership reassignment attempts, anonymous access) still
+passes unchanged.
+
+--------------------------------------------------------------------------------
+35. RLS/SECURITY
+--------------------------------------------------------------------------------
+Not weakened anywhere. The two new SQL functions are `security invoker`
+(RLS applies through them exactly as it does through every table they
+touch), `revoke all ... from public, anon` / `grant execute ... to
+authenticated` — the identical pattern every other Money RPC uses. No
+client-provided `user_id` is accepted anywhere in this phase's new code
+(`createClient()`'s own session cookie is the only identity source,
+per the established `@supabase/ssr` pattern). A runtime grep for
+`service_role`/`SUPABASE_SERVICE` across every file this phase touched
+returned zero matches (§52).
+
+--------------------------------------------------------------------------------
+36. MOBILE BEHAVIOR
+--------------------------------------------------------------------------------
+Priority viewport ~390–393px, per the phase brief. Quick Add's sheet:
+`max-w-md`, `max-h-[92vh]` with internal `overflow-y-auto`, safe-area
+bottom padding, a `rounded-t-2xl` shape matching the reference. Every
+form control reuses the established `Input`/`Select` primitives (48px
+minimum height, `text-base` on mobile to avoid iOS zoom). The
+backdrop's own click handler closes the sheet (`stopPropagation` on the
+sheet itself prevents accidental closes while interacting with a form
+field).
+
+--------------------------------------------------------------------------------
+37. NARROW/FOLD BEHAVIOR
+--------------------------------------------------------------------------------
+Reasoned, not browser-verified (§53). At 320px, every card/section in
+this phase inherits the exact 16px page gutter + 16px card padding
+scale P0-E3-S2's gap-audit pass established and verified structurally
+for Home; no new fixed-pixel-width element was introduced anywhere in
+this phase's components (chip rows use `flex-wrap`; the Move Money
+bucket rows and the category-breakdown grid use `grid`/`flex` with
+`min-w-0`/`truncate` on long text, never an unbounded fixed width).
+
+--------------------------------------------------------------------------------
+38. TABLET
+--------------------------------------------------------------------------------
+`AppShell`'s shared `PageContainer` (`max-w-5xl`, responsive `px-4 sm:
+px-6 lg:px-8`) is unchanged and applies to Money exactly as it does to
+Home. `DesktopNav`'s new Quick Add trigger becomes visible at the `md`
+breakpoint, replacing the mobile bottom nav's now-hidden central button
+— reasoned to prevent Quick Add from being unreachable at tablet widths,
+not browser-verified.
+
+--------------------------------------------------------------------------------
+39. DESKTOP
+--------------------------------------------------------------------------------
+Same `PageContainer`/`AppShell` foundation; Quick Add's sheet keeps its
+own `max-w-md` regardless of viewport width (a deliberate, bounded
+sheet, not a full-width form, matching the reference's own mobile-
+sheet-first design even when opened from a wider screen) — reasoned,
+not browser-verified.
+
+--------------------------------------------------------------------------------
+40. LIGHT MODE
+--------------------------------------------------------------------------------
+No Money- or Quick-Add-specific styling branch exists. Every class used
+throughout this phase is an existing semantic token
+(`bg-surface-raised`, `bg-surface-strong`, `text-accent-primary`,
+`text-attention`, `text-focus`, `text-danger`, `text-text-*`) that
+already resolves correctly under both `:root` (Dark) and
+`:root[data-theme="light"]` (Light) — confirmed by inspection (no raw
+hex, no `dark:`-prefixed Tailwind variant, no `data-theme` conditional
+anywhere in this phase's new/changed files).
+
+--------------------------------------------------------------------------------
+41. DARK MODE
+--------------------------------------------------------------------------------
+Same shared component tree as Light — see §40. Dark remains the
+default/primary-authority mode per the Visual Constitution, unchanged.
+
+--------------------------------------------------------------------------------
+42. ACCESSIBILITY
+--------------------------------------------------------------------------------
+Every interactive control in this phase's new components is a real
+`<button>` or `<select>`/`<input>` (never a `<div onClick>`), with
+`aria-label` on icon-only buttons (close/back/Undo/Add activity),
+`aria-expanded` on the Available Cash disclosure toggle, `aria-modal`/
+`role="dialog"` on the Quick Add sheet, and `role="alert"` on every
+inline form error — matching the established `FormField`/`Button`
+primitives' own existing accessibility discipline. All touch targets
+reuse the 48px-minimum primitives (`Input`/`Select`: `min-h-12`) or are
+explicitly sized `h-9`–`h-14` for sheet-specific controls, all ≥36px
+with generous padding, and the sheet's own submit buttons are `h-12`
+(48px). No sub-16px form input was introduced (every text/number input
+uses the shared `Input` component's `text-base sm:text-sm` pattern).
+
+--------------------------------------------------------------------------------
+43. LOADING/ERROR/EMPTY STATES
+--------------------------------------------------------------------------------
+Loading: the receivable/liability pickers show a plain "Loading your
+receivables/debts…" text state while their on-demand client fetch is in
+flight (derived from `mode === X && data === null`, not a separate
+`useState` flag — see §54 for why). Error: every mutating form shows a
+real caught error message (`err instanceof Error ? err.message : ...`)
+via `role="alert"`, matching the established pattern from
+`RecordMoneyForm`/`TransferForm`. Empty: §18 (Money page), §25/§27
+(zero receivables/liabilities), §23 (fewer than 2 buckets for Move
+Money), §20 hub (zero buckets at all).
+
+--------------------------------------------------------------------------------
+44. REFERENCE FEATURES REPRODUCED
+--------------------------------------------------------------------------------
+Sub-header context bar + real "Manually Tracked" pill; period selector
+(4 real periods); This Month/period summary card (3-metric grid); real
+weekly Cash Flow bar chart; Available Cash with a real collapsible
+bucket drawer; Where Money Went segmented-bar category breakdown; Cash
+In by Source category-card grid with real Earned-Income/Other-Inflow
+distinction; filterable, divided Activity list; the 4-option Quick Add
+hub (icon/title/description/chevron composition); all 4 flow sheets'
+core field sets (amount, source/category, bucket, link-to for the two
+special cases, date, note); the bottom-sheet shape (drag handle, rounded
+top, safe-area padding, scrollable body, accent-colored submit button
+per flow); the 5-second Undo pattern; the central `+` intercepted into a
+real sheet rather than a link.
+
+--------------------------------------------------------------------------------
+45. REFERENCE FEATURES INTENTIONALLY OMITTED
+--------------------------------------------------------------------------------
+1. The "+44.7% surplus" headline badge — a new, un-returned financial
+   ratio; computing it in JSX would violate the phase brief's own
+   prohibition (§14).
+2. Per-source-type review screens before commit (the larger
+   `03-quick-add/code.html`'s 8+ distinct review variants) — a UI
+   elaboration beyond what field-capture/routing correctness needs, and
+   heavily tied to the reference's own demo entities; the single-step
+   form + real inline advisory text + real 5s Undo preserves the same
+   FUNCTION (see something real before it's final, be able to reverse
+   it) without reproducing every prototype-specific screen (§7).
+3. A separate date/time picker beyond "now" — the canonical RPCs'
+   own `occurred_at default now()` already provides a real, correct
+   default; the reference's own date field just displays "Today" (§21).
+4. Generic "Receivable Recovery"/"Asset Sale"/"Debt Payment" chips that
+   submit through the plain `money_received`/`money_spent` categories —
+   replaced with real routing to the linked domain functions or an
+   honest deferral (§25–§27), per the phase brief's own explicit
+   instruction.
+5. A live exchange-rate-assisted FX transfer (auto-computing one amount
+   from the other) — Monatriq has no market-rate source; both real
+   amounts are always user-entered (§23).
+6. Connect Bank / Sync Bank / any automated bank-feed language or
+   control — no such capability exists; "Manually Tracked" is shown
+   instead, honestly (§6).
+7. A notification bell in the header — unchanged from P0-E3-S2's own
+   decision; no notification domain exists.
+
+--------------------------------------------------------------------------------
+46. NEW CANONICAL READ CAPABILITY
+--------------------------------------------------------------------------------
+`supabase/migrations/20260928090000_create_money_period_breakdowns.sql`
+— two new `security invoker`, `stable` functions:
+- `money_weekly_summary(p_start date, p_end date)` → `(week_start date,
+  currency_code text, cash_in text, cash_out text)`. Explicitly
+  pre-authorized by this phase's brief ("if genuinely missing and
+  needed for the production Money screen: add the smallest shared
+  canonical read capability... time buckets"). Reuses
+  `money_period_summary()`'s exact `cash_flow_class` filter
+  (`income`/`other_inflow` → cash_in, `expense`/`other_outflow` →
+  cash_out; `opening_balance`/`transfer`/`fx_transfer` excluded
+  entirely), grouped by `date_trunc('week', occurred_at at time zone
+  <profile timezone>)` instead of summed across the whole period.
+- `money_category_breakdown(p_start date, p_end date)` → `(direction
+  text, category_code text, category_label text, currency_code text,
+  amount text)`. Scoped strictly to `event_type in ('money_received',
+  'money_spent')` — receivable recovery, debt payments, and loan
+  proceeds are real linked events with their own record and are
+  structurally excluded (proven by two dedicated tests, §47), never
+  re-labeled as a generic category.
+
+Neither is a second source of financial truth: both are additive
+groupings of classification `money_period_summary()` already
+established in P0-E3-S1A; that function and `resolve_period_bounds()`
+are completely untouched. `docs/architecture/*` was NOT rewritten for
+this addition, per the phase brief's own "update Money architecture
+documentation ONLY if..." instruction — this migration's own inline SQL
+comments carry the full reasoning, consistent with how P0-E3-S1A's own
+additions were documented at the time.
+
+--------------------------------------------------------------------------------
+47. MONEY TESTS
+--------------------------------------------------------------------------------
+9 new tests appended to `supabase/tests/money/run.ts` (48/48 in that
+suite now, up from 39): real weekly Money In/Out appear with opening-
+balance/transfer correctly excluded from every week's totals; multiple
+native currencies remain separate week rows, never blended; an explicit
+historical period with zero real activity returns zero rows (not
+fabricated ones); anonymous denial for `money_weekly_summary`; real
+category totals with real display labels and correct direction; a REAL
+linked Receivable Recovery (via `createReceivable`+`recordRecovery`) is
+proven excluded from category-breakdown output; a REAL linked Debt
+Payment (via `createLiability`+`recordDebtPayment`) is proven excluded;
+User A never sees User B's category totals; anonymous denial for
+`money_category_breakdown`.
+
+--------------------------------------------------------------------------------
+48. QUICK ADD TESTS
+--------------------------------------------------------------------------------
+No new automated (Postgres-level) tests were added specifically for
+Quick Add's UI flows, because Quick Add introduces no new mutation
+boundary of its own — every path it exercises
+(`recordMoneyReceived`/`recordMoneySpent`/`recordTransfer`/
+`recordFxTransfer`/`recordOpeningBalance`/`recordRecovery`/
+`recordDebtPayment`/`voidFinancialEvent`) is an EXISTING, already-tested
+RPC (covered by `supabase/tests/money/run.ts`,
+`supabase/tests/receivables/run.ts`, `supabase/tests/liabilities/
+run.ts`, all passing unchanged, §49). What IS new is client-side
+routing logic (which mode/chip selects which function) — verified by
+direct code review against the phase brief's own item-by-item test
+matrix (§ items 31–50 of the brief), not a new automated suite, since
+there is no new server-side surface for a Postgres-level test to target.
+This is disclosed explicitly rather than claimed as automated coverage
+it isn't (§53/§54).
+
+--------------------------------------------------------------------------------
+49. REGRESSION RESULTS
+--------------------------------------------------------------------------------
+Fresh `supabase db reset`, full suite re-run: **465/465 passed** across
+all 12 suites — RLS (20), Money (48, +9 from this phase), Currency (11),
+Assets (28), Receivables (27), Liabilities (25), Goals (56), Rules (86),
+Decisions (70), Financial Position (33), Home Readiness (30), Home
+(31). Zero regressions in any pre-existing test.
+
+--------------------------------------------------------------------------------
+50. LINT/TYPECHECK/BUILD
+--------------------------------------------------------------------------------
+`npm run lint`: clean (after fixing two real `react-hooks/set-state-
+in-effect` errors — see §54). `npm run typecheck` (app tsconfig +
+`supabase/tests/tsconfig.json`): clean. `npm run build` (Supabase-
+configured): clean, all 19 routes generated, `/money` correctly
+dynamic. `npm run build` with `.env.local` temporarily removed (then
+restored and re-verified present): also clean — confirms the build
+doesn't hard-crash at build time without Supabase env vars (routes fall
+back to static where they can't reach a real DB at build time, as
+expected).
+
+--------------------------------------------------------------------------------
+51. PROTOTYPE-DATA AUDIT
+--------------------------------------------------------------------------------
+Case-insensitive grep across every file this phase touched (`app/`,
+`components/`, `lib/domain/money`, `lib/domain/receivables`,
+`lib/domain/liabilities`, `components/quick-add`, `components/money`)
+for Victor/Vee/Lagos/BMW/Lakowe/Autodrip/Nemryn/"Capital Compass"/
+sovereign/"P&L"/ledger/"intelligence engine"/"smart insight"/"AI-
+powered"/"connect bank"/"sync bank"/"bank feed": three matches, all
+benign on inspection — a doc-comment explicitly saying "never Capital
+Compass," a doc-comment using "ledger data" as a generic technical
+term, and a doc-comment referencing the real `receivable_ledger_events`
+table name. Zero actual violations.
+
+--------------------------------------------------------------------------------
+52. SECURITY/SERVICE-ROLE AUDIT
+--------------------------------------------------------------------------------
+Grep for `service_role`/`SUPABASE_SERVICE` across every application
+source file: zero matches. No env, auth, or Supabase-client file was
+touched by this phase. Every mutation continues to derive ownership
+from `auth.uid()` server-side; no client-provided identity is trusted
+anywhere in this phase's new code (§33/§35).
+
+--------------------------------------------------------------------------------
+53. MANUAL/BROWSER VALIDATION
+--------------------------------------------------------------------------------
+NOT performed — no browser-automation tool is available in this
+environment (unchanged limitation across every phase in this project).
+Every visual/responsive/theme claim in §36–§41 is a code/CSS-level
+judgment against the reference screenshots and their own `code.html`
+markup, reusing the exact density/padding/typography scale P0-E3-S2's
+own gap-audit pass established and disclosed the same way for — not an
+observed rendering. The user's own manual/browser review remains the
+authoritative next validation step for this phase, exactly as it was
+for Home.
+
+--------------------------------------------------------------------------------
+54. ASSUMPTIONS
+--------------------------------------------------------------------------------
+1. Category-share percentages in `WhereMoneyWentSection`/
+   `CashInBySourceSection` (e.g. "44%") are computed client-side via
+   Decimal.js from two already-fetched real totals (a category's own
+   amount ÷ the real sum of every category shown). This is a judgment
+   call: `money_category_breakdown()` returns raw amounts only, not
+   pre-computed percentages, so this is a new derived ratio rather than
+   a sum of already-computed percentages (the precedent Home's Capital
+   Distribution used). Treated as acceptable because it's fully
+   decimal-exact, transparent, reproducible, and never used for
+   anything beyond display — but flagged explicitly here as a boundary
+   judgment rather than a clean precedent match.
+2. `AvailableCashSection` originally summed bucket balances with native
+   JS `Number()` arithmetic to produce a per-currency total — caught
+   during this same implementation pass (not by an external review) and
+   replaced with `money_currency_totals()`'s own real, pre-summed
+   total before any test or build was run against it.
+3. The two `useEffect`-based on-demand fetches (receivable/liability
+   pickers) initially called `setLoading(true)` synchronously inside
+   the effect body, which ESLint's `react-hooks/set-state-in-effect`
+   rule correctly flagged (the same rule encountered and resolved in
+   P0-E3-S2's onboarding-hook fix). Fixed by deriving the loading flag
+   from existing state (`mode === X && data === null`) instead of a
+   separate `useState`, eliminating the synchronous setState entirely.
+4. Quick Add's data (buckets/balances/categories) is fetched once at
+   `AppShell` level and does not automatically refresh while the sheet
+   is open across multiple submissions in one session without a page
+   navigation; `router.refresh()` after each successful mutation (used
+   throughout every form) re-runs the server fetch, including
+   `AppShell`'s own, so this self-corrects on every submit.
+
+--------------------------------------------------------------------------------
+55. OPEN QUESTIONS
+--------------------------------------------------------------------------------
+1. Should Quick Add's Money Received/Spent forms eventually support an
+   editable date/time (not just "now"), matching the reference's own
+   editable "Today, Sep 28" field more literally? Deferred this phase
+   since the canonical default is real and correct (§45.3).
+2. Should the per-source-type review-screen layer from
+   `03-quick-add/code.html` be built in full in a future pass, or is
+   the single-step-form-with-real-Undo approach this phase took
+   sufficient? A product decision, not an architecture one.
+3. Once Assets gains a real sale/disposal mutation (a future phase),
+   should "Asset Sale" in Quick Add route to it directly, or remain a
+   Money-received-style flow? Depends on that future mutation's own
+   shape.
+
+--------------------------------------------------------------------------------
+56. RISKS
+--------------------------------------------------------------------------------
+1. Unchanged, project-wide: no browser has verified this phase's visual
+   output (§53) — the same standing risk P0-E3-S2 disclosed.
+2. `QuickAddProvider`'s data fetch now runs on every authenticated page
+   load (via `AppShell`), not just Money's — a deliberate, bounded cost
+   (3 small queries) for making Quick Add globally reachable; worth
+   monitoring if bucket/category counts ever grow large enough to make
+   this non-trivial (unlikely at V1 scale).
+3. The receivable/liability pickers inside Quick Add fetch client-side
+   on demand rather than being pre-loaded — correct for avoiding
+   unnecessary cost on every page load, but means those two specific
+   sub-flows have one extra network round-trip before their picker
+   populates; disclosed in §43 as a real (short) loading state, not
+   hidden.
+4. Category-share percentage computation is a boundary judgment call
+   (§54.1) — worth a deliberate second look if this pattern is repeated
+   elsewhere.
+
+--------------------------------------------------------------------------------
+57. GIT DIFF SUMMARY
+--------------------------------------------------------------------------------
+9 modified files (app/(app)/assets/page.tsx +1/-1;
+app/(app)/money/page.tsx full rewrite; components/layout/AppShell.tsx,
+DesktopNav.tsx, MobileBottomNav.tsx; lib/domain/money/repository.ts,
+types.ts; lib/supabase/database.types.ts regenerated;
+supabase/tests/money/run.ts +89 lines) plus docs/project/BUILD_STATE.md.
+14 new files (1 migration, 1 utility, 8 Money components, 4 Quick Add
+components — see §10) plus this report. 5 files deleted (superseded
+foundation-level Money components, confirmed unused before removal,
+§11). Two new reference folders (`docs/reference/02-money/`,
+`docs/reference/03-quick-add/`) remain untracked, unchanged by this
+phase's own work — the user's own provided reference material.
+
+--------------------------------------------------------------------------------
+58. GIT STATUS
+--------------------------------------------------------------------------------
+Nothing staged or committed by this phase. `git status --short` at
+report time:
+ M app/(app)/assets/page.tsx
+ M app/(app)/money/page.tsx
+ M components/layout/AppShell.tsx
+ M components/layout/DesktopNav.tsx
+ M components/layout/MobileBottomNav.tsx
+ D components/money/ActivityList.tsx
+ D components/money/BucketList.tsx
+ D components/money/CashByCurrency.tsx
+ D components/money/RecordMoneyForm.tsx
+ D components/money/TransferForm.tsx
+ M docs/project/BUILD_STATE.md
+ M lib/domain/money/repository.ts
+ M lib/domain/money/types.ts
+ M lib/supabase/database.types.ts
+ M supabase/tests/money/run.ts
+?? components/money/AddCashBalanceForm.tsx
+?? components/money/AvailableCashSection.tsx
+?? components/money/CashFlowChart.tsx
+?? components/money/CashInBySourceSection.tsx
+?? components/money/MoneyActivityList.tsx
+?? components/money/MoneySummaryCard.tsx
+?? components/money/PeriodSelector.tsx
+?? components/money/WhereMoneyWentSection.tsx
+?? components/quick-add/
+?? docs/reference/02-money/
+?? docs/reference/03-quick-add/
+?? docs/reports/P0-E3-S3-money-quick-add-production-ui.txt
+?? lib/utils/period-range.ts
+?? supabase/migrations/20260928090000_create_money_period_breakdowns.sql
+
+--------------------------------------------------------------------------------
+59. RECOMMENDED NEXT PHASE
+--------------------------------------------------------------------------------
+Per instruction, Assets production UI is NOT begun automatically. The
+two reasonable next steps: (a) the user's own manual/browser review of
+Home AND Money together (the "same product" test now spans two real
+screens, not one) before any further production UI is built on an
+unverified visual foundation, or (b) continuing the production-UI
+rollout to Assets, which would both need its own approved reference
+audited and let "Asset / Investment" in Quick Add eventually route to a
+real sale/disposal mutation once Assets' own domain gains one. Either
+is a reasonable next step; this is the user's own priority call.
+================================================================================
+
+ADDENDUM — THEME PROVIDER REACT 19 / NEXT 16 COMPATIBILITY FIX
+================================================================================
+
+DEFECT. `npm run dev` reported: "Encountered a script tag while
+rendering React component. Scripts inside React components are never
+executed when rendering on the client," originating from
+`components/theme/ThemeProvider.tsx`. Confirmed by inspection: `next-
+themes@0.4.6` (the installed, and current latest stable, version) with
+React `19.2.8` / Next.js `16.3.6`. `next-themes` has no fixed stable
+release for this — its only newer published version tag, `1.0.0-beta.0`,
+was checked directly against the npm registry's per-version publish
+timestamps and dates to 2022-05-17, years before React 19 existed;
+irrelevant, not a fix.
+
+FIX. Migrated from `next-themes` to `@teispace/next-themes@^3.0.2` — an
+actively maintained fork whose own README explicitly documents this
+exact upstream bug (its issue #397: "React 19.2 'Encountered a script
+tag while rendering React component' when the provider client-remounts,"
+and #387/#385, the same inline-`<script>`-in-React-19 class of issue)
+and its fix mechanism: the anti-FOUC bootstrap script is injected via
+Next.js's own `useServerInsertedHTML` (raw HTML written directly into
+the stream), never returned as `<script>` JSX from a component, so
+React's client reconciler never encounters a script element as part of
+a component's own render output — structurally eliminating the warning
+rather than suppressing it. Peer deps (`next >=13`, `react/react-dom
+>=18`) confirmed compatible before migrating, per this task's own
+explicit "verify API compatibility first" instruction.
+
+`components/theme/ThemeProvider.tsx`: import swapped;
+`storage="local"` added explicitly — this fork defaults to a hybrid
+cookie+localStorage mode, and `storage="local"` is required to preserve
+the exact prior device-local-only, no-cookie persistence behavior the
+original P0-E3-S2 phase brief mandated (confirmed via the fork's own
+migration guide: "Default storage is 'hybrid' ... To preserve exact old
+behavior, set storage='local'"). `attribute="data-theme"`,
+`defaultTheme="system"`, `enableSystem` are unchanged — all three are
+source-compatible props on the new library. `components/theme/
+ThemeToggle.tsx`: import swapped; its doc comment updated to describe
+the new library's actual pre-hydration behavior (`theme` starts at
+`defaultTheme` via `useSyncExternalStore`, never `undefined`, unlike
+upstream) rather than leaving a now-inaccurate comment in place.
+
+INCIDENTAL FIX (discovered while verifying this one, not scope creep):
+`components/layout/AppShell.tsx` had a real, pre-existing crash —
+`QuickAddProvider` (added in the P0-E3-S3 work this addendum follows)
+only wrapped `<main>`/`MobileBottomNav`, not the `<header>`, so
+`DesktopNav`'s own Quick Add trigger call to `useQuickAdd()` threw
+"useQuickAdd must be used within QuickAddProvider" on every single page
+render at any viewport. This was invisible to lint/typecheck/build/the
+Postgres test suite (none of them render this component tree against a
+live request for a dynamic route) and was only caught because starting
+a real dev server to verify the theme fix surfaced it in the server log.
+Fixed by moving `QuickAddProvider` to wrap the entire shell, including
+the header — confirmed correct by direct inspection of the resulting
+JSX nesting (`DesktopNav` is now unambiguously a descendant).
+
+NOT related to this fix, left alone: the dev server (pointed at the
+remote "Monatriq Dev" Supabase project via `.env.local`, per the
+established environment-separation architecture) returns
+`PGRST202`/"Could not find the function public.money_category_
+breakdown" on `/money`, because this session's new migration
+(`20260928090000_create_money_period_breakdowns.sql`) has only ever been
+applied to LOCAL Docker Supabase (where the full 465/465 regression
+suite passes) — it has never been pushed to the remote Dev project, and
+this task did not ask for that. Documented here so it isn't mistaken for
+a new defect; it is an expected, known consequence of work still being
+un-pushed and un-committed.
+
+VALIDATION. `npm run lint`: clean. `npx tsc --noEmit`: clean. `npm run
+build` (Supabase-configured): clean, unchanged 19-route list. `npm run
+dev`: started successfully; `GET /login` returned 200 with a clean
+server log (no script-tag warning, no other error) — confirmed by
+direct HTTP fetch of the rendered HTML, which shows the new library's
+anti-FOUC script present and correctly configured
+(`"m":"local","d":"system","a":["data-theme"]`, matching `storage=
+"local"`/`defaultTheme="system"`/`attribute="data-theme"` exactly),
+injected as a plain inline `<script>` in the raw HTML stream rather than
+through a component's JSX return value.
+
+BROWSER VERIFICATION NOT PERFORMED. Neither browser tool available in
+this session could reach this dev server: the built-in browser pane
+explicitly cannot open `localhost` servers Claude starts itself (its own
+documented limitation — the pane runs in a different process/context
+than the shell), and the Claude-in-Chrome extension tools were not
+connected/available when checked. The specific warning this task
+targets is a client-side-only React diagnostic that requires an actual
+browser executing JavaScript to observe directly; a plain HTTP fetch
+(used above) can only confirm the SSR HTML output, not hydration-time
+console behavior. The structural argument above (the script is injected
+outside the React tree, exactly matching the library's own documented
+fix for this exact upstream issue number) is the strongest verification
+available without a real browser, and is reported as exactly that — not
+as an observed absence of the warning. The user's own manual check in a
+real browser (open any page, check the console for the script-tag
+warning) remains the authoritative next step, per this task's own
+explicit "do not claim browser verification if you cannot actually
+reproduce localhost" instruction.
+
+Not run: the Postgres regression suite (no domain/database file was
+touched by this fix — theme and one layout-nesting fix only, both pure
+UI). Not committed, per instruction.
+
+FILES CHANGED:
+  M  package.json / package-lock.json   (next-themes → @teispace/next-themes@^3.0.2)
+  M  components/theme/ThemeProvider.tsx (library swap, storage="local", doc comment)
+  M  components/theme/ThemeToggle.tsx   (import swap, doc comment)
+  M  components/layout/AppShell.tsx     (QuickAddProvider now wraps the full shell — incidental crash fix)
+================================================================================
+
+ADDENDUM — MONATRIQ DEV MIGRATION DEPLOYMENT
+================================================================================
+
+OBJECTIVE. Apply the pending P0-E3-S3 migration
+(`20260928090000_create_money_period_breakdowns.sql`) to the remote
+"Monatriq Dev" Supabase project only — it had only ever been applied to
+local Docker Supabase, causing `/money` to fail with `PGRST202` against
+the cloud project `npm run dev` actually points at.
+
+SAFETY PREFLIGHT.
+- `npx supabase projects list`: exactly ONE project is visible to this
+  CLI/account at all — ref `mvnwrkfcszazqqccmmxq`, name "monatriq's
+  Project", org `ruxuuvlkwwyhvmxkianm`, status `ACTIVE_HEALTHY`,
+  `linked: true`.
+- Cross-verified against two independent sources: the local CLI link
+  state (`supabase/.temp/project-ref` → same ref) and the application's
+  own `.env.local` (`NEXT_PUBLIC_SUPABASE_URL=https://
+  mvnwrkfcszazqqccmmxq.supabase.co` → same ref). All three agree.
+- No "Nemryn" project exists or is visible to this environment at all —
+  re-confirmed, not merely assumed from earlier in this session.
+- No other/unexpected project exists to confuse this one with — it is
+  the only project this CLI can see.
+- `npx supabase migration list`: every migration through
+  `20260927090000` already matched local/remote exactly;
+  `20260928090000` was the ONLY one present locally (`remote: ""`) —
+  confirmed as the sole pending migration before touching anything.
+- `npx supabase db push --dry-run`: confirmed exactly one migration
+  (`20260928090000_create_money_period_breakdowns.sql`) would be
+  pushed — nothing else, matching the migration-list finding.
+- `supabase db reset` was NOT run against any remote target at any
+  point.
+- No service-role key, password, or database credential was printed to
+  visible output at any point in this addendum's work — every
+  verification query below uses only the ANON key already present in
+  `.env.local` (public/publishable by design, not a secret, consistent
+  with this project's own established precedent for what may appear in
+  a client-facing request).
+
+MIGRATION APPLIED. `npx supabase db push` (interactive confirmation
+accepted, listing only the one expected migration file). The CLI
+printed a warning during an auxiliary "pg-delta catalog" caching step
+(`failed to cache migrations catalog: ... Failed to read certificate
+file '/workspace/supabase/.temp/pgdelta/pgdelta-target-ca.crt'`) — this
+is a local, optional diff-caching convenience used by the CLI tooling
+itself, unrelated to whether the migration's actual SQL executed
+against the remote database; it was not treated as proof of success or
+failure either way, only as a reason to verify directly (below) rather
+than trust the ambiguous console output.
+
+VERIFICATION.
+1. Remote migration recorded: re-ran `npx supabase migration list`
+   after the push — `20260928090000` now shows `"remote":
+   "20260928090000"`, matching local exactly, alongside every
+   previously-matching migration (no other row changed).
+2. Function existence — `supabase db dump` was attempted first as a
+   ground-truth check but is NOT usable in this environment/account:
+   `--dry-run` revealed the underlying mechanism needs an elevated
+   "login role" this account lacks (`403: "Your account does not have
+   the necessary privileges to access this endpoint"`), which explains
+   why an earlier plain dump attempt silently returned zero function
+   definitions for EVERY function, including long-established,
+   definitely-existing ones (`money_period_summary`) — a broken
+   verification method, not evidence of anything, and abandoned rather
+   than misreported.
+3. Function existence and permissions — verified instead by directly
+   calling each RPC endpoint over HTTPS with only the anon key (no
+   authenticated session, no secret credential), comparing the two new
+   functions against two long-established, definitely-working ones:
+     money_currency_totals      -> HTTP 401, code 42501, "permission denied for function money_currency_totals"
+     money_period_summary       -> HTTP 401, code 42501, "permission denied for function money_period_summary"
+     money_weekly_summary       -> HTTP 401, code 42501, "permission denied for function money_weekly_summary"
+     money_category_breakdown   -> HTTP 401, code 42501, "permission denied for function money_category_breakdown"
+   All four return the IDENTICAL response class (Postgres's own
+   `42501` permission-denied, from the `revoke ... from anon` grant
+   actually being enforced) — never `PGRST202` ("could not find the
+   function"). This is unambiguous: PostgREST found and routed to real
+   functions for all four names, and anonymous execution was correctly
+   denied for all four, exactly matching the migration's own `revoke
+   all ... from public, anon` statements. This directly satisfies "verify
+   public.money_weekly_summary exists," "verify public.money_category_
+   breakdown exists," and "verify anon/public permissions remain denied."
+4. Authenticated execute permission was not separately re-verified with
+   a live authenticated network call (no real Monatriq Dev user
+   credential was available or appropriate to use for this check without
+   being asked). Confidence instead rests on: the new migration's
+   `grant execute ... to authenticated` statements are byte-identical in
+   structure to every other Money RPC's own grant (which the anon-denial
+   test above just re-confirmed is correctly enforced on this exact
+   deployment), and the identical SQL already passed real authenticated-
+   user tests against local Postgres (9 new tests, 48/48 in the Money
+   suite, §47/§49 of this report) — the SAME migration file, not a
+   separate implementation. This is disclosed as inference from a strong
+   but indirect signal, not an observed authenticated call.
+5. RLS was not modified — this migration adds two new `security
+   invoker` functions only; no `alter policy`/`create policy`/`drop
+   policy` statement exists anywhere in it (re-confirmed by re-reading
+   the applied file).
+6. The migration itself was not altered to "make deployment easier" —
+   the exact same file already reviewed, tested, and reported in the
+   base P0-E3-S3 report was pushed verbatim.
+
+/MONEY SERVER RESULT. Fresh `npm run dev`, then `GET /money`: `307`
+(redirect to `/login`) — correct, expected behavior for an
+unauthenticated request (this curl-based check has no real session, the
+same limitation disclosed in the prior ThemeProvider addendum). The
+server log shows NO `PGRST202` anywhere, and no other error — a
+material change from before this migration was applied, when the
+identical unauthenticated-redirect behavior for other routes coexisted
+with a real `PGRST202` crash on any actually-authenticated request to
+`/money`. Full authenticated-session browser verification was not
+performed — no connected browser tool was available in this session
+(same limitation as the prior addendum: the built-in browser pane
+cannot reach a `localhost` server Claude starts itself; Claude-in-Chrome
+was not connected) — not claimed as done.
+
+ISSUES ENCOUNTERED. (1) The CLI's own migration-catalog caching step
+warned/failed due to a missing certificate file in an unrelated sandbox
+path — did not block the actual migration; disclosed above rather than
+hidden. (2) `supabase db dump` cannot be used for verification in this
+environment/account (missing "login role" privilege, HTTP 403) —
+worked around with a more direct and, in retrospect, more conclusive
+method (comparing real RPC-call response codes rather than a schema
+dump). Neither issue affected the migration's actual application or
+this addendum's conclusions.
+
+LOCAL REGRESSION / TEST ENVIRONMENT. Unchanged and re-confirmed:
+`.env.test.local` still points at `http://127.0.0.1:54321` (local
+Docker only) — not touched by this addendum. The `npm run dev` →
+Monatriq Dev cloud / automated RLS-database tests → local Docker
+Supabase separation established in an earlier phase remains exactly as
+it was. No local test was re-run as part of this addendum (nothing in
+the local Postgres schema or the application/domain code changed —
+only the remote Dev database's schema gained the migration it was
+already missing).
+
+FILES CHANGED: none in the working tree. This addendum's only effect
+was applying an already-existing, already-committed-to-neither-branch
+migration file to the remote Monatriq Dev database's own schema — a
+database-state change, not a source change. Not committed (nothing new
+to commit).
+================================================================================
+
+ADDENDUM — MONEY STRICT REFERENCE REPLICATION + CENTERED QUICK ADD CHOOSER
+================================================================================
+
+Financial semantics, Money architecture, multi-currency behavior, RLS,
+and the two new Money RPCs (`money_weekly_summary`,
+`money_category_breakdown`) were NOT touched by this pass — every change
+below is a Tailwind class, component-structure, or interaction change
+against markup already reading from the same canonical functions.
+
+WHAT VISUALLY DIFFERED (found via a re-read of `docs/reference/
+02-money/screen.png` and its own `code.html` against the current
+component source, section by section):
+
+1. Outer page rhythm: the reference joins its sections with
+   `space-y-space-md` (16px); production used `gap-6` (24px) — a
+   systemic 8px-per-section overshoot repeated across the whole page,
+   the single largest contributor to the "less dense than reference"
+   complaint.
+2. This Month card: reference's primary metric values are `text-base
+   sm:text-lg` (16/18px) `font-bold`; production used `text-sm` (14px)
+   — smaller than the reference, not larger, in the one place density
+   should NOT have been saved. Reference's header pairs a calendar icon
+   (18px) with a `title-md` label AND a real period name ("This Month");
+   production showed only a raw date range with a 16px icon, no period
+   title.
+3. Cash Flow chart: with real weekly data now flowing through
+   (`money_weekly_summary`, live since the prior addendum's migration
+   deployment), a period with only 1-2 real weeks rendered via a
+   `grid-cols-N` that STRETCHED to the full card width — exactly the
+   "one giant isolated bar in a large empty panel" the task described,
+   confirmed by re-reading `CashFlowChart.tsx`'s own layout logic before
+   touching it.
+4. Available Cash: reference's headline balance is `display-lg-mobile`
+   (32px/700); production used 28px — smaller than the reference.
+5. Activity rows: reference's leading icon circle is `w-9 h-9` (36px,
+   fully rounded); production used `w-10 h-10` (40px, `rounded-xl` not
+   fully round) — a small but real size/shape mismatch.
+6. Period selector: functionally correct; the only real gap was the
+   active segment missing the reference's own subtle `shadow-sm`.
+7. Where Money Went / Cash In by Source: already close on review (2-
+   column card grid, segmented bar, icon/percentage placement all
+   already matched the reference's own proportions from the original
+   build) — no material changes needed beyond what the page-level
+   spacing fix already improved.
+8. Add Cash Balance / Create Cash Bucket: the single largest structural
+   gap. The reference's populated Money dashboard shows NEITHER form —
+   its screen ends at Activity. Production showed both as two large,
+   always-expanded sections underneath Activity on every populated
+   visit, materially lengthening the page for a state the reference
+   never depicts that way.
+
+WHAT WAS CORRECTED:
+
+- `app/(app)/money/page.tsx`: outer section gap `gap-6` → `gap-4`
+  (16px), matching the reference's own `space-y-space-md` exactly; the
+  header row's cross-axis alignment fixed from `items-start` to
+  `items-center` (matching the reference's own row alignment for the
+  subtitle/"Manually Tracked" pair).
+- `components/money/MoneySummaryCard.tsx`: primary metric values raised
+  to `text-base sm:text-lg font-bold` (from `text-sm`); header icon
+  raised to 18px; a real period title ("This Week"/"This Month"/"Last 3
+  Months"/"This Year", derived from the already-selected `periodKey` —
+  no new data, no new calculation) now precedes the real date range
+  rather than replacing it.
+- `components/money/CashFlowChart.tsx`: replaced the stretching
+  `grid-cols-N` layout with a fixed-width (`w-10` per week), `justify-
+  center`, `overflow-x-auto` flex row. This is the one change in this
+  pass with real layout-logic consequences worth stating precisely: 1-3
+  real weeks now render as a compact, centered cluster of bars instead
+  of being stretched across the full card width; 4+ weeks lay out
+  exactly as before (each week still gets its own fixed-width column);
+  a genuinely long period (e.g. "Year," which can really return dozens
+  of weekly buckets from `money_weekly_summary`) scrolls horizontally
+  within the card's own bounds instead of overflowing the viewport —
+  addressing item 17's "no horizontal overflow" requirement for a case
+  the reference itself never has to handle (its own chart is
+  hardcoded to exactly 4 weeks). No week was fabricated in either
+  direction; every bar still corresponds to one real
+  `MoneyWeeklyBucket` row.
+- `components/money/AvailableCashSection.tsx`: single-currency headline
+  raised from `text-[28px]` to `text-[32px]` (matching `display-lg-
+  mobile`); the rare multi-currency list's own per-line size raised from
+  `text-lg` to `text-xl` to stay visually proportionate to the new
+  single-currency size.
+- `components/money/MoneyActivityList.tsx`: row icon container corrected
+  from `h-10 w-10 rounded-xl` to `h-9 w-9 rounded-full`, matching the
+  reference exactly.
+- `components/money/PeriodSelector.tsx`: added `shadow-sm` to the active
+  segment.
+- `components/money/ManageCashSection.tsx` (new): wraps the existing,
+  unmodified `AddCashBalanceForm`/`CreateBucketForm` in a single
+  collapsed-by-default disclosure ("Add cash or a new bucket"), matching
+  the reference's own choice not to show either form permanently on a
+  populated dashboard. Collapsed state shows one compact row (icon +
+  label + chevron); expanding reveals both forms exactly as they worked
+  before this pass — same fields, same `recordOpeningBalance`/
+  `createBucket` calls, same validation, same success behavior. A
+  brand-new (zero-bucket) user still sees `AddCashBalanceForm` directly,
+  uncollapsed, in `page.tsx` — the empty-state onboarding path this
+  pass's own instruction explicitly said must remain the primary state
+  for that case was left untouched.
+
+ADD ACTIVITY CHOOSER REPOSITIONING. `components/quick-add/
+QuickAddProvider.tsx` now renders two structurally distinct overlays
+depending on `view`, both still gated by the same `isOpen` state and
+the same `QuickAddContext`:
+- `view === "hub"`: a CENTERED modal — `fixed inset-0 flex items-center
+  justify-center p-4` backdrop, `w-full max-w-sm rounded-2xl` card,
+  content-driven height (no `max-h`/scroll needed for 4 rows + header).
+  `max-w-sm` (384px) deliberately stays a step narrower than the flow-
+  forms' own `max-w-md` (448px), per the instruction to keep this
+  specific screen a "restrained modal panel," not a giant dialog. Row
+  height trimmed slightly (`min-h-[58px]` → `min-h-[52px]`, icon circles
+  `h-11 w-11` → `h-10 w-10`, title `text-base` → `text-sm`) to keep the
+  whole card visibly compact against its own smaller width.
+- `view !== "hub"` (received/spent/move): UNCHANGED — the original
+  bottom-anchored sheet (`rounded-t-2xl`, drag handle, `max-h-[92vh]`
+  scroll, `max-w-md`), exactly as the reference itself shows for these
+  three detailed flows, per this pass's own explicit instruction not to
+  force long forms into a tiny centered card.
+The "Asset / Investment" row's routing to `/assets#add-asset` is
+unchanged — same link, same destination, same canonical Add Asset form,
+now just reached from the centered chooser instead of the bottom one.
+
+REFERENCE FEATURES STILL OMITTED, AND WHY (unchanged from the base
+report and its first addendum — re-confirmed still correct, not
+silently dropped):
+- The "+44.7% surplus" ratio badge — still not a real value any
+  canonical function returns; still not computed in JSX.
+- Per-row descriptive captions on Where Money Went / Cash In by Source
+  cards where no real per-category description field exists.
+- The reference's exact abbreviated notation ("₦3.8M") — production
+  still shows full-precision amounts via the trusted currency-formatting
+  layer, per the same reasoning as Home's equivalent decision.
+- The header's notification bell — still no notification domain.
+- Bank-connect language of any kind — still none exists; "Manually
+  Tracked" remains real, unchanged.
+
+POPULATED MONEY FORM-PLACEMENT DECISION (explicit, since the brief asks
+for it to be recorded directly): `ManageCashSection`'s collapsed-by-
+default treatment was chosen over three other options considered —
+(a) removing the forms from `/money` entirely and only reaching them via
+Quick Add: rejected, because Quick Add's own four options are
+transaction-recording flows (Money Received/Spent/Move/Asset), and
+"Add Cash Balance"/"Create Cash Bucket" are a structurally different
+operation (initializing a bucket, not recording a transaction against
+one) that the phase brief's own Quick Add section never asked to fold
+in; (b) moving them into the `AvailableCashSection`'s own existing
+bucket-disclosure drawer: rejected, because that drawer's real job is
+displaying real bucket balances, and folding two multi-field forms into
+it would overload one already-real disclosure with an unrelated
+concern; (c) a page-level link to a separate settings page: rejected as
+unnecessary new-route scope for what the reference itself likely
+handles as a lightweight, page-local disclosure (its own screenshot
+doesn't show a separate settings route, only the absence of the forms
+on the main scroll). The chosen approach — a single new disclosure
+section, own real bucket data as props, zero new mutation, zero new
+route — was the smallest change that satisfies "preserve the
+functionality, expose it through the appropriate reference-aligned
+interaction."
+
+SIDE-BY-SIDE AUDIT REASONING (code/CSS-level, against the reference's
+own literal values re-read directly from `code.html` for this pass — no
+browser render performed, see Validation below): each corrected section
+above was checked height/padding/typography against the reference's own
+class list before and after the fix, not merely confirmed to "exist" —
+e.g. the This Month metric-value fix was sized specifically to
+`text-base sm:text-lg` because that is the LITERAL class the reference
+uses at that exact position (`text-base sm:text-lg font-bold` on the
+Money In/Out/Net values), not a rounded estimate. Sections not listed
+under "what was corrected" (Header/context bar, Where Money Went, Cash
+In by Source, Period Selector's non-active state) were re-checked
+against the same reference classes and found to already match closely
+enough that no change was warranted — re-confirmed, not skipped.
+
+VALIDATION. `npm run lint`: clean. `npm run typecheck` (app + test-
+harness configs): clean. `npm run build` (Supabase-configured): clean,
+unchanged 19-route list. The existing Postgres regression suite was NOT
+re-run: no financial/domain/migration/RLS file was touched by this
+pass — confirmed by review (every edited file is a `components/money/
+*`, `components/quick-add/*`, or `app/(app)/money/page.tsx` presentation
+change; no new repository call, no new RPC parameter, no changed query
+shape). Stated plainly rather than claiming a regression run that did
+not happen, per this task's own explicit instruction.
+
+Confirmed by direct review: Money still reads exclusively from
+`money_period_summary`/`money_weekly_summary`/`money_category_
+breakdown`/`money_bucket_balances`/`money_currency_totals`/
+`money_recent_activity` — no new query was added, none was removed.
+Quick Add's three flow forms and their mutation calls
+(`recordMoneyReceived`/`recordMoneySpent`/`recordTransfer`/
+`recordFxTransfer`/`recordRecovery`/`recordDebtPayment`/
+`voidFinancialEvent`) are byte-identical to before this pass — only the
+HUB view's outer wrapper changed; none of the three form components
+were edited. No fake/demo data was introduced (the new period-title
+strings are static UI copy keyed off the real `periodKey`, not
+financial values). No new financial arithmetic was added anywhere (the
+chart's bar-height scaling and the two forms' unchanged percentage
+calculations are the same presentational-ratio patterns already
+disclosed and accepted in the base report and Home's own precedent). No
+user-specific hardcoding was introduced. No service-role key, password,
+or credential was referenced or printed by this pass — grep for
+`service_role`/`SUPABASE_SERVICE` across every file this addendum
+touched: zero matches. RLS unchanged — no migration or policy file was
+touched. Light/Dark structure remains shared — every class used is an
+existing semantic token (`bg-surface-raised`, `bg-surface-strong`,
+`text-accent-primary`, `text-focus`, `text-attention`, `text-danger`),
+no `data-theme` branch, no raw hex, confirmed by inspection; no central
+token value was changed in `lib/styles/tokens.css` — the visual gaps
+found this round were all spacing/typography/layout, not color-mapping,
+so no token tuning was needed. Home was not touched — no file under
+`components/home/`, `app/(app)/home/`, or any file Home itself imports
+(`AppShell.tsx`, `MobileBottomNav.tsx`, `DesktopNav.tsx`,
+`PageContainer.tsx`) was modified by this pass.
+
+FILES CHANGED:
+  M  app/(app)/money/page.tsx                    (section gap, header alignment, ManageCashSection swap-in)
+  M  components/money/MoneySummaryCard.tsx        (period title, icon size, metric value scale)
+  M  components/money/CashFlowChart.tsx           (fixed-width/centered/scrollable bar layout)
+  M  components/money/AvailableCashSection.tsx    (headline scale)
+  M  components/money/MoneyActivityList.tsx       (row icon size/shape)
+  M  components/money/PeriodSelector.tsx          (active-segment shadow)
+  M  components/quick-add/QuickAddProvider.tsx    (hub view split into a centered modal; flow forms unchanged)
+  ?? components/money/ManageCashSection.tsx       (new — collapsed-by-default Add Cash Balance/Create Bucket wrapper)
+
+No financial, domain, migration, or RLS file was touched. Not committed,
+per instruction — stopping here for manual browser comparison.
+================================================================================
+
+ADDENDUM — FINAL MONEY MANUAL-QA POLISH
+================================================================================
+
+Presentation-only, as instructed. The centered Add Activity chooser,
+the overall Money layout, Quick Add's mutation calls, every Money RPC,
+multi-currency semantics, period calculations, opening-balance
+treatment, transfer semantics, RLS, the database schema, Home, and the
+Add Cash / new bucket collapsed behavior were all left untouched —
+confirmed by review: every file this addendum edited is one of the four
+named below, and none of them gained, lost, or changed a data fetch,
+repository call, or RPC parameter.
+
+1. CASH FLOW — ONE/TWO WEEK STATE. `components/money/CashFlowChart.tsx`:
+   the plotting area's own height now depends on how many real weeks are
+   actually present — `weeks.length <= 2` uses a compact `h-20` row /
+   `h-12` bar area instead of the previous fixed `h-32` row / `h-24` bar
+   area used for 3+ real weeks. No week was fabricated in either
+   direction; this only changes how tall the SAME real bars are drawn.
+   Inflow, outflow, week label (`W1`, `W2`, ...), the In/Out legend, and
+   the real positive-weeks footer line are all unchanged — the exact
+   same JSX, just inside a shorter frame for the compact case.
+
+2. WHERE MONEY WENT — EMPTY STATE. `components/money/
+   WhereMoneyWentSection.tsx`: the "No spending recorded in this
+   period." card is no longer a full `p-4` card with a stacked title-
+   then-message layout (which read at nearly the same height as a
+   populated breakdown's header alone); it's now one compact row
+   (`p-3.5`, title and message side by side, `justify-between`) — a
+   materially shorter card, real message text unchanged verbatim. When
+   real spending exists, the function returns before reaching this
+   branch at all, so the full segmented-bar breakdown renders exactly as
+   before — automatic, not a separate code path to keep in sync.
+
+3. CASH IN BY SOURCE — SINGLE ITEM (+ empty state).
+   `components/money/CashInBySourceSection.tsx`: the empty state got the
+   identical compact-row treatment as item 2, for the same reason. The
+   populated grid now checks the real category count:
+   `sorted.length >= 2` keeps the original 2-column grid unchanged;
+   `sorted.length === 1` switches the wrapper to a plain `flex` and caps
+   that one real card at half-width (`w-1/2 min-w-[140px]`) instead of
+   either stretching it edge-to-edge or leaving an empty second grid
+   cell. No source was invented to fill the second column — the
+   category count is still read verbatim from `money_category_
+   breakdown()`; only the layout branches on how many rows it actually
+   returned. 2+ sources are unaffected — same grid, same cards, same
+   markup as before this addendum.
+
+4. ACTIVITY ROW POLISH. `components/money/MoneyActivityList.tsx`: row
+   padding tightened `p-4` → `p-3.5`. The transfer caption ("Internal
+   transfer, excluded from In/Out") no longer renders as its own
+   badge-styled line (`bg-surface-strong` pill with padding and a
+   rounded background, competing visually with the title/amount); it's
+   now folded into the existing muted subline as plain quiet text
+   (`text-text-muted/70`, no background, no border) appended after the
+   date/category — real information, same wording in substance, now
+   reading as ordinary secondary metadata rather than a badge. The
+   transaction title (`text-base font-semibold`) and the amount
+   (`text-base font-semibold`, real accent/plain color rule unchanged)
+   remain the two visually dominant elements on every row, untouched.
+
+VALIDATION. `npm run lint`: clean. `npm run typecheck` (app + test-
+harness configs): clean. `npm run build` (Supabase-configured): clean,
+unchanged 19-route list. No database migration was run, per instruction.
+No Postgres regression suite was run: no financial/domain/RLS/migration
+file was touched by this pass (re-confirmed — all four edited files are
+`components/money/*` presentation components; no repository import, RPC
+call, or data shape changed in any of them). Confirmed by direct review:
+Money's canonical reads are unchanged; Quick Add's mutation calls are
+unchanged (this pass touched none of the three flow-form components or
+`QuickAddProvider.tsx`); the centered Add Activity chooser is untouched;
+no fake/demo data was introduced (every conditional above branches on a
+real, already-fetched count — `weeks.length`, `sorted.length` — never a
+placeholder value); no new financial arithmetic was added; no user-
+specific hardcoding was introduced; no service-role key, password, or
+credential was referenced by this pass; RLS and the database schema are
+unchanged; Light/Dark structure remains shared (every class used is an
+existing semantic token — `bg-surface-strong`, `text-focus`, `text-
+text-muted`/`text-text-muted/70` — no raw hex, no `data-theme` branch);
+Home was not touched.
+
+FILES CHANGED:
+  M  components/money/CashFlowChart.tsx           (compact plotting height for 1-2 real weeks)
+  M  components/money/WhereMoneyWentSection.tsx    (compact empty-state row)
+  M  components/money/CashInBySourceSection.tsx    (compact empty-state row; balanced single-item layout)
+  M  components/money/MoneyActivityList.tsx        (row padding; transfer caption quieted, folded into subline)
+
+No financial, domain, migration, or RLS file was touched. Not committed,
+per instruction — stopping here for final browser review.
+================================================================================

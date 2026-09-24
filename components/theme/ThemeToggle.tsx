@@ -1,6 +1,6 @@
 "use client";
 
-import { useTheme } from "next-themes";
+import { useTheme } from "@teispace/next-themes";
 import { Sun, Moon, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 
@@ -13,12 +13,12 @@ const OPTIONS = [
 /**
  * Restrained appearance control — Light/Dark/System. Deliberately kept out
  * of the financial dashboard body and placed in the account menu (see
- * AppShell) per the phase brief. `theme` is `undefined` until next-themes'
- * own provider has read localStorage on the client (it cannot know the
- * value during server rendering) — no local mounted/effect state is
- * needed here: next-themes re-renders every `useTheme()` consumer via
- * context once it resolves, so `selected` is simply false for every
- * option until then and correct immediately after. UI-only state
+ * AppShell). Built on @teispace/next-themes (see ThemeProvider.tsx for why
+ * this replaced upstream next-themes). `theme` is backed by
+ * `useSyncExternalStore` under the hood, so it's never `undefined` here —
+ * it starts at `defaultTheme` ("system") and updates the instant the
+ * client store finishes reading `localStorage`, with no manual mounted/
+ * effect state needed in this component either way. UI-only state
  * throughout — never a financial one.
  */
 export function ThemeToggle() {
