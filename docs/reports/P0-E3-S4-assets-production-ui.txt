@@ -1,0 +1,1051 @@
+P0-E3-S4 — ASSETS: PRODUCTION UI + ASSET WORKFLOW COMPLETION
+================================================================
+
+1. PHASE
+P0-E3-S4 — Assets: Production UI + Asset Workflow Completion.
+
+2. STATUS
+PARTIAL — ASSET SALE DOMAIN GAP. The Assets Overview screen is complete,
+built against the approved reference, and verified against real
+authenticated-user data. Two capabilities the reference implies — Offers
+and a real Asset Sale/Disposal mutation — are deliberately NOT
+implemented this phase, per the brief's own explicit allowance to report
+a domain gap rather than invent unsafe financial behavior. One small,
+safe, non-financial schema capability (asset `status_code`) was added
+because it was explicitly required by the completion gate ("vehicle
+status is user-driven") and judged tractable/safe within scope.
+
+3. OBJECTIVE
+Build Monatriq's production Assets screen against the approved
+`docs/reference/04-assets/` design reference, reusing 100% of the
+existing generic Assets domain (assets / asset_basis_events /
+asset_valuations / asset_summary()) plus Receivables, implementing
+progressive-disclosure Add Asset, a generic + subtype-aware detail
+surface, Needs Attention / Potential Liquidity sections backed only by
+real domain signals, and auditing whether Offers and Asset Sale/Disposal
+can be safely added within this phase.
+
+4. GIT/REPOSITORY PREFLIGHT
+`git status` was inspected before starting: only P0-E3-S3's own
+already-completed, not-yet-committed changes were present (Money/Quick
+Add/theme files) — no unexpected unrelated changes. P0-E3-S3 was
+confirmed functionally complete per its own report before this phase's
+work began. No commits were made at any point in this phase, per the
+standing "do not commit" instruction; the branch remains `main` with the
+same uncommitted-since-last-commit working tree extended by this phase's
+files.
+
+5. REFERENCES INSPECTED
+`docs/product/PRODUCT_DEFINITION.md`, `docs/architecture/
+FINANCIAL_DOMAIN_MODEL.md`, `docs/architecture/MULTI_CURRENCY_MODEL.md`,
+`docs/architecture/SYSTEM_ARCHITECTURE.md`, `docs/security/
+SECURITY_AND_RLS_PRINCIPLES.md`, `docs/design/VISUAL_CONSTITUTION.md`,
+`docs/project/BUILD_STATE.md`, all Assets-domain migrations, `lib/domain/
+assets/repository.ts` and `types.ts` (pre-phase state), `supabase/tests/
+assets/run.ts` (pre-phase, 28 assertions), the Receivables domain
+(`lib/domain/receivables/repository.ts`), and the final P0-E3-S2/P0-E3-S3
+production-UI reports for visual convention continuity (AppShell, theme
+tokens, bottom-sheet pattern, 48px touch targets, Decimal.js discipline).
+
+6. APPROVED ASSETS REFERENCE ANATOMY
+`docs/reference/04-assets/` contained a final approved screenshot set
+plus supporting `code.html`/`DESIGN.md` — the hard reference gate was
+satisfied, so no BLOCKED state was returned. The reference showed an
+Assets Overview with: a tracked-total headline, a category composition
+bar, a "Needs Attention" list, a "Potential Liquidity" figure, category-
+grouped asset cards (Vehicles, Property, Business Interests, Receivables
+shown as one of several example categories), an Add Asset entry point,
+and per-card status chips. This anatomy was implemented closely; category
+sections were made conditional on real data rather than reproduced as a
+fixed five-category layout (see §41).
+
+7. EXISTING ASSETS DOMAIN AUDIT
+Confirmed fully generic schema pre-phase: `assets` (type/name/currency/
+description/acquired_at/is_archived, no subtype columns, no status
+column), `asset_basis_events` (append-only, signed, basis_event_type:
+initial_basis/capital_improvement/basis_reduction), `asset_valuations`
+(append-only, always positive, valuation_type: estimated_current_value/
+quick_sale_estimate/target_value, latest-per-type via DISTINCT ON),
+`asset_summary()` (one combined read via LEFT JOIN LATERAL per valuation
+type), `asset_value_by_type()` and `asset_native_currency_totals()`
+(P0-E3-S2). Receivables confirmed as a fully separate domain composed
+alongside Assets, with `recordRecovery()` and `updateReceivable()`
+already supporting the recovery/follow-up workflows this phase needed
+with zero new capability. Currency is immutable once history exists.
+
+8. DOMAIN GAPS FOUND
+(a) No `status_code` or any status concept existed on `assets` —
+required by the brief's explicit "vehicle status is user-driven" gate.
+(b) No Offers table/model exists anywhere in the domain.
+(c) No Asset Sale/Disposal mutation exists anywhere in the domain — Quick
+Add's Asset Sale option was already a deferred stub as of P0-E3-S3.
+(d) No `asset_id` FK exists on `liabilities`, confirming Property's
+"Debt/Encumbrance" cannot be linked and must honestly read "Not set."
+
+9. DOMAIN CHANGES INTRODUCED
+Exactly one: `assets.status_code text` (nullable, CHECK-constrained to 6
+values, deliberately excluding `'sold'`/`'archived'`), via
+`supabase/migrations/20260929090000_add_asset_status.sql`. `asset_
+summary()` was dropped and recreated to surface it. See §12 (Migrations)
+in BUILD_STATE.md for the full technical description. No other schema,
+RLS policy, or canonical function was changed. Offers and Asset Sale were
+evaluated and explicitly NOT added — see §31/§32.
+
+10. VISUAL ARCHITECTURE
+100% reuse of the P0-E3-S2/S3 foundation: `AppShell`, theme tokens
+(`bg-surface`, `text-text-primary`, etc.), 48px-touch-target `Input`/
+`Select`/`Button`/`FormField` primitives, the bottom-sheet pattern
+(rounded-t-2xl, drag handle, `max-h-[92vh]`, `max-w-md`, safe-area
+padding) for `AssetActionSheet` and `AddAssetSheet`, and the shared
+Quick Add overlay (unmodified, only its existing Asset Sale deferral
+message continues to route to `/assets`). No Assets-specific theme logic
+was introduced.
+
+11. FILES CREATED
+`components/assets/AddAssetButton.tsx`, `AddAssetSheet.tsx`,
+`AssetActionSheet.tsx`, `AssetCard.tsx`, `AssetsBoard.tsx`,
+`CapitalAllocationCard.tsx`, `NeedsAttentionSection.tsx`,
+`PotentialLiquiditySection.tsx`, `ReceivableActions.tsx`,
+`ReceivablesSection.tsx`, `TrackedAssetsSummaryCard.tsx`;
+`lib/domain/assets/asset-status.ts`, `category-meta.ts`;
+`supabase/migrations/20260929090000_add_asset_status.sql`;
+`docs/reports/P0-E3-S4-assets-production-ui.txt` (this file).
+
+12. FILES MODIFIED
+`app/(app)/assets/page.tsx` (full rewrite, server component composing
+all Assets+Receivables reads); `lib/domain/assets/repository.ts`
+(status_code plumbing); `lib/domain/assets/types.ts` (AssetStatusCode,
+AssetUpdate/AssetSummary additions); `lib/supabase/database.types.ts`
+(regenerated types reflecting the migration); `supabase/tests/assets/
+run.ts` (5 new tests); `docs/project/BUILD_STATE.md` (phase entry,
+migration entry, architecture-change notes, updated Next Approved Step).
+
+13. FILES DELETED
+`components/assets/AddAssetForm.tsx`, `AssetList.tsx`,
+`AssetsByCurrency.tsx` — confirmed superseded, no remaining references
+(grep-verified before deletion), foundation-level components replaced by
+this phase's production UI.
+
+14. ASSETS OVERVIEW
+`TrackedAssetsSummaryCard` shows tracked non-cash asset totals grouped by
+category and currency (Decimal.js summation, never native float),
+sourced from `asset_value_by_type()`. Cash is never included — Money
+owns cash, and the headline is scoped to non-cash tracked assets only,
+avoiding the double-count risk the brief called out. Only categories
+with a real present asset render.
+
+15. ASSET CATEGORY COMPOSITION
+`CapitalAllocationCard` renders one segmented bar PER CURRENCY (never
+blended across currencies) using real current-value composition from
+`asset_value_by_type()`. Category color is identity-stable via a fixed
+`COLOR_BY_TYPE` map keyed by asset_type code (not sort/array position),
+matching the established Home/Money precedent. Colors carry no good/bad/
+risk semantics — purely categorical.
+
+16. NEEDS ATTENTION
+`NeedsAttentionSection` surfaces exactly two real, factual signals: (a)
+assets with `estimatedCurrentValue === null` (missing valuation), and
+(b) receivables with `lastFollowUpAt === null` (no follow-up ever
+logged). No "urgent"/"risk"/"sell now" language anywhere. Empty when
+neither condition is true for any record.
+
+17. POTENTIAL LIQUIDITY
+`PotentialLiquiditySection` only includes assets where `quickSaleEstimate
+!== null` — the user's own conservative quick-sale figure, never target
+value, never latest current-value estimate. Assets without a quick-sale
+figure are simply absent from this section rather than defaulting to
+another value.
+
+18. GENERIC ASSET DETAIL
+`AssetCard` is the shared foundation used for every asset type: Cost
+Basis, Current Value (Est.), Quick-Sale Value, Target Value are rendered
+as four visually distinct fields (never merged/derived from one
+another), plus a status chip (`assetStatusLabel()`, "Status not set"
+fallback) and a "Manage" trigger opening `AssetActionSheet`. Notes,
+valuation history entry points, and timestamps are exposed via the same
+canonical `asset_summary()` fields already returned.
+
+19. VEHICLE DETAIL
+No vehicle-specific screen/fields were added beyond what the generic
+foundation + `status_code` already provide — the domain has no vehicle-
+only columns (classification, remaining-repair-as-a-field, etc. do not
+exist as first-class columns; "remaining repair" is derivable only via
+basis-event history, not a stored field). Vehicles render through the
+same `AssetCard`/`AssetActionSheet` foundation as every other type,
+correctly avoiding inventing vehicle information the user never entered.
+
+20. VEHICLE STATUS
+`assets.status_code` (new column, §9) with 6 real, user-set values:
+Awaiting Repair, Repairing, Ready to List, Listed, Offer Received, Under
+Negotiation. Unset renders "Status not set." Status is a plain dropdown
+in `AssetActionSheet` calling `updateAsset({statusCode})` — nothing in
+the read or write path infers status from valuation/repair data ("Insight
+!= status" preserved by construction, not by convention).
+
+21. VEHICLE REPAIR HANDLING
+`AssetActionSheet`'s "Record a repair / improvement cost" form calls
+`recordBasisEvent({basisEventType: 'capital_improvement'})` — a real,
+already-canonical append-only basis-history row. This increases cost
+basis but deliberately does NOT create a `financial_events`/
+`cash_movements` row and does not touch Money, per the brief's explicit
+instruction not to auto-capitalize every repair as a combined cash+basis
+event (no such atomic canonical operation exists). If the user paid from
+a tracked cash bucket, that is recorded separately as real Money Spent
+via Quick Add — documented in-component via a code comment.
+
+22. OFFERS
+NOT implemented. No Offers table/model exists in the domain, and the
+brief explicitly permits deferring this: "Do not create an offer system
+solely because the screenshot has a decorative offer chip." No offer
+chip, count, or fabricated state appears anywhere in the UI. See §31 for
+the full audit reasoning.
+
+23. PROPERTY/LAND
+Rendered through the generic `AssetCard`/`AssetActionSheet` foundation —
+type, cost basis, current estimate, quick-sale estimate, target value,
+valuation history all real. No freehold/title/survey/mortgage/equity
+field exists or is fabricated. Debt/Encumbrance is not rendered as a
+distinct field this phase (no `asset_id` FK on `liabilities` — §8d); it
+was not invented as "Debt: Not set" copy since no UI slot for it was
+built, avoiding a half-implemented field. This is a disclosed omission,
+not a silent gap (see §51).
+
+24. RECEIVABLES
+`ReceivablesSection` renders real Receivables cards (separate domain,
+composed alongside Assets) — face amount, outstanding, recovered,
+currency, status, last follow-up all sourced from `getReceivableSummaries
+()`. Receivables never contribute to the Assets tracked-total headline or
+liquidity figures as if they were cash.
+
+25. RECOVERY INTEGRATION
+`ReceivableActions.tsx` provides `LogFollowUpButton` (calls
+`updateReceivable()` directly, setting `lastFollowUpAt`) and
+`RecordRecoveryButton` (opens the global Quick Add sheet via
+`useQuickAdd().open()` then `.goTo("received")`, routing to the existing
+Money Received → Receivable Recovery flow built in P0-E3-S3). No
+duplicate recovery form was built in Assets.
+
+26. BUSINESS INTERESTS
+Rendered through the generic foundation with an added disclosure line in
+`AssetsBoard` for this category specifically: "A business interest's
+invested amount is not automatically its market value. Business income
+and spending are tracked in Money." No automatic market valuation is
+computed; invested amount (cost basis) and market valuation (current
+value estimate) remain the two distinct, separately-entered fields
+already provided generically. Deliberate reference deviation: the
+reference's own claim that business interests are "not included in
+portfolio total" was NOT reproduced, since Monatriq's real
+`asset_value_by_type()` DOES include valued business-interest assets —
+reproducing the reference's claim verbatim would have been a misleading
+financial statement.
+
+27. VALUATION HISTORY
+Every valuation update goes through the existing `recordValuation()` →
+`asset_valuations` (append-only, timestamped, latest-per-type read via
+DISTINCT ON) — prior estimates are never overwritten. Updating a value
+from e.g. one figure to a higher one does NOT create a Money In entry;
+this is enforced structurally, not by copy, since `recordValuation()` has
+no code path that touches `financial_events`/`cash_movements` (verified
+by the pre-existing test "Valuation creation does not create
+financial_events or cash_movements").
+
+28. QUICK-SALE VALUE
+Always explicitly user-entered — via `recordValuation({valuationType:
+'quick_sale_estimate'})` in `AssetActionSheet`, or at asset-creation time
+in `AddAssetSheet`. Never derived as a percentage of target/current
+value; when absent, sections requiring it (§17) simply omit the asset.
+
+29. TARGET VALUE
+Purely aspirational/planning — same `recordValuation()` mechanism,
+`valuation_type = 'target_value'`. Confirmed (by existing pre-phase test
+"Target value is never returned as the current estimated value") that it
+never silently substitutes for current value, and by construction it
+never enters `asset_value_by_type()`'s Net-Worth-facing totals (that
+function only reads `estimated_current_value`).
+
+30. ADD ASSET
+`AddAssetSheet` implements 2-step progressive disclosure: step 1 (Asset
+Type / Name / Currency — required), step 2 (Cost Basis / Current Value /
+Quick-Sale Value / Target Value — all optional, contextually labeled via
+`BASIS_LABEL`/`CURRENT_VALUE_LABEL` maps, e.g. "Capital Invested" for
+Business Interest). No Vehicle-only fields are shown for non-vehicle
+types, since no such fields exist in the domain to show. Creating an
+asset never moves cash (`createAsset()` has no cash-bucket interaction —
+see §33).
+
+31. ASSET EDITING
+Differentiated by mutation type, per the brief's explicit "do not treat
+all changes as one generic UPDATE form": metadata (name — not exposed as
+editable this phase, since no reference affordance requested it),
+valuation update (`recordValuation`, new history row), financial event
+(`recordBasisEvent`, new history row), status transition (`updateAsset
+({statusCode})`, plain column update), archive toggle (`updateAsset
+({isArchived})`). All four are distinct forms/buttons inside
+`AssetActionSheet`, not one combined form.
+
+32. ARCHIVE/DELETE BEHAVIOR
+Archive only — `AssetActionSheet`'s "Archive Asset"/"Unarchive Asset"
+button toggles `is_archived` via the existing `updateAsset()` mutation
+(pre-existing capability, not new this phase). No hard-delete UI was
+built, per the brief's explicit "do not hard-delete financially
+meaningful assets merely because the reference has a trash icon."
+
+33. ASSET ACTIVITY/TIMELINE
+Not built as a separate dedicated timeline view this phase. The
+reference's activity/timeline treatment was not reproduced as its own
+section; valuation and basis-event history remain queryable/real via the
+existing append-only tables but no new UI surface was added to render
+them as a combined chronological feed. Disclosed omission (§52) — adding
+this safely was judged lower priority than the core Overview build
+within this phase's scope, and no existing read function currently
+returns a combined, ordered valuation+basis-event stream.
+
+34. ASSET SALE/DISPOSAL AUDIT
+Re-confirmed: zero sale/disposal mutation exists anywhere in Assets, and
+none was added by P0-E3-S3. A safe implementation requires: atomicity
+(single transaction spanning asset lifecycle + cash movement + basis
+history), ownership verification of both the asset and destination cash
+bucket via `auth.uid()`, currency-compatibility checking, correct
+separation of capital-returned vs. realised gain/loss (computed in SQL,
+never in JSX), selling-cost handling, idempotency/double-sale prevention,
+audit-preserving history, and a full adversarial RLS test suite (cross-
+user asset, cross-user bucket, double-sale, currency mismatch). This is a
+materially separate scope of domain + security work from the Overview UI
+build completed this phase. Per the brief's own explicit instruction —
+"If safely completing this requires significant architecture redesign:
+STOP and report: ASSET SALE DOMAIN GAP rather than inventing unsafe
+accounting" — this phase reports exactly that gap rather than
+implementing a partial/unsafe version.
+
+35. ASSET SALE IMPLEMENTATION (IF ANY)
+None. Quick Add's existing Asset Sale deferral (from P0-E3-S3: routes to
+`/assets` with an honest "not yet supported" message rather than a
+generic Money Received form) is unchanged and remains correct, since no
+real flow exists yet to route it to.
+
+36. MONEY/QUICK ADD INTEGRATION
+Unchanged except for the Receivable Recovery entry point now also being
+reachable from Assets (`RecordRecoveryButton`, §25), which opens the
+SAME global Quick Add sheet and calls the SAME `recordRecovery()`
+mutation already built in P0-E3-S3 — no duplicated form. No Money
+architecture, RPC, or mutation was touched.
+
+37. MULTI-CURRENCY
+Verified throughout: `TrackedAssetsSummaryCard` and `CapitalAllocationCard`
+both group/sum strictly within a single currency (Decimal.js), never
+blend NGN+USD+GBP into one figure. No combined single "Total Assets"
+number is ever rendered when multiple currencies are present — native
+per-currency totals/bars only. Profile preferred currency is used only
+as the `AddAssetSheet` default currency selection (display/default
+convenience), never as an assumption applied to existing asset data.
+
+38. FINANCIAL POSITION CONSISTENCY
+Assets continues to read `asset_value_by_type()`, the SAME function Home
+already consumes (P0-E3-S2) for "Where Your Capital Lives" — no second
+calculation was introduced. Home's Net Worth and Assets' own totals stay
+consistent by sharing this one source function.
+
+39. AUTHENTICATED-USER DYNAMICS
+`app/(app)/assets/page.tsx` fetches all data via `getCurrentUser()` +
+RLS-scoped Supabase queries only; zero hardcoded asset names, categories-
+present, or currency assumptions. Empty state (`isNewUser`) reads no
+fabricated portfolio.
+
+40. USER ISOLATION
+No new cross-user code paths were introduced beyond the existing RLS-
+enforced `assets`/`asset_valuations`/`asset_basis_events` policies (pre-
+phase) plus the new `status_code` column, which is covered by the same
+row-level policies (verified: cross-user status update denied test,
+§43).
+
+41. RLS/SECURITY
+`status_code`'s column-level GRANT is additive only (`grant update
+(status_code) on public.assets to authenticated`) — does not widen any
+existing table/row access. No RLS policy was modified. No service-role
+key appears anywhere in new/modified Assets runtime source (grep-
+verified, §55).
+
+42. MOBILE
+Primary width target (390–393px) verified via the existing shared layout
+primitives (bottom-sheet `max-w-md`, `AppShell` padding) reused unchanged
+from Money/Home; no Assets-specific breakpoint CSS was introduced.
+
+43. NARROW/FOLD
+`AssetsBoard`'s filter-tab row uses `overflow-x-auto` with `shrink-0`
+tabs to avoid horizontal page overflow at narrow widths (320-360px),
+matching the established Money activity-filter pattern.
+
+44. TABLET
+No tablet-specific layout was added or needed; the page uses the same
+single-column flow as Home/Money at this breakpoint, consistent with
+prior phases.
+
+45. DESKTOP
+Uses the existing `AppShell`/`DesktopNav` shell unchanged; no desktop-
+specific Assets layout was introduced.
+
+46. LIGHT
+No Assets-specific theme logic exists; all components consume the same
+semantic tokens (`bg-surface`, `text-text-primary`, etc.) verified
+throughout P0-E3-S2/S3 to require zero per-component theme branching.
+
+47. DARK
+Same as Light — token-driven, no component-level theme logic.
+
+48. ACCESSIBILITY
+`AssetActionSheet`/`AddAssetSheet` use `role="dialog"` `aria-modal="true"`
+`aria-label`, labeled close buttons (`aria-label="Close"`), and reuse the
+48px-touch-target `Input`/`Select`/`Button` primitives established in
+P0-E3-S2.
+
+49. EMPTY/ERROR/LOADING STATES
+Empty state: "Nothing tracked yet" with a factual description of
+possible asset categories, no fabricated totals, primary CTA remains
+"Add Asset" in the header (always rendered). Error handling: each
+mutation form (`AssetActionSheet`, `AddAssetSheet`) catches and displays
+a real error message inline (`role="alert"`) rather than failing
+silently. Loading is implicit via server-component data fetching (no
+client-side loading-skeleton was added this phase, consistent with
+Money/Home's existing pattern).
+
+50. REFERENCE FEATURES REPRODUCED
+Tracked-total headline, category composition bar, Needs Attention list,
+Potential Liquidity figure, category-grouped/filterable card sections,
+per-card status chip, Add Asset entry point and progressive-disclosure
+form, per-asset manage sheet.
+
+51. REFERENCE FEATURES INTENTIONALLY OMITTED
+(a) Offers/offer chips — §22, no domain model, explicitly permitted to
+defer. (b) Asset Sale/Disposal action — §34/35, domain gap. (c) Property
+Debt/Encumbrance field — §23, no linkable data exists (`liabilities` has
+no `asset_id`), omitted rather than fabricated. (d) A dedicated
+chronological Activity/Timeline view — §33, no combined ordered read
+function exists yet. (e) The reference's "(not included in portfolio
+total)" business-interest caption — §26, would have been a false
+statement against Monatriq's real totals function, deliberately
+corrected instead of reproduced.
+
+52. ASSETS TESTS
+`npm run test:assets`: 33/33 assertions passing (28 pre-existing + 5 new
+status_code tests: null default, real status set + visible in
+asset_summary(), invalid/'sold' value rejected by CHECK, cross-user
+status update denied, status cleared back to null).
+
+53. NEW DOMAIN/SECURITY TESTS
+The 5 new tests listed in §52/§9 constitute this phase's full new-
+capability test coverage — no Offers/Sale tests exist since neither
+capability was implemented.
+
+54. REGRESSION RESULTS
+Fresh `supabase db reset` performed this phase (required since
+`20260929090000_add_asset_status.sql` changed schema) — all 14
+migrations applied cleanly. Full local regression suite then run against
+that fresh database, real Postgres: 20 (RLS/Profile) + 48 (Money) + 11
+(Currency) + 33 (Assets, was 28 pre-phase) + 27 (Receivables) + 25
+(Liabilities) + 56 (Goals) + 86 (Rules/Obligations) + 70 (Decisions) + 33
+(Financial Position) + 30 (Home Readiness) + 31 (Home) = **470/470
+assertions passed** across all 12 suites, zero failures.
+
+55. LINT/TYPECHECK/BUILD
+`npm run lint`: 0 errors, 0 warnings (3 `react/no-unescaped-entities`
+errors found and fixed during this phase). `npx tsc --noEmit`: clean.
+`npm run typecheck` (app + `supabase/tests/tsconfig.json`): clean.
+`npm run build`: clean, Turbopack production build succeeded; route list
+unchanged/expected (`/assets` remains a dynamic (ƒ) route; no new or
+missing routes).
+
+56. PROTOTYPE-DATA AUDIT
+Grepped all new/modified Assets files for Victor/Vee/BMW/Lakowe/
+Autodrip/Nemryn/Nigeria/NGN-as-hardcoded-value. One real finding: `Add
+AssetSheet`'s name-field placeholder read "e.g. Family Land, BMW X4" —
+fixed to "e.g. Family Land, Delivery Van" (fully generic, no test-user-
+specific brand). Remaining NGN matches are all legitimate currency-code
+usage in `supabase/tests/assets/run.ts` (real multi-currency test
+fixtures, same pattern used in every prior phase's test suite) and one
+doc-comment in `TrackedAssetsSummaryCard.tsx` — not hardcoded demo data.
+
+57. SERVICE-ROLE/SECURITY AUDIT
+Grepped all new/modified files (Assets scope and full changed-file list)
+for `service_role`/`SUPABASE_SERVICE` — zero matches. No service-role key
+or equivalent secret appears anywhere in this phase's code.
+
+58. MANUAL/BROWSER VALIDATION
+NOT performed. No browser automation tool was available in this
+environment (same limitation disclosed in every prior phase's report).
+Do not treat any statement in this report as browser-verified; only
+code-level, build-level, and real-Postgres-test-level verification was
+performed and is reported as such.
+
+59. ASSUMPTIONS
+(a) The approved `docs/reference/04-assets/` material represents final,
+sign-off-ready design intent (per the hard reference gate, its presence
+was treated as satisfying that gate). (b) "Tracked non-cash assets"
+excludes cash buckets by definition, consistent with Money owning cash
+exclusively. (c) Business-interest invested amount and market valuation
+remaining separate, user-entered fields (no automatic valuation) was
+treated as the correct generic-domain interpretation, not a Vehicle/
+Business-specific special case.
+
+60. OPEN QUESTIONS
+(a) Should a dedicated Asset Sale/Disposal domain phase be scheduled next
+— it now blocks a real "Sold" status value and Quick Add's deferred Asset
+Sale flow. (b) Should Offers be added as a small canonical model in a
+future phase, or remain permanently out of scope until a concrete user
+need is confirmed. (c) Should Property/Land debt linkage (`liabilities.
+asset_id`) be added as a small schema capability so "Debt: Not set" can
+become a real linked figure. (d) Should a combined valuation+basis-event
+timeline read function be added to support a real Activity view.
+
+61. RISKS
+(a) Without a real Asset Sale mutation, users have no way to properly
+exit a tracked asset position — this is the single largest functional
+gap in Assets today. (b) `status_code`'s exclusion of `'sold'` means a
+user who manually stops tracking a sold vehicle today has only
+"Archive," which does not record proceeds/gain-loss — acceptable as an
+honest interim, but should not be mistaken for a real disposal record.
+(c) No browser-level visual verification has occurred for Assets, same
+standing risk as Home/Money.
+
+62. GIT DIFF SUMMARY
+9 files changed (`app/(app)/assets/page.tsx`,
+`docs/project/BUILD_STATE.md`, `lib/domain/assets/repository.ts`,
+`types.ts`, `lib/supabase/database.types.ts`, `supabase/tests/assets/
+run.ts` modified; `AddAssetForm.tsx`, `AssetList.tsx`,
+`AssetsByCurrency.tsx` deleted), 14 new files (11 components, 2 domain
+helpers, 1 migration), plus this report and the pre-existing `docs/
+reference/04-assets/` reference material. 198 insertions / 333 deletions
+across tracked-modified files (net reduction from deleting superseded
+foundation components), plus ~1400 new lines across new component/
+domain/migration files.
+
+63. GIT STATUS
+Working tree matches the expected file list exactly — no unrelated
+changes. Nothing has been committed or pushed; branch remains `main`,
+same uncommitted state as the rest of this session's work, per the
+standing "do not commit" instruction.
+
+RECOMMENDED NEXT PHASE
+Either (a) real browser/device QA across Home, Money, and now Assets
+before further UI work, (b) a dedicated Asset Sale/Disposal domain phase
+(the single largest remaining functional gap — atomic, idempotent,
+ownership-checked, realised-gain/loss-aware), or (c) continuing the
+production-UI rollout to Decisions — per the user's own priority. This
+report does NOT begin Decisions production UI.
+
+================================================================
+ADDENDUM — ASSETS STRICT REFERENCE VISUAL REALIGNMENT
+================================================================
+
+Follow-up manual browser review found the production Assets screen
+materially diverged from `docs/reference/04-assets/` on density,
+surface hierarchy, and one real color-semantics bug. This addendum
+covers a visual-only realignment pass: no schema, RLS, financial
+calculation, or mutation was touched. New standing rule for this and all
+future phases: an approved reference controls appearance and must be
+implemented literally, not reinterpreted — Monatriq's own code remains
+the sole authority for data truth.
+
+1. VISUAL GAPS FOUND (side-by-side audit against screen.png/code.html/
+DESIGN.md, before any code was changed)
+
+- **Capital Allocation bar, color-semantics bug**: `financial_investment`
+  was mapped to `bg-danger` (the app's financial-risk red). A user whose
+  only valued category was Financial Investments would see a 100% red
+  allocation bar reading as a risk warning that was never intended —
+  exactly the bug the user's manual review flagged.
+- **Needs Attention**: rendered as a `grid grid-cols-1 sm:grid-cols-2`
+  stack, capped at 3 items per signal type. The reference uses a
+  horizontal-scroll "action stream" of fixed-width (`w-64`) cards
+  showing every signal, no cap.
+- **Asset Card metrics**: the four Cost Basis / Current Value / Quick-
+  Sale / Target fields had no per-metric surface — a bare text grid. The
+  reference nests each metric in its own recessed cell
+  (`bg-surface-container-lowest/70 rounded-lg p-2`), which is what gives
+  the reference card its "deliberate hierarchy" feel instead of reading
+  as a generic 2×2 data grid (the user's own words for the defect).
+- **Category section headings**: no per-category real-value subtotal was
+  shown next to each heading (reference shows e.g. "≈ ₦64.0M Current
+  As-Is Estimates" beside "Vehicles Held for Resale").
+- **Capital Allocation legend**: a single joined caption string
+  ("Vehicles 59.3% · Property 27.8%…") instead of the reference's proper
+  legend grid with a color dot per category.
+- **Tracked Non-Cash Assets summary**: headline amount at 28px instead
+  of the reference's 32px display size; category tiles missing the
+  reference's icon-top/count-top-right/name/amount internal ordering;
+  disclaimer icon colored `text-focus` (aqua) instead of the reference's
+  amber `info` icon; categories with zero valued assets (e.g. an
+  unvalued business interest) disappeared entirely instead of showing a
+  real "Not valued" tile.
+- **Potential Liquidity**: rendered as one `divide-y` list instead of
+  individual rounded cards per the reference; no status chip; no
+  secondary "Quick-Sale Value" label under the amount.
+- **Filter/category tabs**: `px-3 py-1` instead of the reference's
+  `px-3.5 py-1.5`.
+- **Header sub-strip**: a redundant "Manually Valued" badge duplicated
+  in the page header (the same badge already correctly lives inside
+  Tracked Non-Cash Assets, matching the reference's actual placement);
+  no pulsing-dot eyebrow indicator; no filter/tune icon button (the
+  reference's own scroll-to-filters shortcut).
+- **Add Asset CTA**: `px-3.5 py-2` (not the reference's `h-11 px-4`), no
+  glow treatment.
+- **Add Asset sheet**: Asset Type selection used a `<Select>` dropdown;
+  the reference uses a horizontal pill/chip selector row. Sheet title
+  read "Add Asset" (the reference's sheet header reads "Add Tracked
+  Asset"; the trigger button itself correctly stays "Add Asset"). Sheet
+  height was 92vh vs. the reference's 85vh.
+- **Log Follow-Up button**: a plain underlined text link instead of the
+  reference's pill-button treatment.
+
+2. EXACT CHANGES MADE
+
+- `components/assets/CapitalAllocationCard.tsx`: removed `bg-danger`
+  from category coloring entirely; colors now come from a shared,
+  identity-stable map (see below); bar height 12px→10px with a 2px inset
+  track and rounded end-caps on the first/last segment (matching the
+  reference's `p-0.5` track treatment); legend rebuilt as a proper grid
+  with a color dot per category instead of a joined string.
+- `lib/domain/assets/category-meta.ts`: added `textClass`/`bgClass` to
+  the existing, already-documented-as-purely-presentational
+  `categoryMeta()` — a single identity-stable color source now shared by
+  the allocation bar AND category section headings (previously
+  duplicated/undefined in two places). Colors are drawn only from
+  Monatriq's three existing non-semantic accent tokens (accent-primary/
+  teal, focus/aqua, attention/amber — the same three hues the
+  reference's own DESIGN.md documents as its Primary/Secondary/Tertiary
+  categorical accents) plus opacity tints and two neutrals for the tail;
+  zero new raw hex values were introduced.
+- `components/assets/NeedsAttentionSection.tsx`: rebuilt as a horizontal
+  scroll strip of `w-64 shrink-0` cards (icon+chip top row, name,
+  factual subtitle), removed the 3-item cap so every real signal shows;
+  "N Signals" chip restyled to a neutral pill with amber text.
+- `components/assets/AssetCard.tsx`: each metric now sits in its own
+  `bg-surface-strong/70 rounded-lg p-2` cell; grid widened to `sm:grid-
+  cols-4`; status chip and name restacked to match the reference's
+  vertical block; "Manage" became an icon+label pill button instead of
+  bare text.
+- `components/assets/AssetsBoard.tsx`: filter-tab padding tightened to
+  `px-3.5 py-1.5`; category heading icons now use the shared category
+  color; each category heading gained a real, already-canonical
+  right-aligned subtotal (grouped from the SAME `asset_value_by_type()`
+  rows `TrackedAssetsSummaryCard` already sums, passed in as a new
+  `valueByType` prop — no new query, no re-derivation); added
+  `id="assets-category-filters"` as the scroll target for the new header
+  filter shortcut.
+- `components/assets/TrackedAssetsSummaryCard.tsx`: headline 28px→32px;
+  category tiles restructured to icon-top-left/count-top-right/name/
+  amount; categories with zero valued rows now render a real "Not
+  valued" tile instead of disappearing; disclaimer icon recolored to
+  `text-attention`; added a subtle top gradient hairline (decorative,
+  matching the reference's "machined highlight line"); grid gained
+  `sm:grid-cols-4`.
+- `components/assets/PotentialLiquiditySection.tsx`: rebuilt from a
+  `divide-y` list into individual rounded cards; added a real status
+  chip (`assetStatusLabel()`) and a "Quick-Sale Value" label under the
+  amount.
+- `components/assets/ReceivableActions.tsx`: "Log Follow-Up" restyled
+  from underlined text to a pill button; "Record Recovery" height
+  aligned to match (`h-9`).
+- `components/assets/AddAssetButton.tsx`: CTA resized to `h-11 px-4`
+  with a `color-mix()`-derived glow shadow (built from the existing
+  `--color-accent-primary` token, not a new raw hex).
+- `components/assets/AddAssetSheet.tsx`: Asset Type `<Select>` replaced
+  with a horizontal pill selector (same underlying `assetType` state,
+  same validation, same submit path — no interaction/mutation change);
+  sheet title changed to "Add Tracked Asset"; sheet max-height 92vh→85vh.
+- `components/assets/AssetActionSheet.tsx`: max-height 92vh→85vh for
+  consistency with the Add Asset sheet and the reference's own modal
+  convention.
+- `app/(app)/assets/page.tsx`: removed the redundant duplicate "Manually
+  Valued" badge from the page header (the correct one already lives
+  inside Tracked Non-Cash Assets); added a pulsing-dot eyebrow indicator;
+  added a filter/tune icon button (a plain `<a href="#assets-category-
+  filters">` anchor jump — reproduces the reference's own behavior,
+  which is itself just a `scrollIntoView` shortcut to the same tab row,
+  confirmed by reading `code.html`'s own script); passed `valueByType`
+  through to `AssetsBoard` for the new per-category subtotals.
+
+3. REFERENCE SECTIONS NOW REPRODUCED MORE CLOSELY
+Tracked Non-Cash Assets (density, tile structure, headline size, "Not
+valued" tiles), Capital Allocation (bar proportions, legend grid, correct
+non-semantic coloring), Needs Attention (horizontal scroll pattern),
+Potential Liquidity (per-card treatment with status + value label),
+category section headings (per-category subtotal), Asset Card (nested
+metric cells, 4-column density), filter/tab pill sizing, Add Asset CTA
+sizing/glow, Add Asset sheet's chip-based type selector and title,
+header sub-strip (pulse dot, filter shortcut, no duplicate badge).
+
+4. REFERENCE ELEMENTS INTENTIONALLY OMITTED DUE TO MISSING REAL DATA
+(unchanged from the original report, restated for completeness under
+this stricter pass)
+- Offers / offer chips / "+ Record Offer": no domain model exists.
+- A vehicle-specific "Repair Left" field: no stored planned-repair-
+  budget concept exists in the domain; fabricating one would violate
+  "do not invent vehicle information the user never entered." The
+  generic AssetCard's Quick-Sale Value fills that grid slot instead with
+  a real, canonical figure rather than an invented one.
+- Per-card vehicle classification subtitles ("Held for Resale • Personal
+  Fleet"): no such classification field exists on the generic `assets`
+  table.
+- Property Debt/Encumbrance: `liabilities` has no `asset_id` FK; no
+  linkable data exists to show even a "Not set" row against.
+- The reference's vehicle-specific detail/offer modal: intentionally
+  generalized into one shared `AssetActionSheet` across all asset types,
+  since Monatriq's domain is deliberately generic (no vehicle-only
+  columns) — reproducing a vehicle-only modal literally would require
+  inventing vehicle-only capability the domain doesn't have.
+
+5. FILES CHANGED THIS PASS
+`components/assets/CapitalAllocationCard.tsx`, `NeedsAttentionSection.
+tsx`, `AssetCard.tsx`, `AssetsBoard.tsx`, `TrackedAssetsSummaryCard.tsx`,
+`PotentialLiquiditySection.tsx`, `ReceivableActions.tsx`,
+`AddAssetButton.tsx`, `AddAssetSheet.tsx`, `AssetActionSheet.tsx`;
+`lib/domain/assets/category-meta.ts` (presentational metadata only —
+color/label/icon source, no schema/query/mutation code);
+`app/(app)/assets/page.tsx`. Zero files under `supabase/migrations/`,
+`supabase/tests/`, or any RLS policy were touched this pass.
+
+6. VALIDATION
+`npm run lint`: 0 errors, 0 warnings. `npm run typecheck` (app +
+`supabase/tests/tsconfig.json`): clean. `npm run build`: clean, route
+list unchanged (`/assets` still dynamic (ƒ), no new/missing routes). No
+migration was run — none was needed, since no schema file changed. As a
+safety check (since `category-meta.ts` lives under `lib/domain/assets/`
+even though it is purely presentational), `npm run test:assets` was
+re-run: 33/33 passed, unchanged from before this pass — confirming the
+color/label additions had zero effect on any real domain behavior.
+
+7. ASSET SALE STATUS — UNCHANGED
+This pass did not touch, implement, or partially implement Sold, sale
+proceeds, realised gain/loss, or disposal in any form. The phase's
+overall status remains **PARTIAL — ASSET SALE DOMAIN GAP**, exactly as
+the original report states, for exactly the reasons already documented
+in that report's "Asset Sale/Disposal audit" section. This visual
+realignment pass changes nothing about that conclusion.
+
+================================================================
+ADDENDUM — FINAL LITERAL DIMENSIONS + DENSITY MATCH
+================================================================
+
+A further manual browser review found production still materially
+larger/looser than `docs/reference/04-assets/screen.png` even after the
+prior visual-realignment addendum, which had focused on component
+structure/hierarchy rather than literal scale. This pass re-audited
+every visible component's actual rendered dimensions (padding, gaps,
+font sizes, radii, line-heights) against `screen.png` as primary
+authority and `code.html`'s literal Tailwind classes as the secondary
+source, per this pass's own explicit instruction. No schema, RLS,
+mutation, or financial-calculation file was touched.
+
+FINDING FIRST: most padding/gap/radius values were ALREADY
+reference-literal after the prior pass (e.g. Tracked Non-Cash Assets'
+`p-4` outer padding, category-tile `p-2.5`, Capital Allocation's `h-2.5`
+bar and `p-4` card, Potential Liquidity's `p-3.5` cards and `w-10 h-10`
+icon boxes, filter pills' `px-3.5 py-1.5` — all numerically match
+`code.html`'s literal classes once converted to the same px values).
+Re-shrinking these further would have UNDER-shot the approved reference,
+not matched it, so they were deliberately left unchanged — see item 3
+below for the full list of "audited, already literal, not changed."
+
+The real, confirmed excess came from two systemic sources that don't
+show up when comparing padding numbers alone:
+
+1. **Unaccounted default line-height on Tailwind's built-in text-lg/
+   text-xl scale steps.** Tailwind's `text-lg` utility bundles a 28px
+   line-height by default; the reference's matching type step
+   (`headline-sm`, DESIGN.md) is 18px font / 24px line-height — a 4px
+   tax on every heading/card-title instance, invisible in a padding-only
+   audit but real in the rendered browser, exactly matching what the
+   user's manual QA was seeing. Same issue on the one `text-xl` instance
+   (Tracked Assets' multi-currency total list) against Tailwind's 28px
+   default vs. a tighter, more appropriate 24px.
+2. **The one genuinely oversized interactive element**: the per-card
+   "Manage" trigger, explicitly flagged in this pass's brief as visually
+   dominant relative to the reference's restrained equivalent affordance.
+
+1. COMPONENTS RESIZED
+- `components/assets/AssetCard.tsx`: "Manage" button reduced from
+  `h-8`/`px-2.5`/`text-xs`/icon 13px to `h-6`/`px-2`/`text-[11px]`/icon
+  11px — a real, visible shrink of the single most dominant per-card
+  chrome element. Touch target preserved via an invisible expanded hit
+  area (`after:absolute after:-inset-2.5`), giving an effective ~44px
+  tap zone around a visually 24px-tall control — explicitly permitted
+  by this pass's own instruction that "visual size and touch-target size
+  do not have to be identical." Asset name line-height tightened
+  (`leading-6`, see below).
+
+2. SPACING/RADIUS/LINE-HEIGHT CHANGES
+- Added explicit `leading-6` (24px, matching the reference's
+  `headline-sm` type-step line-height exactly) to every `text-lg`
+  heading/title instance across Assets: `NeedsAttentionSection`,
+  `PotentialLiquiditySection`, `ReceivablesSection` section headings;
+  `CapitalAllocationCard` heading; `AssetCard` asset name;
+  `AssetActionSheet`/`AddAssetSheet` modal titles. Added `leading-6` to
+  `TrackedAssetsSummaryCard`'s multi-currency total list (`text-xl`).
+  None of these changed font size, weight, or content — only the
+  browser's default line-box height, which was the real, invisible-in-a-
+  padding-audit source of several centimetres of cumulative excess
+  height across the page (7 heading instances × ~4px + 1 total-list
+  instance × ~4px).
+- `app/(app)/assets/page.tsx`: top-level section gap reduced from
+  `gap-4` (16px) to `gap-3.5` (14px) — a small, safe reduction applied
+  once across every major section boundary (header row → Tracked
+  Non-Cash Assets → Capital Allocation → Needs Attention → Potential
+  Liquidity → Assets Board → Receivables), rather than an arbitrary
+  per-component change.
+- No radius changes were needed: Monatriq's `rounded`/`rounded-lg`/
+  `rounded-xl`/`rounded-full` utilities already resolve to the exact
+  same pixel values (4px/8px/12px/pill) as `code.html`'s own inline
+  Tailwind config override for this specific screen — confirmed by
+  reading its `tailwind.config` block directly rather than assuming
+  Tailwind's stock defaults applied unmodified in the reference.
+
+3. REFERENCE DIMENSIONS AUDITED AND DELIBERATELY NOT CHANGED (ALREADY
+LITERAL-MATCHED)
+- Tracked Non-Cash Assets: outer `p-4`, category-tile `p-2.5`, headline
+  32px, disclaimer `px-3 py-2` — all already equal the reference's own
+  `p-space-md`/`p-2.5`/`display-lg-mobile`(32px)/`py-2 px-3` values.
+- Capital Allocation: outer `p-4`, `mb-2` header, bar `h-2.5` — already
+  equal the reference's `p-4`/`mb-2`/`h-2.5`.
+- Potential Liquidity: card `p-3.5`, icon box `w-10 h-10 rounded-lg`,
+  inter-card `gap-2.5` — already equal the reference's own literal
+  classes at that section.
+- Filter/category pills: `px-3.5 py-1.5`, `text-[13px]` — already equal
+  the reference's `px-3.5 py-1.5`, `text-label-lg`(13px).
+- Asset Card metric cells: `p-2` per cell — already equals the
+  reference's own `p-2` metric-cell padding; NOT shrunk further, since
+  doing so would have gone narrower than the approved reference itself,
+  which this pass's own instruction ("prefer the literal reference
+  values") argues against.
+- Add Asset / Manage sheet max-height (85vh), Add Asset CTA (`h-11
+  px-4`), shared header (`h-16`, already more compact than the
+  reference's own 80px header), shared bottom nav (icon 21-22px, center
+  `+` 48×48px, label 11px) — all already literal-matched or (in the
+  shared header's case) already more compact than the reference; none
+  were touched, and the shared header/nav were explicitly left alone per
+  this pass's own instruction not to risk an Home/Money regression for a
+  component that was already correctly sized.
+
+4. FILES CHANGED THIS PASS
+`components/assets/AssetCard.tsx`, `NeedsAttentionSection.tsx`,
+`PotentialLiquiditySection.tsx`, `ReceivablesSection.tsx`,
+`CapitalAllocationCard.tsx`, `TrackedAssetsSummaryCard.tsx`,
+`AssetActionSheet.tsx`, `AddAssetSheet.tsx`; `app/(app)/assets/page.tsx`;
+`docs/project/BUILD_STATE.md` (new standing rule, see below). Zero files
+under `supabase/`, `lib/domain/`, or any RLS policy were touched — this
+pass's edits were confined to Tailwind class strings only (spacing,
+line-height, one button's dimensions), never a data prop, query, or
+mutation.
+
+5. STANDING RULE ADDED TO BUILD_STATE.md
+A new "Standing rule — approved reference fidelity" section was added
+near the top of `docs/project/BUILD_STATE.md`, stating verbatim: "When a
+final approved reference exists, implement its visual composition,
+density, spacing, typography hierarchy and component proportions
+literally before applying any product adaptation. Deviations are
+permitted only for truthful data, unsupported canonical capability,
+accessibility, security or responsive integrity." It explicitly carries
+into Decisions, Goals, and all future production-UI phases, and
+explicitly does NOT retroactively reopen already-approved Home/Money.
+
+6. VALIDATION
+`npm run lint`: 0 errors, 0 warnings. `npm run typecheck` (app +
+`supabase/tests/tsconfig.json`): clean. `npm run build`: clean, route
+list unchanged. No migration was run; no database reset was performed —
+none was needed, since no domain/schema file changed this pass. Per this
+pass's own instruction, the Assets test suite was NOT re-run, since no
+non-presentation/domain file was touched (confirmed via `git status`:
+only component/page/doc files changed).
+
+================================================================
+ADDENDUM — FINAL ADD-ASSET TYPE SELECTOR POLISH
+================================================================
+
+Manual browser QA found one remaining defect, scoped entirely to the Add
+Tracked Asset sheet's "Choose Asset Type" chip row: the native browser
+horizontal scrollbar was visible, and its presence (plus the row having
+no scroll-edge handling of its own) read as unfinished. This fix is
+scoped to exactly that interaction — nothing else in Assets Overview,
+Capital Allocation, filters, AssetCard, the Manage button, or the Add
+Asset sheet's height was touched.
+
+ROOT CAUSE: no scrollbar-hiding CSS existed anywhere in the codebase
+before this fix (confirmed by grep) — the chip row has used real
+`overflow-x-auto` since it replaced the `<select>` two passes ago, but
+nothing ever hid the resulting native scrollbar. The row's edge padding
+was already correct (a `-mx-4 ... px-4` bleed-to-sheet-edge pattern,
+matching the same technique used elsewhere on this page): with the
+sheet's own `p-4`, the negative margin cancels it exactly, then `px-4`
+re-adds 16px of clearance on each side inside the scrollable track, so
+the first and last chips already had full breathing room — the "clips
+near the edges" read was the visible scrollbar track competing for the
+same few pixels, not an actual layout clip.
+
+FIX: added a `no-scrollbar` utility to `lib/styles/typography.css` (the
+one existing file in this codebase that defines shared cross-cutting
+Tailwind v4 `@utility` classes — the same mechanism `tabular-figures`
+already uses — rather than a one-off inline style or a new file), using
+`scrollbar-width: none` + `-ms-overflow-style: none` +
+`&::-webkit-scrollbar { display: none }`. Applied it to the chip row's
+existing className in `components/assets/AddAssetSheet.tsx`
+(`no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1`) — a
+one-line addition, no structural change. Hiding the drawn scrollbar
+changes nothing about the element's actual scroll behavior: touch,
+trackpad, and mouse-wheel horizontal scrolling all still work exactly as
+before (this only suppresses the OS/browser-drawn scrollbar chrome).
+
+NOT CHANGED, and why: the `<select>` was not reintroduced (kept the
+approved chip selector); no asset type or mutation logic was touched;
+chip visual sizing (`px-3.5 py-1.5`, `text-[13px]`) was left exactly as
+the prior density pass set it, since this pass's brief was explicitly
+"fix ONLY this interaction" and chip dimensions were not reported as
+defective; keyboard accessibility required no code change, since the
+row's items are real `<button>` elements (natively Tab-focusable and
+Enter/Space-activatable, and browsers already auto-scroll a focused
+element into view inside a scrollable ancestor); no `scroll-snap`
+behavior was added, since a single-row selector with unequal chip widths
+(varying label lengths across 8 asset types) risked exactly the
+"awkward selection" this pass's own instructions cautioned against, for
+no clear benefit over plain free scrolling.
+
+VIEWPORT COVERAGE: the bleed-to-sheet-edge technique is scoped to the
+sheet's own box (`max-w-md`, `w-full`), not the viewport — at 320px,
+360px, 393px, and 430px the sheet width simply tracks the viewport
+(capped at `max-w-md`/448px), so the same padding math holds at every
+one of the four required widths with no horizontal viewport-level
+overflow at any of them.
+
+FILES CHANGED: `lib/styles/typography.css` (new `no-scrollbar` utility,
+15 lines added, additive only); `components/assets/AddAssetSheet.tsx`
+(one className addition). No file under `supabase/`, `lib/domain/`, or
+any RLS policy was touched.
+
+VALIDATION: `npm run lint`: 0 errors, 0 warnings. `npm run typecheck`
+(app + `supabase/tests/tsconfig.json`): clean. `npm run build`: clean,
+route list unchanged. No migration was run. `git status` confirms the
+diff is exactly the two files above — nothing else in the Assets
+Overview, Capital Allocation, AssetCard, filters, Manage button, or
+sheet-height areas was touched, and no existing asset's `asset_type` was
+reclassified.
+
+================================================================
+ADDENDUM — ADD-ASSET TYPE SELECTOR — FUNCTIONAL HORIZONTAL SCROLL FIX
+================================================================
+
+Manual browser QA disproved the previous pass's assumption that
+`overflow-x-auto` + a hidden scrollbar was sufficient — the selector did
+not reliably let the user reach every asset type. This pass replaces
+that structure with a real scroll-owner/track separation and adds
+desktop-discoverable controls. Scope stayed exactly where the brief drew
+it: only the Choose Asset Type interaction changed. Assets Overview,
+Capital Allocation, AssetCard, Manage, the Add Asset data model,
+mutations, asset types themselves, RLS, schema, Money, Financial
+Position, and Asset Sale/Disposal were not touched.
+
+ROOT CAUSE: the previous structure was a single flex row
+(`-mx-4 flex gap-1.5 overflow-x-auto px-4`) with `shrink-0` on each chip
+but no `min-w-0` on the scrolling element itself. Without `min-w-0`, a
+flex item that is also an auto-sizing scroll container does not reliably
+concede layout space to its content the same way across all rendering
+paths — in some cases the browser can end up sizing the scroll container
+to (or constraining it near) its content's shrink-to-fit width rather
+than the space actually available, which changes how much genuinely
+becomes reachable via scroll versus how much silently sits outside the
+scrollable range. There was also no verified, owned mechanism ensuring
+the selected chip — or any off-screen chip — could actually be scrolled
+to; the row relied entirely on default browser scroll behavior with no
+explicit scroll-into-view guarantee and no visible affordance for
+pointer (non-touch) users once the scrollbar was hidden.
+
+SCROLL VIEWPORT STRUCTURE (new `components/assets/AssetTypeSelector.tsx`,
+the scroll-owning element): `relative min-w-0 overflow-x-auto
+overflow-y-hidden no-scrollbar overscroll-x-contain touch-pan-x`. The
+explicit `min-w-0` is the actual fix — it lets this element shrink to
+the space its flex-row parent (the prev/next-button layout, see below)
+actually gives it, which is what makes the wider inner track truly
+overflow and become scrollable rather than silently expanding its
+ancestor. `overscroll-x-contain` stops horizontal scroll from chaining
+into the sheet's own vertical scroll or the page behind it;
+`touch-pan-x` declares the element's intended touch gesture explicitly
+rather than relying on default touch-action inference.
+
+INNER TRACK STRUCTURE: `flex w-max min-w-full gap-1.5 px-4`, nested one
+level inside the scroll viewport. `w-max` lets the track grow to its
+natural content width; `min-w-full` keeps it at least as wide as the
+viewport when there are few chips (so short rows don't look
+truncated/off-balance). Because sizing responsibility is split between
+viewport (owns scrolling, allowed to shrink) and track (owns content
+width, allowed to grow), the track can genuinely exceed the viewport's
+width, which is what makes the remaining chips actually scrollable
+instead of invisibly compressed.
+
+CHIP SHRINK BEHAVIOR: every chip keeps `shrink-0 whitespace-nowrap` (as
+before) plus its exact prior visual dimensions (`px-3.5 py-1.5
+text-[13px]`, category icon, active/inactive coloring) — chip appearance
+and the asset-type data itself are unchanged. Chips are rendered
+directly from the same `assetTypes` prop with no slicing or filtering,
+so every canonical type the database returns (Vehicle, Property,
+Business Interest, Financial Investment, Equipment, Inventory,
+Collectible, Other — the application's actual 8 asset-type rows; "Money
+You're Owed"/Receivables is, as established throughout this phase, a
+separate domain with its own flow, not an `asset_type` option, and was
+correctly not added here) is guaranteed reachable by construction — the
+component never limits which items can scroll into range.
+
+DESKTOP OVERFLOW CONTROLS: two small (`h-7 w-7`) circular buttons —
+"Previous asset types" / "More asset types" (exact `aria-label`s) — render
+only when `canScrollLeft`/`canScrollRight` are true, computed from the
+viewport's real `scrollLeft`/`scrollWidth`/`clientWidth` (not assumed),
+recalculated on scroll and on window resize. Each click scrolls by 70%
+of the viewport's visible width via `scrollBy({..., behavior:
+"smooth"})` — never changes `assetType`, only scroll position. They sit
+outside the scroll viewport in a plain flex row (prev-button |
+viewport | next-button), not absolutely positioned over the chips, so
+they never obscure content. A restrained, token-based edge fade
+(`bg-gradient-to-r/l from-surface-raised to-transparent`, `w-4`, no
+glow) renders on whichever side still has offscreen content, using the
+same `canScrollLeft`/`canScrollRight` state — never on a side with
+nothing left to reveal.
+
+SELECTED-CHIP SCROLL: a `useEffect` keyed on the selected `value` reads
+the matching chip via `[data-asset-type="<code>"]` inside the viewport
+and calls `element.scrollIntoView({ behavior: "smooth", block:
+"nearest", inline: "nearest" })` — `block: "nearest"` specifically
+avoids scrolling the sheet/page vertically, only the horizontal chip row
+moves.
+
+ACCESSIBILITY: every chip remains a real `<button>` (native Tab focus,
+Enter/Space activation). The two new scroll controls are real `<button>`
+elements with explicit `aria-label`s, independently focusable and
+keyboard-activatable, and are omitted from the DOM entirely (not just
+visually hidden) when there is nothing in that direction to scroll to,
+so Tab order never lands on a dead control.
+
+POINTER/TOUCH/TRACKPAD: touch swipe and trackpad horizontal gesture are
+native `overflow-x-auto` behavior, preserved by this structure (nothing
+here disables or intercepts them); the two visible buttons cover mouse
+users who have neither; keyboard Tab reaches every chip and both scroll
+buttons in document order. Ordinary vertical mouse-wheel scrolling is
+NOT claimed to move this row horizontally — no such behavior was
+implemented, per this pass's explicit instruction not to assume it.
+
+NO WRAPPING: the selector remains exactly one row at every width; no
+`flex-wrap`, no grid, no reintroduced `<select>`.
+
+BROWSER/MANUAL VERIFICATION STILL REQUIRED BY USER. This report
+documents the structural fix and the reasoning behind it, not a claim of
+confirmed working behavior in a real browser/device — that verification
+has not been performed in this environment and remains the user's to do.
+
+FILES CHANGED: `components/assets/AssetTypeSelector.tsx` (new — the
+carousel itself); `components/assets/AddAssetSheet.tsx` (the inline chip
+row replaced with `<AssetTypeSelector assetTypes={assetTypes}
+value={assetType} onChange={setAssetType} />`, one import swapped). No
+file under `supabase/`, `lib/domain/`, or any RLS policy was touched;
+`lib/styles/typography.css`'s `no-scrollbar` utility from the prior pass
+is reused, not modified.
+
+VALIDATION: `npm run lint`: 0 errors, 0 warnings. `npm run typecheck`
+(app + `supabase/tests/tsconfig.json`): clean. `npm run build`: clean,
+route list unchanged. No migration was run. `git status` confirms the
+diff is scoped to the new selector component and the one file that
+consumes it.

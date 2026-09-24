@@ -1,0 +1,401 @@
+P0-E3-S4R — GENERIC ASSET DOMAIN: SUBTYPE BEHAVIOR REMEDIATION
+================================================================
+
+STATUS: COMPLETE.
+
+1. ROOT CAUSE
+P0-E3-S4 added `assets.status_code` (the vehicle operational lifecycle:
+awaiting_repair -> repairing -> ready_to_list -> listed ->
+offer_received -> under_negotiation) directly onto the GENERIC `assets`
+table. The column's CHECK constraint restricted its VALUE vocabulary
+(`status_code is null or status_code in (...)`) but placed NO
+restriction on which asset TYPE could hold a non-null value. The shared
+`AssetActionSheet` then rendered the status selector and a "Record a
+repair / improvement cost" form UNCONDITIONALLY for every asset — it
+never branched on `asset.assetType` at all (confirmed by direct source
+inspection before any change was made). `AssetCard` and
+`PotentialLiquiditySection` likewise displayed the status chip for every
+type. The repository's `updateAsset()` passed `patch.statusCode` straight
+through to the database with no validation. Net effect, exactly as
+manual QA found: a "Stocks" (financial_investment) asset could both
+display and actually receive "Ready to List," "Repairing," etc. This was
+not a cosmetic bug — the database itself would accept the mutation, so
+the false state was persisted, not just rendered.
+
+2. GENERIC VS. SUBTYPE BOUNDARY
+Documented as a new architecture section, `docs/architecture/
+FINANCIAL_DOMAIN_MODEL.md` §44. Generic asset data (name, type, currency,
+description, cost basis, current/quick-sale/target valuation, valuation
+history, archive state) is universal — the schema makes no per-type
+distinction, so every type gets it from the same tables/RPCs. Subtype
+capability is a real, canonical behavior that only applies to some
+types, and per this remediation's own new standing rule, any such
+capability must now be enforced at three independent layers that all
+agree: database (CHECK constraint), repository (thrown domain error,
+independent of what the database would do), and UI (a single centralized
+capability read, never a scattered `if (asset.type === ...)`).
+
+3. EXISTING VEHICLE LEAKAGE FOUND
+- `AssetActionSheet`: the "Status" `<Select>` (vehicle lifecycle) and the
+  "Record a repair / improvement cost" form both rendered for every
+  asset type with zero conditional logic.
+- `AssetCard`: the status chip rendered for every type (showing "Status
+  not set" for non-vehicle types, which at least wasn't false, but
+  implied a status COULD eventually be set — misleading by omission of
+  the real constraint).
+- `PotentialLiquiditySection`: same status-chip issue as `AssetCard`.
+- Database: `assets.status_code`'s CHECK constrained values, not types —
+  any asset type could structurally hold a vehicle status.
+- Repository: `updateAsset()` had no validation logic for `statusCode`
+  at all.
+No other vehicle-specific leakage (garage language, offer language,
+resale language) was found outside `AssetActionSheet`'s own status/repair
+controls and the `ASSET_STATUS_OPTIONS` vocabulary itself, which is
+correctly vehicle-only content, not leakage.
+
+4. CAPABILITY MODEL INTRODUCED
+New file `lib/domain/assets/capabilities.ts`, exporting
+`AssetCapabilities` (typed interface) and `assetCapabilities(assetType)`
+(pure function, one centralized source). Two real fields, matching only
+capabilities that are actually canonically implemented today:
+- `supportsVehicleStatus: boolean` — true only for `vehicle`.
+- `supportsCapitalImprovement: boolean` +
+  `capitalImprovementCopy: {title, description, submitLabel} | null` —
+  true for every type except `financial_investment` (explicitly
+  withheld — no canonical "contribution" operation exists yet), with
+  subtype-appropriate wording (vehicle: "repair / improvement"; property:
+  "capital improvement"; equipment: "additional capital cost";
+  business_interest: "additional capital invested"; inventory/
+  collectible/other: "additional cost").
+`supportsReceivableRecovery`, `supportsInvestmentContribution`,
+`supportsSale`, `supportsOffers`, `supportsIncomeTracking`, and
+`supportsDebtLinkage` were deliberately NOT modeled — none has a real
+canonical operation behind it today, and a capability flag that always
+reads `false` would be dead code pretending to be a real boundary, per
+the brief's own "do not create fake capability merely because it may
+exist in the future."
+
+5. DATABASE ENFORCEMENT
+New migration `supabase/migrations/
+20260930090000_restrict_asset_status_to_vehicle.sql`. Local Docker
+(`supabase_db_Monatriq`) was queried directly before writing it (`select
+asset_type, status_code, count(*) from assets where status_code is not
+null group by asset_type, status_code`) and returned ZERO rows — no
+existing invalid data to protect locally (local fixtures are cleaned up
+by each test run's own teardown). The migration still includes an
+unconditional, idempotent defensive cleanup UPDATE (clears `status_code`
+only, never `asset_type`/name/currency/basis/valuation) ahead of the
+constraint, so it remains safe to apply later to any environment —
+including Monatriq Dev, NOT pushed this pass — without a separate manual
+audit first. Adds a new table-level CHECK,
+`assets_status_code_requires_vehicle`: `status_code is null or
+asset_type = 'vehicle'`, additive alongside the original P0-E3-S4
+column-level enum CHECK (Postgres allows multiple CHECK constraints on
+one column; both must hold).
+
+6. REPOSITORY ENFORCEMENT
+`lib/domain/assets/repository.ts`'s `updateAsset()` signature changed
+from `(client, assetId, patch)` to `(client, assetId, currentAssetType,
+patch)` — `currentAssetType` is a required parameter, not optional,
+specifically so the invariant can never be silently skipped. Before
+building the update payload, it checks: if `patch.statusCode` is being
+set to a non-null value and `assetCapabilities(currentAssetType).
+supportsVehicleStatus` is false, it throws `Error('Asset type "..." does
+not support the vehicle lifecycle status.')` — independent of whatever
+the database would separately reject. Every real call site
+(`AssetActionSheet`) already had the asset's own type in scope (it always
+holds the full `AssetSummary` it's mutating), so this was a
+zero-extra-fetch, signature-only change. All other call sites across the
+codebase (both production and test) were found via grep and updated:
+`components/assets/AssetActionSheet.tsx` (2 call sites),
+`supabase/tests/assets/run.ts` (8 call sites, several new),
+`supabase/tests/home-readiness/run.ts` (1 call site, an unrelated
+archive-toggle test using a vehicle fixture).
+
+7. ASSETACTIONSHEET COMPOSITION CHANGES
+Rebuilt around `const capabilities = assetCapabilities(asset.assetType)`,
+computed once per render. The Status `<Select>` block now renders only
+`if (capabilities.supportsVehicleStatus)`. The capital-cost form now
+renders only `if (capabilities.supportsCapitalImprovement &&
+capabilities.capitalImprovementCopy)`, with its title/description/submit
+label all read from `capabilities.capitalImprovementCopy` rather than
+hardcoded vehicle text. The generic valuation-update form and the
+archive toggle are unconditional, matching their status as genuinely
+generic capabilities. Both `updateAsset()` call sites now pass
+`asset.assetType` as the new required parameter.
+
+8. VEHICLE BEHAVIOR
+Unchanged in substance, verified explicitly: a vehicle asset can still
+set and clear all 6 lifecycle statuses (tested individually — see §18),
+and still gets the capital-cost form with its original "Record a repair
+/ improvement cost" wording (`capabilities.capitalImprovementCopy.title
+=== "Record a repair / improvement cost"`, asserted directly).
+
+9. FINANCIAL INVESTMENT BEHAVIOR
+`assetCapabilities("financial_investment")` returns
+`supportsVehicleStatus: false`, `supportsCapitalImprovement: false`,
+`capitalImprovementCopy: null` — verified by a dedicated test. In
+`AssetActionSheet`, this means NEITHER the status selector NOR any
+capital-cost form renders for a Financial Investment; it is left with
+exactly: valuation update (current value / quick-sale / target — all
+real, generic, already-canonical), and archive. No "Buy more," "Sell
+shares," "Dividend," "Broker," "Ticker," "ROI," or "Market price" concept
+was invented — none of those exist in the domain, and this remediation's
+scope is removing false behavior, not building a brokerage system.
+
+10. PROPERTY BEHAVIOR
+`supportsVehicleStatus: false`; `supportsCapitalImprovement: true` with
+copy title "Record a capital improvement" (verified to contain no
+"repair" wording via a regex assertion). No mortgage, tenant, rent,
+freehold, or title-status field was added — none exist in the domain,
+consistent with the P0-E3-S4 report's own prior finding on Property.
+
+11. EQUIPMENT BEHAVIOR
+`supportsVehicleStatus: false`; `supportsCapitalImprovement: true` with
+copy title "Record an additional capital cost" (verified no "repair"
+wording). No "repair needed to sell" framing exists anywhere.
+
+12. BUSINESS INTEREST BEHAVIOR
+`supportsVehicleStatus: false`; `supportsCapitalImprovement: true` with
+copy title "Record additional capital invested" (verified no "repair"
+wording) — deliberately echoes the existing "Capital Invested" label
+already used for this type in `AddAssetSheet`'s basis field, for
+copy consistency. No company operating lifecycle was invented. Capital
+invested vs. estimated business value remain the same two distinct,
+separately-entered generic valuation fields as before — this
+remediation did not touch that distinction.
+
+13. INVENTORY/STOCK BEHAVIOR
+`supportsVehicleStatus: false`; `supportsCapitalImprovement: true` with
+neutral copy title "Record an additional cost" (verified no "repair"
+wording). No quantity/SKU/COGS functionality was built — none exists
+canonically, and none was added this pass, per the brief's explicit
+instruction.
+
+14. COLLECTIBLE/OTHER BEHAVIOR
+Both: `supportsVehicleStatus: false`; `supportsCapitalImprovement: true`
+with the same neutral "Record an additional cost" copy (verified no
+"repair" wording) — generic valuation and basis capabilities only, no
+vehicle workflow, per the brief.
+
+15. EXISTING INVALID DATA HANDLING
+Local Docker was inspected directly (§5) and found no existing invalid
+rows — nothing needed to be reported as at-risk locally. The migration's
+defensive cleanup UPDATE still runs unconditionally (a no-op locally,
+real protection wherever data might exist) so this same migration is
+safe to apply to Monatriq Dev later without a separate data-audit step.
+No asset's `asset_type`, name, valuation, basis, or currency was changed
+by this remediation anywhere — confirmed by the migration's own scope
+(touches only `status_code`) and by `git diff` showing no other
+repository/domain field logic touched.
+
+16. MIGRATION
+`supabase/migrations/20260930090000_restrict_asset_status_to_vehicle.sql`.
+Applied via `supabase db reset` against LOCAL Docker only (all 15
+migrations, including this one, applied cleanly). NOT pushed to
+Monatriq Dev — explicitly deferred per the brief ("Stop for review
+first"); that push is a separate, later, user-reviewed step.
+
+17. RLS/SECURITY
+No RLS policy was touched. The new CHECK constraint is a table-level
+constraint, not a policy — it applies equally regardless of which user
+row is being written, so it doesn't interact with tenant isolation.
+Cross-user status mutation was re-verified after the remediation (User A
+attempting to set a vehicle status on User B's vehicle asset still fails
+via RLS's own row-matching, independent of the new type constraint).
+Column-level grants are unchanged (still additive from P0-E3-S4). No
+service-role key or equivalent secret appears anywhere in the new/changed
+files (grep-audited).
+
+18. TESTS ADDED
+All 23 items from the brief's required list are covered in
+`supabase/tests/assets/run.ts`:
+1-6: six discrete tests, one per vehicle status value, each setting it
+  and asserting it round-trips through `asset_summary()`.
+7-13: seven discrete tests (financial_investment, property, equipment,
+  business_interest, inventory, collectible, other), each creating a
+  fresh asset of that type and asserting `updateAsset()` throws with a
+  message containing "does not support" when a vehicle status is
+  attempted.
+14: covered by the same 7 tests in items 7-13 (each IS a repository
+  rejection of an invalid subtype status mutation) plus a combined
+  post-attempt integrity check that every one of those 7 assets still
+  has `status_code === null` after every rejected attempt.
+15: a dedicated test bypasses the repository entirely via a raw
+  `.from("assets").update({status_code: "listed"})` REST call against
+  the financial_investment fixture, asserting the database's own
+  `assets_status_code_requires_vehicle` CHECK constraint rejects it
+  (`expectDenied`).
+16: the existing P0-E3-S4 cross-user test (User A attempting to set
+  User B's vehicle asset's status) was kept and re-verified passing.
+17-23: since no browser/DOM test infrastructure exists in this
+  environment (same disclosed limitation as every prior phase's
+  report), these are covered as direct assertions against
+  `assetCapabilities()` — the exact pure function `AssetActionSheet`/
+  `AssetCard`/`PotentialLiquiditySection` read to decide what to render,
+  not a re-implementation of it. Five tests assert: vehicle has both
+  capabilities with vehicle-worded copy (19, 20); financial_investment
+  has neither capability at all (17, 18); property has capital
+  improvement with non-"repair" wording and no vehicle status (21);
+  business_interest has capital improvement with no "repair" wording and
+  no vehicle status (22); equipment/inventory/collectible/other all lack
+  vehicle status and all use non-"repair" wording (23, plus covering
+  inventory/collectible/other beyond what was strictly asked).
+Total: 27 new tests (6 + 7 + 1 combined-integrity + 1 DB-bypass + 5
+capability + the already-existing cross-user test re-verified +
+setup/fixture-creation steps counted individually by the test runner).
+
+19. FULL REGRESSION
+Fresh `supabase db reset` performed (required — schema changed via the
+new migration); all 15 migrations applied cleanly. Full suite run
+immediately after: 20 (RLS/Profile) + 48 (Money) + 11 (Currency) + 60
+(Assets, was 33 pre-remediation) + 27 (Receivables) + 25 (Liabilities) +
+56 (Goals) + 86 (Rules/Obligations) + 70 (Decisions) + 33 (Financial
+Position) + 30 (Home Readiness) + 31 (Home) = **497/497 assertions
+passed**, all 12 suites, zero failures.
+
+20. LINT/TYPECHECK/BUILD
+`npm run lint`: 0 errors, 0 warnings. `npm run typecheck` (app +
+`supabase/tests/tsconfig.json`): clean — this caught two `updateAsset()`
+call sites the initial edit missed (`supabase/tests/home-readiness/
+run.ts`), both fixed before this report was written. `npm run build`:
+clean, Turbopack production build succeeded; route list unchanged (no
+new/missing routes).
+
+21. FILES CHANGED
+New: `lib/domain/assets/capabilities.ts`; `supabase/migrations/
+20260930090000_restrict_asset_status_to_vehicle.sql`; this report.
+Modified: `lib/domain/assets/repository.ts` (`updateAsset()` signature +
+validation); `components/assets/AssetActionSheet.tsx` (dynamic
+composition around `assetCapabilities()`); `components/assets/
+AssetCard.tsx` (status chip gated); `components/assets/
+PotentialLiquiditySection.tsx` (status chip gated); `supabase/tests/
+assets/run.ts` (27 new tests, 6 `updateAsset()` call sites updated);
+`supabase/tests/home-readiness/run.ts` (1 `updateAsset()` call site
+updated); `docs/architecture/FINANCIAL_DOMAIN_MODEL.md` (new §44);
+`docs/project/BUILD_STATE.md` (phase entry, migration entry,
+architecture-change note, updated Next Approved Step).
+
+22. GIT STATUS
+Working tree matches the expected file list: the remediation's own new/
+modified files above, plus every already-untracked/modified file from
+the P0-E3-S4 production-UI phase and its follow-up visual/density/
+scroll-fix passes (all still uncommitted, as instructed throughout this
+entire session). Nothing has been committed or pushed. `lib/supabase/
+database.types.ts`'s existing small diff predates this remediation (from
+P0-E3-S4's own `status_code` column addition) and required no further
+change here, since a table-level CHECK constraint does not alter any
+column's generated TypeScript type.
+
+23. REMAINING DOMAIN GAPS
+Unchanged from the P0-E3-S4 report: Offers and Asset Sale/Disposal
+remain unimplemented (deliberately — see that report's own audit
+sections). This remediation was explicitly a precondition for Asset
+Sale/Disposal work, per the brief ("This remediation must be completed
+BEFORE Asset Sale/Disposal and BEFORE Decisions UI") — that precondition
+is now satisfied, but Asset Sale/Disposal itself was NOT implemented in
+this pass (out of scope, explicitly listed under "DO NOT IMPLEMENT").
+This remediation's own migration has not been pushed to Monatriq Dev.
+
+24. RECOMMENDED NEXT PHASE
+Either (a) push this remediation's migration to Monatriq Dev once
+reviewed, (b) a dedicated Asset Sale/Disposal domain phase — now
+unblocked by this remediation — or (c) real browser/device QA across
+Home, Money, and Assets before further UI work, or the user's own
+priority. This report does NOT begin Decisions production UI and does
+NOT begin Asset Sale/Disposal implementation.
+
+================================================================
+ADDENDUM — MONATRIQ DEV DEPLOYMENT ATTEMPT: BLOCKED, NO CHANGE MADE
+================================================================
+
+STATUS: BLOCKED — environment/account access issue. The remote database
+was NOT touched in any way. This is not a finding about the migration's
+correctness or safety; it is an inability to authenticate to the target
+project from this environment at all, discovered during the mandatory
+safety preflight, before any write action was attempted.
+
+LINKED PROJECT VERIFICATION. Three independent local sources agree on
+which project this codebase is linked to: `supabase/.temp/project-ref`
+(`mvnwrkfcszazqqccmmxq`), the application's own `.env.local`
+(`NEXT_PUBLIC_SUPABASE_URL=https://mvnwrkfcszazqqccmmxq.supabase.co`),
+and `supabase/config.toml`'s `project_id = "Monatriq"`. This exact ref
+(`mvnwrkfcszazqqccmmxq`) was independently verified as "Monatriq Dev"
+("monatriq's Project") in the P0-E3-S3 migration deployment report
+(`docs/reports/P0-E3-S3-money-quick-add-production-ui.txt`, its own
+"MONATRIQ DEV MIGRATION DEPLOYMENT" addendum) — cross-checked again here
+and confirmed consistent. This is NOT Nemryn (Nemryn's ref is
+`wyocbivzgrbekuyqdfts`, a different value entirely).
+
+THE BLOCKER. Running `npx supabase projects list` in this environment
+right now returns exactly ONE project — but it is "Nemryn"
+(`wyocbivzgrbekuyqdfts`, org `bbbnpghoszumikuggadg`), NOT "monatriq's
+Project." The actual linked project (`mvnwrkfcszazqqccmmxq`) does not
+appear in this account's project list at all anymore, which is the
+opposite of the P0-E3-S3 deployment's own finding at the time ("exactly
+ONE project is visible... ref mvnwrkfcszazqqccmmxq... No 'Nemryn'
+project exists or is visible to this environment at all"). The
+CLI/account context available in this environment has evidently changed
+since that earlier, successful deployment. Attempting the required
+read-only preflight commands against the linked ref directly confirms
+this is a real access problem, not just a listing quirk:
+- `npx supabase migration list` → `unexpected login role status 403:
+  "Your account does not have the necessary privileges to access this
+  endpoint."`
+- `npx supabase db push --dry-run` → the identical 403, plus: "Connect
+  to your database by setting the env var correctly:
+  SUPABASE_DB_PASSWORD."
+No `SUPABASE_*` environment variable is set in this shell (checked with
+values redacted) — the 403 comes from the CLI's own stored login
+session, not a misconfigured env var pointing elsewhere.
+
+WHY THIS STOPS HERE, RATHER THAN BEING ROUTED AROUND. Per this task's
+own explicit constraints: do not print secrets (a `SUPABASE_DB_PASSWORD`
+was not sought out, requested, or fabricated); do not manually reproduce
+the CHECK constraint through ad-hoc SQL if the tracked migration can be
+applied normally (it currently cannot be applied at all — normally or
+otherwise — from this environment, so no alternate path was attempted
+either); do not run `supabase db reset` remotely (not attempted). A
+lower-privileged account being unable to reach the target project is
+exactly the class of ambiguous, access-sensitive situation that should
+stop for review rather than be worked around.
+
+WHAT WAS AND WAS NOT DONE.
+- Migration status before: UNKNOWN — could not be inspected (blocked at
+  the same 403 as the push attempt itself).
+- Migration applied: NO. `supabase db push` was never actually run
+  (only `--dry-run`, which itself failed before reaching the database).
+- Constraint verified remotely: NOT PERFORMED — no connection to the
+  remote database was ever established.
+- Defensive cleanup effect on remote rows: NOT PERFORMED — cannot be
+  known without a connection; zero rows were affected because nothing
+  was applied.
+- Migration status after: UNCHANGED from before this task started —
+  `20260930090000_restrict_asset_status_to_vehicle.sql` remains local-
+  only, exactly as it was when P0-E3-S4R's own report was written.
+- `supabase db reset` was NOT run against any remote target.
+- No secret (service-role key, password, database credential, access
+  token) was printed, requested, or set at any point.
+- `git status`: unchanged by this deployment attempt — every command run
+  during this preflight was read-only (`projects list`, `migration
+  list`, `db push --dry-run`), and none of them succeeded far enough to
+  touch the database, let alone any local file. The working tree is
+  identical to the state left by the P0-E3-S4R remediation report.
+
+APP QA READINESS. Not applicable to verify further given the above —
+`npm run dev` was not restarted or re-checked this pass, since no
+migration was applied and `.env.local`/`.env.test.local` were not
+touched (confirmed by `git status`: neither file appears as changed).
+
+RECOMMENDATION. This needs the user's own action, not a code change:
+re-authenticate the Supabase CLI in this environment to the account/
+session that has access to the Monatriq Dev project (the same one used
+successfully for the P0-E3-S3 deployment), or supply the deployment
+another way (e.g. running the push from an environment/session that
+still has that access, or applying the tracked migration through the
+Supabase Dashboard's own migration UI for that project) — never through
+an ad-hoc SQL workaround. Once CLI access to the correct project is
+restored, the deployment steps in this task's own brief (dry-run status
+check, then `supabase db push`, then the remote verification queries)
+can be run exactly as specified. Nothing about the migration itself
+changed or needs to change; the pending file remains ready to deploy.

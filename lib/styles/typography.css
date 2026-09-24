@@ -7,3 +7,18 @@
 @utility tabular-figures {
   font-variant-numeric: tabular-nums lining-nums;
 }
+
+/*
+ * Hides the native scrollbar on a horizontally-scrollable row (filter
+ * pills, chip selectors) while preserving real touch/trackpad/keyboard
+ * scrolling — only the OS-drawn scrollbar chrome is removed, not
+ * scrolling itself. Usage: <div className="no-scrollbar overflow-x-auto">
+ */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

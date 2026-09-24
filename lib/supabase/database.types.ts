@@ -167,6 +167,7 @@ export type Database = {
           id: string
           is_archived: boolean
           name: string
+          status_code: string | null
           updated_at: string
           user_id: string
         }
@@ -179,6 +180,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           name: string
+          status_code?: string | null
           updated_at?: string
           user_id: string
         }
@@ -191,6 +193,7 @@ export type Database = {
           id?: string
           is_archived?: boolean
           name?: string
+          status_code?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -1625,6 +1628,7 @@ export type Database = {
           latest_valued_at: string
           name: string
           quick_sale_estimate: string
+          status_code: string
           target_value: string
         }[]
       }
@@ -1658,6 +1662,7 @@ export type Database = {
           id: string
           is_archived: boolean
           name: string
+          status_code: string | null
           updated_at: string
           user_id: string
         }

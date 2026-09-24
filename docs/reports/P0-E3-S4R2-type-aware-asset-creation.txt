@@ -1,0 +1,205 @@
+P0-E3-S4R2 — ADD ASSET: TYPE-AWARE CREATION FLOW
+================================================================
+
+STATUS: COMPLETE.
+
+1. ROOT ISSUE
+P0-E3-S4R fixed subtype leakage in the post-creation Manage flow
+(`AssetActionSheet` no longer shows vehicle status/repair controls for
+non-vehicle assets). Manual QA then found the same underlying problem
+one step earlier: `AddAssetSheet`'s Step 2 showed essentially identical
+fields for every asset type — "Cost Basis," "Current Value Estimate,"
+"Conservative Quick-Sale Value," "Target Value" — with only two labels
+(`business_interest`/`financial_investment`'s basis+current-value)
+varying via a small local `BASIS_LABEL`/`CURRENT_VALUE_LABEL` map.
+Quick-sale and target labels were 100% hardcoded, generic, identical
+across all 8 types. A Vehicle and a Financial Investment therefore
+looked like the same product with a different type tag at creation
+time, even though the post-creation Manage experience had already been
+made properly type-aware.
+
+2. GENERIC FIELDS RETAINED
+Confirmed by re-reading `create_asset()` (the atomic RPC every type
+still calls unchanged): it accepts `p_asset_type`, `p_name`,
+`p_currency_code`, `p_description`, `p_acquired_at`,
+`p_initial_basis_amount`, `p_estimated_current_value`,
+`p_quick_sale_estimate`, `p_target_value`, `p_valued_at` — one INSERT
+into `assets` plus up to one `asset_basis_events` row and up to three
+`asset_valuations` rows, all type-agnostic at the database level. These
+remain the ONLY fields creation ever writes, for every type, with no
+change to that function's signature or body. What changed is purely
+which LABEL is shown for each of those same four numeric inputs, plus
+(for Vehicle only) one additional real capability — see §4.
+
+3. CREATION CONFIG INTRODUCED
+`lib/domain/assets/capabilities.ts` gained a second export,
+`assetCreationConfig(assetType): AssetCreationConfig`, alongside the
+existing `assetCapabilities()` — the same centralized-model pattern,
+extended to creation-time presentation rather than a third set of
+scattered `assetType === "vehicle"` conditionals in JSX. Shape:
+`valuesHeading` (Step 2's heading), `helperCopy?` (Step 1's clarifying
+line under the selected type), `basisLabel`, `currentValueLabel`,
+`quickSaleLabel`, `targetValueLabel`. Deliberately does NOT duplicate
+`supportsVehicleStatus` — `AddAssetSheet` calls `assetCapabilities()`
+directly for that, so the flag lives in exactly one place. `AddAssetSheet`
+now calls both functions once per render and reads every Step 1/Step 2
+label from their results; the old local `BASIS_LABEL`/`CURRENT_VALUE_LABEL`
+maps were removed entirely.
+
+4. VEHICLE CREATION BEHAVIOR
+`valuesHeading`: "Vehicle values". Labels: Cost Basis / "Current /
+As-Is Value" / "Conservative Quick-Sale Value" / "Target Sale Value" —
+matching the brief's suggested wording. No make/model/year/VIN field was
+added (none exist canonically). One real addition, evaluated per the
+brief's own "Vehicle Status on Create" section: an OPTIONAL "Vehicle
+Status" select in Step 2, gated by `assetCapabilities("vehicle").
+supportsVehicleStatus`, defaulting to "Status not set", using the exact
+same `ASSET_STATUS_OPTIONS` vocabulary Manage uses — no inferred
+default, no second status system. Because `create_asset()` has no status
+parameter and adding one would mean changing that atomic RPC's
+signature (a schema change), this was deliberately implemented WITHOUT
+touching the database: `handleSubmit` calls the existing `createAsset()`
+first, and only if a status was chosen does it make a second, already-
+existing `updateAsset(supabase, asset.id, "vehicle", {statusCode})`
+call. If that second call fails, the sheet does not silently discard the
+failure or pretend nothing happened — it shows an honest message ("...
+was added, but its status could not be saved — set it from Manage
+instead") and keeps the sheet open, while still refreshing so the
+successfully-created asset is visible.
+
+5. FINANCIAL INVESTMENT BEHAVIOR
+`valuesHeading`: "Investment values". `helperCopy`: "Shares, funds,
+bonds and similar investments" (shown under the selected type in Step
+1, per the brief's "Type Label Clarity" section, distinguishing it from
+Inventory/Stock). Labels: "Amount Invested / Cost Basis" / "Current
+Estimated Value" / "Estimated Liquidation Value" / "Target Value" — no
+vehicle/repair/listing language anywhere (verified by a regex assertion
+against the full concatenated copy). No Vehicle Status field renders
+(`supportsVehicleStatus` is false for this type). No Ticker, Broker,
+Shares-count, Dividend, Market Price, ROI, or Performance field was
+invented — none of those are canonically modeled, and this remediation
+is about removing false behavior, not building a brokerage system.
+
+6. PROPERTY BEHAVIOR
+`valuesHeading`: "Property values". Labels: "Purchase / Cost Basis" /
+"Current Estimated Value" / "Conservative Sale Value" / "Target Value".
+No Vehicle Status field. No mortgage/rent/title/freehold/survey/tenant
+field was invented — none exist canonically (consistent with the
+original P0-E3-S4 report's own finding on Property).
+
+7. BUSINESS INTEREST BEHAVIOR
+`valuesHeading`: "Business interest values". Labels: "Capital Invested"
+/ "Estimated Business Value" / "Estimated Exit / Liquidation Value" /
+"Target Value" — capital invested and estimated business value remain
+two visually and semantically distinct labels, preserving the existing
+"capital invested != business valuation" rule; nothing implies they are
+the same figure. No Vehicle Status field.
+
+8. EQUIPMENT BEHAVIOR
+`valuesHeading`: "Equipment values". Labels: "Purchase Cost / Cost
+Basis" / "Current Estimated Value" / "Estimated Resale Value" / "Target
+Value" — no vehicle workflow language. No Vehicle Status field.
+
+9. INVENTORY/STOCK BEHAVIOR
+`valuesHeading`: "Inventory values". `helperCopy`: "Goods or inventory
+held for resale" (clarifying this means business inventory, not
+publicly traded equities, per the brief's "Type Label Clarity" section).
+Labels: "Inventory Cost Basis" / "Current Inventory Value" / "Estimated
+Clearance / Liquidation Value" / "Target Sale Value". No SKU, quantity,
+COGS, or warehouse functionality was built — none exist canonically, and
+none was added this pass, per the brief's explicit instruction. No
+Vehicle Status field.
+
+10. COLLECTIBLE BEHAVIOR
+`valuesHeading`: "Collectible values". Labels: "Acquisition Cost" /
+"Current Estimated Value" / "Quick-Sale Estimate" / "Target Value". No
+Vehicle Status field.
+
+11. OTHER BEHAVIOR
+`valuesHeading`: "Asset values" (the fallback config `assetCreationConfig()`
+returns for any unrecognized type, though every one of the 8 real
+canonical types has its own explicit entry). Labels: neutral "Cost
+Basis" / "Current Estimated Value" / "Estimated Liquidation Value" /
+"Target Value", no helper copy. No Vehicle Status field.
+
+12. TYPE-SWITCH STATE HANDLING
+`AddAssetSheet`'s `handleAssetTypeChange(next)` — the function passed to
+`AssetTypeSelector`'s `onChange` — sets the new `assetType` AND, in the
+same handler, clears the `vehicleStatus` draft state whenever
+`assetCapabilities(next).supportsVehicleStatus` is false. This runs
+immediately on selection in Step 1, not deferred to submit time, so
+switching Vehicle -> Financial Investment (or any other type) cannot
+carry a stale vehicle-only status value forward — there is no code path
+by which an incompatible status could reach `handleSubmit`, since
+`handleSubmit` itself only attempts the second `updateAsset()` call when
+`capabilities?.supportsVehicleStatus` is true for the CURRENTLY selected
+type at submit time, a second independent check.
+
+13. TESTS
+`lib/domain/assets/capabilities.ts`'s `assetCreationConfig()` is tested
+directly in `supabase/tests/assets/run.ts` (same "test the pure function
+the UI actually calls" precedent as the existing `assetCapabilities()`
+tests) — 9 new tests: vehicle (heading, As-Is wording, quick-sale/target
+wording, status-eligible), financial_investment (heading, basis label,
+a regex proving no vehicle/repair/listing wording anywhere in its
+combined copy, status-ineligible), property (heading, basis label,
+status-ineligible), business_interest (capital-invested label,
+business-valuation label, status-ineligible), equipment (resale wording
+in quick-sale label, status-ineligible), inventory (inventory wording in
+heading and basis label, status-ineligible), collectible (acquisition
+label, status-ineligible), other (neutral basis label, no helper copy,
+status-ineligible), and a dedicated test proving the type-switch
+decision function (`assetCapabilities(nextType).supportsVehicleStatus`)
+returns false for every one of the 7 non-vehicle types — the exact
+condition `handleAssetTypeChange` branches on. No DOM/React test
+infrastructure exists in this environment (same disclosed limitation as
+every prior phase's report), so the component's own state-clearing
+behavior is not directly exercised by a browser test; these assertions
+instead prove the underlying decision function is correct for every
+possible switch destination, which is what that behavior is entirely
+driven by.
+
+14. VALIDATION
+`npm run lint`: 0 errors, 0 warnings (one real TypeScript issue was
+found and fixed during this pass: two sequential exact-value `assert()`
+calls — a TypeScript assertion function — narrowed
+`config.basisLabel`/`config.currentValueLabel` to disjoint literal
+types, making a third, logically-redundant `!==` comparison both a
+compile error and unnecessary; removed rather than worked around).
+`npm run typecheck` (app + `supabase/tests/tsconfig.json`): clean.
+`npm run build`: clean, route list unchanged. No migration, no
+`supabase db reset` — confirmed correct, since `git status` shows no
+file under `supabase/migrations/` changed this pass. `npm run
+test:assets`: 69/69 passed (up from 60). Full regression re-run as a
+courtesy (not required, per the brief, since nothing schema-level
+changed): 506/506, all 12 suites, zero failures.
+
+15. FILES CHANGED
+Modified: `lib/domain/assets/capabilities.ts` (new `AssetCreationConfig`
+interface + `assetCreationConfig()`, additive — `AssetCapabilities`/
+`assetCapabilities()` untouched); `components/assets/AddAssetSheet.tsx`
+(rebuilt around `assetCreationConfig()`/`assetCapabilities()`, removed
+the old local label maps, added the optional Vehicle Status field and
+its two-call submit sequence, added `handleAssetTypeChange`);
+`supabase/tests/assets/run.ts` (9 new tests + import); this report.
+Also updated: `docs/project/BUILD_STATE.md` (phase entry). No file
+under `supabase/migrations/`, `lib/domain/assets/repository.ts`, or any
+RLS policy was touched.
+
+16. GIT STATUS
+Working tree matches the expected file list: this pass's own changes
+above, plus every already-untracked/modified file carried forward from
+P0-E3-S4/P0-E3-S4R (still uncommitted throughout this entire session, as
+instructed). Nothing has been committed or pushed.
+
+17. REMAINING DOMAIN GAPS
+Unchanged: Offers and Asset Sale/Disposal remain unimplemented
+(deliberately deferred, per the P0-E3-S4 report's own audit). P0-E3-S4R's
+migration (`20260930090000_restrict_asset_status_to_vehicle.sql`) is
+still not deployed to Monatriq Dev — blocked by a CLI/account access
+issue during the last deployment attempt, unrelated to this pass; see
+`docs/reports/P0-E3-S4R-asset-subtype-behavior-remediation.txt`'s own
+deployment addendum. No new domain gap was introduced by this pass — it
+is presentation-only, with the one already-existing `updateAsset()`
+mutation reused for the optional vehicle-status-on-create step, not a
+new capability.

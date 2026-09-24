@@ -10,6 +10,17 @@ export type AssetBasisEvent = Database["public"]["Tables"]["asset_basis_events"]
 export type AssetValuation = Database["public"]["Tables"]["asset_valuations"]["Row"];
 export type ValuationType = AssetValuation["valuation_type"];
 
+/**
+ * Optional, user-driven operational status (P0-E3-S4) — never inferred
+ * from valuation/repair data (see docs/reports/P0-E3-S4-assets-
+ * production-ui.txt, "Insight != status"). Deliberately has no "sold"
+ * value: that lifecycle transition belongs to the real Asset Sale/
+ * Disposal workflow (not implemented this phase — see that report's
+ * "ASSET SALE DOMAIN GAP" section), not a status flag with no real
+ * cash/lifecycle effect.
+ */
+export type AssetStatusCode = "awaiting_repair" | "repairing" | "ready_to_list" | "listed" | "offer_received" | "under_negotiation";
+
 /** Fields a user may change on an existing asset — matches the DB's column-level UPDATE grant on `assets`. */
 export interface AssetUpdate {
   name?: string;
@@ -17,6 +28,7 @@ export interface AssetUpdate {
   assetType?: AssetTypeCode;
   currencyCode?: string;
   isArchived?: boolean;
+  statusCode?: AssetStatusCode | null;
 }
 
 export interface AssetBasisTotal extends CurrencyAmount {
@@ -36,6 +48,7 @@ export interface AssetSummary {
   name: string;
   currencyCode: string;
   isArchived: boolean;
+  statusCode: AssetStatusCode | null;
   costBasis: string | null;
   estimatedCurrentValue: string | null;
   quickSaleEstimate: string | null;

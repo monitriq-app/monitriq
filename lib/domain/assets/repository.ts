@@ -5,6 +5,7 @@ import type {
   AssetBasisEvent,
   AssetBasisTotal,
   AssetQuickSaleCoverage,
+  AssetStatusCode,
   AssetSummary,
   AssetType,
   AssetTypeCode,
@@ -17,6 +18,7 @@ import type {
   RecordValuationInput,
 } from "./types.ts";
 import type { CurrencyAmount } from "../currency/types.ts";
+import { assetCapabilities } from "./capabilities.ts";
 
 type Client = SupabaseClient<Database>;
 
@@ -53,13 +55,28 @@ export async function listAssets(client: Client): Promise<Asset[]> {
   return data;
 }
 
-export async function updateAsset(client: Client, assetId: string, patch: AssetUpdate): Promise<Asset> {
+/**
+ * `currentAssetType` is required — not optional — specifically so this
+ * function can enforce, independently of the UI and independently of the
+ * database CHECK constraint, that a vehicle-lifecycle `statusCode` can
+ * only ever be set on a `vehicle` asset (P0-E3-S4R: "defense in depth —
+ * UI, domain, database must agree"). Every real call site already has
+ * the asset's own type in scope (it always has the full `AssetSummary`
+ * it's mutating), so this is not an extra fetch, just a required
+ * parameter making the invariant impossible to accidentally skip.
+ */
+export async function updateAsset(client: Client, assetId: string, currentAssetType: AssetTypeCode, patch: AssetUpdate): Promise<Asset> {
+  if (patch.statusCode !== undefined && patch.statusCode !== null && !assetCapabilities(currentAssetType).supportsVehicleStatus) {
+    throw new Error(`Asset type "${currentAssetType}" does not support the vehicle lifecycle status.`);
+  }
+
   const update: Database["public"]["Tables"]["assets"]["Update"] = {};
   if (patch.name !== undefined) update.name = patch.name;
   if (patch.description !== undefined) update.description = patch.description;
   if (patch.assetType !== undefined) update.asset_type = patch.assetType;
   if (patch.currencyCode !== undefined) update.currency_code = patch.currencyCode;
   if (patch.isArchived !== undefined) update.is_archived = patch.isArchived;
+  if (patch.statusCode !== undefined) update.status_code = patch.statusCode;
 
   const { data, error } = await client
     .from("assets")
@@ -88,6 +105,7 @@ export async function getAssetSummaries(client: Client): Promise<AssetSummary[]>
     name: row.name,
     currencyCode: row.currency_code,
     isArchived: row.is_archived,
+    statusCode: row.status_code as AssetStatusCode | null,
     costBasis: row.cost_basis as string | null,
     estimatedCurrentValue: row.estimated_current_value as string | null,
     quickSaleEstimate: row.quick_sale_estimate as string | null,

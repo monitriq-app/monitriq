@@ -3,11 +3,145 @@
 Canonical implementation checkpoint. Updated at the end of every phase.
 Do not mark future phases complete ahead of time.
 
+## Standing rule — approved reference fidelity
+
+Introduced P0-E3-S4, after Assets production UI required two follow-up
+visual-realignment passes because the first implementation
+*interpreted* the approved reference instead of matching it literally:
+
+> When a final approved reference exists, implement its visual
+> composition, density, spacing, typography hierarchy and component
+> proportions literally before applying any product adaptation.
+> Deviations are permitted only for truthful data, unsupported
+> canonical capability, accessibility, security or responsive
+> integrity.
+
+This applies to Decisions, Goals, and all future production-UI phases.
+It does not retroactively alter already-approved Home/Money — those
+were built and approved under P0-E3-S2/S3's own process and remain the
+Visual Constitution's existing precedent; this rule governs how a
+*new* approved reference gets implemented going forward, not a re-audit
+of prior phases.
+
 ## Current phase
 
-P0-E3-S3 — Money + Quick Add: Production UI.
+P0-E3-S4R2 — Add Asset: Type-Aware Creation Flow.
 
 ## Current status
+
+**COMPLETE.** P0-E3-S4R fixed subtype leakage in the post-creation
+Manage flow; manual QA then found the same class of problem one step
+earlier — the Add Tracked Asset creation flow's Step 2 showed
+effectively identical fields (Cost Basis / Current Value Estimate /
+Conservative Quick-Sale Value / Target Value) for every asset type, so a
+Vehicle and a Financial Investment read as the same product with a
+different label. `lib/domain/assets/capabilities.ts` gained a second
+exported function, `assetCreationConfig(assetType)` — the same
+centralized-model pattern `assetCapabilities()` already established,
+extended to creation-time presentation (heading/helper copy/all four
+field labels) rather than a third, separately-scattered set of `if
+(assetType === ...)` branches in `AddAssetSheet`. Zero schema changes:
+every type still records through the exact same `create_asset()` RPC
+and the same `asset_basis_events`/`asset_valuations` rows — only the
+LABELS shown for those fields vary by type now. One real, evaluated
+addition: an optional Vehicle Status field in Step 2 (gated by
+`assetCapabilities().supportsVehicleStatus`, so vehicle-only), using the
+existing `updateAsset()` call as a second mutation after `createAsset()`
+succeeds — `create_asset()`'s own RPC signature was deliberately left
+unchanged rather than adding a schema-changing status parameter to that
+atomic function. Switching away from Vehicle in Step 1 clears any drafted
+status immediately.
+
+No migration, no `supabase db reset` — this pass touched no schema/RPC.
+Assets suite: 69/69 (up from 60). Full regression re-run as a courtesy
+(not required, since nothing schema-level changed): 506/506, all 12
+suites, zero failures.
+
+## Prior phase: P0-E3-S4R — Generic Asset Domain: Subtype Behavior Remediation
+
+**COMPLETE** (implementation), migration **NOT YET DEPLOYED** to
+Monatriq Dev — a deployment attempt was made and BLOCKED by an
+environment/CLI-account access issue unrelated to the migration's
+correctness (the authenticated Supabase CLI session in that attempt
+could only see the "Nemryn" project, not the actual linked Monatriq Dev
+project; see this phase's own report addendum, "MONATRIQ DEV DEPLOYMENT
+ATTEMPT: BLOCKED, NO CHANGE MADE," for full detail). The migration
+(`20260930090000_restrict_asset_status_to_vehicle.sql`) remains local-
+only and ready to deploy once CLI access is restored.
+
+Manual browser QA on P0-E3-S4's Assets Overview found a Financial
+Investment exposing the vehicle operational lifecycle (Awaiting Repair/
+Repairing/Ready to List/Listed/Offer Received/Under Negotiation) and a
+"Record a repair / improvement cost" form — the shared `AssetActionSheet`
+rendered both unconditionally for every asset type, and nothing in the
+database restricted which asset TYPE could hold `assets.status_code`
+either (only its value vocabulary was constrained). This remediation
+fixed it at all three layers per the brief's own "defense in depth"
+requirement:
+- **Database**: a new migration,
+  `20260930090000_restrict_asset_status_to_vehicle.sql`, adds a
+  table-level CHECK constraint (`status_code is null or asset_type =
+  'vehicle'`) after a defensive (idempotent, found-nothing-to-clear-
+  locally) cleanup UPDATE.
+- **Repository**: `updateAsset()` now requires the caller to pass the
+  asset's current type and throws a clear domain error if a
+  vehicle-lifecycle `statusCode` is attempted on any other type.
+- **UI**: a new centralized, typed capability model,
+  `lib/domain/assets/capabilities.ts` (`assetCapabilities(assetType)`),
+  is the single source `AssetActionSheet`/`AssetCard`/
+  `PotentialLiquiditySection` read to decide whether to render the
+  status control, the capital-improvement form, and what copy to use —
+  replacing the previous universal, type-blind rendering. Capital-cost
+  recording ("Record a repair / improvement cost" and its equivalents)
+  is now subtype-worded per type and deliberately absent for
+  `financial_investment` (no canonical "contribution" operation exists
+  yet — see `docs/architecture/FINANCIAL_DOMAIN_MODEL.md` §44).
+
+Verified against a real local Supabase stack, fresh `supabase db reset`
+(required — schema changed): 20 (RLS/Profile) + 48 (Money) + 11
+(Currency) + 60 (Assets, was 33 pre-remediation) + 27 (Receivables) + 25
+(Liabilities) + 56 (Goals) + 86 (Rules/Obligations) + 70 (Decisions) + 33
+(Financial Position) + 30 (Home Readiness) + 31 (Home) = **497/497
+assertions passed**, all 12 suites, zero failures.
+
+## Prior phase: P0-E3-S4 — Assets: Production UI + Asset Workflow Completion
+
+**PARTIAL — ASSET SALE DOMAIN GAP.** The Assets Overview screen
+(summary, category composition, Needs Attention, Potential Liquidity,
+filterable category board, per-asset manage sheet, Receivables
+integration, progressive-disclosure Add Asset) is complete, built
+against the approved reference at `docs/reference/04-assets/`, and
+verified against real authenticated-user data with zero prototype
+content. Two capabilities the reference implies — Offers and a real
+Asset Sale/Disposal mutation — remain deliberately unimplemented this
+phase, per the brief's own explicit allowance to report a domain gap
+rather than invent unsafe financial behavior; see the phase report's
+"Asset Sale/Disposal audit" section. Quick Add's Asset Sale option
+continues to defer to `/assets` with an honest message, unchanged from
+P0-E3-S3.
+
+The only schema change this phase is a narrow, non-financial one:
+`assets.status_code`, a user-driven vehicle/asset lifecycle status
+column (see Migrations below) — deliberately excludes `'sold'` and
+`'archived'` so it can never be used as a substitute for the still-
+missing real sale/archive lifecycle. (P0-E3-S4R, immediately following,
+found and fixed a real defect in this column's original scoping — see
+above.) Same limitation class as every prior phase: no browser
+automation tool was available in this environment, so pixel-level
+visual/viewport/theme rendering could not be observed directly.
+Everything verifiable without a browser (production build, lint, both
+typecheck configs, and a real-Postgres regression suite) was verified
+and is reported as such.
+
+Verified against a real local Supabase stack, fresh `supabase db reset`
+(required this phase since the `status_code` migration changed schema):
+20 (RLS/Profile) + 48 (Money) + 11 (Currency) + 33 (Assets, was 28
+pre-phase) + 27 (Receivables) + 25 (Liabilities) + 56 (Goals) + 86
+(Rules/Obligations) + 70 (Decisions) + 33 (Financial Position) + 30
+(Home Readiness) + 31 (Home) = **470/470 assertions passed**, all 12
+suites, zero failures.
+
+## Prior phase: P0-E3-S3 — Money + Quick Add: Production UI
 
 **Complete**, with the same class of limitation as P0-E3-S2: no browser
 automation tool was available in this environment, so pixel-level
@@ -510,6 +644,47 @@ Recovery/Debt Payment exclusion via the actual linked domain functions,
 cross-user isolation, anonymous denial) — applied cleanly on every reset
 this phase, 48/48 Money-suite assertions passing.
 
+**P0-E3-S4**:
+`supabase/migrations/20260929090000_add_asset_status.sql`. Zero new
+tables. Adds `assets.status_code text` with an inline `CHECK` constraint
+limited to `('awaiting_repair', 'repairing', 'ready_to_list', 'listed',
+'offer_received', 'under_negotiation')` — deliberately excludes
+`'sold'` (no canonical sale mutation exists yet, see the phase report's
+Asset Sale audit) and `'archived'` (the existing `is_archived` column
+already owns that state; a status value would create two sources of
+truth). Column-level grant: `update (status_code)` added additively
+alongside the existing `assets` UPDATE grant. `asset_summary()` was
+dropped and recreated (`CREATE OR REPLACE` cannot change a function's
+return-column shape) to add `status_code` to its output — its underlying
+`LEFT JOIN LATERAL` valuation logic is completely unchanged. 5 new tests
+added to `supabase/tests/assets/run.ts` (null default, real status set
+and visible in `asset_summary()`, invalid/`'sold'` value rejected by the
+CHECK constraint, cross-user status update denied, status cleared back
+to null) — 33/33 Assets-suite assertions passing.
+
+**P0-E3-S4R**:
+`supabase/migrations/20260930090000_restrict_asset_status_to_vehicle.sql`.
+Zero new tables. Local Docker was inspected first (a direct query
+against `supabase_db_Monatriq`) and found zero existing rows with
+`status_code` set on any asset — nothing to protect locally. The
+migration still includes an unconditional, idempotent defensive cleanup
+(`update assets set status_code = null where status_code is not null
+and asset_type <> 'vehicle'`) ahead of the constraint, so it is safe to
+apply later to any environment (including Monatriq Dev, not pushed this
+pass) without a separate manual data audit first — it touches only
+`status_code`, never `asset_type`/name/currency/basis/valuation. Adds a
+new table-level CHECK constraint,
+`assets_status_code_requires_vehicle` (`status_code is null or
+asset_type = 'vehicle'`), additive alongside the original column-level
+enum CHECK from P0-E3-S4 (Postgres allows multiple CHECK constraints on
+one column; both must hold). 27 new tests added to `supabase/tests/
+assets/run.ts` (all 6 vehicle statuses settable, status clears to null,
+all 7 non-vehicle types rejected by the repository with a clear error
+message, the same rejection re-proven at the database layer via a raw
+REST bypass, a post-attempt integrity check that no non-vehicle asset
+ended up with a status anyway, plus 5 pure-function assertions against
+`assetCapabilities()` itself) — 60/60 Assets-suite assertions passing.
+
 ## Architecture changes
 
 - **Theme is a pure presentation-layer concern, enforced by construction.**
@@ -566,6 +741,33 @@ this phase, 48/48 Money-suite assertions passing.
   summary()` for the same user in the same request — the strongest form
   of "no duplicate calculation" proof available without static analysis
   tooling.
+
+- **Status/insight separation is structural, not a copy convention
+  (P0-E3-S4).** `assets.status_code` is a plain user-set enum column —
+  nothing in the read path (`asset_summary()`, `AssetActionSheet`) ever
+  infers or defaults a status from valuation/repair data. "Status not
+  set" is the only fallback, by construction, matching the brief's
+  explicit "insight != status" rule.
+- **Deliberately deferred: Offers, Asset Sale/Disposal (P0-E3-S4).**
+  Neither capability exists in the domain; both were evaluated and
+  explicitly NOT added this phase rather than invented unsafely — see
+  the phase report's Asset Sale/Disposal audit section for the full
+  reasoning (atomicity, idempotency, ownership verification, and
+  realised-gain/loss calculation constitute a separate scope of work).
+  Quick Add's Asset Sale option keeps deferring to `/assets` with an
+  honest message.
+- **Generic-vs-subtype capability is now a real, three-layer boundary,
+  not a UI convention (P0-E3-S4R).** `lib/domain/assets/capabilities.ts`
+  (`assetCapabilities(assetType)`) is the one centralized, typed source
+  every component reads to decide what to render; `updateAsset()`
+  independently enforces the same rule in the repository (requires the
+  caller's known asset type, throws a domain error on mismatch); the
+  database independently enforces it too (`assets_status_code_requires_
+  vehicle` CHECK). All three layers were verified to actually agree —
+  see docs/architecture/FINANCIAL_DOMAIN_MODEL.md §44 and docs/reports/
+  P0-E3-S4R-asset-subtype-behavior-remediation.txt. Any FUTURE
+  subtype-only capability must follow this same three-layer pattern, not
+  a UI-only `if (asset.type === ...)` branch.
 
 ## Known limitations
 
@@ -691,12 +893,19 @@ push, never `supabase db reset` against it.
 
 ## Next approved step
 
-Do not begin automatically. Assets production UI is explicitly NOT
-started (P0-E3-S3's own phase boundary forbids it). Recommended next
-phase (pending user review): either (a) real browser/device QA of Home
-AND Money before building further UI on an unverified visual foundation,
-or (b) continuing the production-UI rollout to Assets (which already has
-the domain layer and would reuse the exact same AppShell/theme/
-responsive/QuickAdd foundation these two phases established, including
-wiring the "Asset / Investment" Quick Add option's deferred Asset Sale
-path to a real mutation once one exists) — or the user's own priority.
+Do not begin automatically. Decisions production UI is explicitly NOT
+started (P0-E3-S4R2's own phase boundary forbids it, restated from
+P0-E3-S4/P0-E3-S4R). P0-E3-S4R's migration
+(`20260930090000_restrict_asset_status_to_vehicle.sql`) is still NOT
+deployed to Monatriq Dev — a deployment attempt was made and BLOCKED by
+a CLI/account access issue (see that phase's report addendum); this
+remains an outstanding, user-actionable item, not something to retry
+automatically. Recommended next phase (pending user review): either (a)
+restore Supabase CLI access to Monatriq Dev and deploy the pending
+migration, (b) real browser/device QA across Home, Money, and Assets
+before building further UI on an unverified visual foundation, (c) a
+dedicated Asset Sale/Disposal domain phase (atomic, idempotent,
+ownership-checked, realised-gain/loss-aware — see the P0-E3-S4 report's
+Asset Sale audit) — now unblocked by P0-E3-S4R/P0-E3-S4R2's own
+completion, or (d) continuing the production-UI rollout to Decisions —
+or the user's own priority.

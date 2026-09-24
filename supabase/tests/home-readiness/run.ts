@@ -419,7 +419,7 @@ async function main() {
       let pln = coverage.find((c) => c.currencyCode === "PLN");
       assert(pln?.coverageStatus === "partial", `expected partial with the new unestimated asset present, got ${pln?.coverageStatus}`);
 
-      await updateAsset(userA.client, a4.id, { isArchived: true });
+      await updateAsset(userA.client, a4.id, "vehicle", { isArchived: true });
 
       coverage = await getAssetQuickSaleCoverage(userA.client);
       pln = coverage.find((c) => c.currencyCode === "PLN");

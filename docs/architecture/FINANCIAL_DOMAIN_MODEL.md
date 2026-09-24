@@ -1459,3 +1459,62 @@ in `supabase/tests/home/run.ts`: Home's `nativePositions` and `thisMonth`
 are asserted byte-identical to direct calls to `financial_position_by_
 currency()`/`money_period_summary()` for the same user, and Safe to
 Deploy is asserted byte-identical to `safe_to_deploy_by_currency()`.
+
+## 44. Generic asset data vs. subtype capability boundary (P0-E3-S4R)
+
+The `assets` table (§19) is, and remains, fully generic: no
+subtype-specific columns exist for any asset type. Two kinds of behavior
+sit on top of that one generic table, and they must never be confused:
+
+**Generic asset data** — universal across every asset type, because the
+schema itself makes no distinction: name, asset type, currency,
+description, cost basis (`asset_basis_events`), current/quick-sale/target
+valuation (`asset_valuations`), valuation history, and archive state.
+Every asset type gets these, unconditionally, from the same tables and
+the same RPCs (`create_asset`, `record_asset_valuation`,
+`record_asset_basis_event`, `asset_summary`).
+
+**Subtype capability** — a real, canonical behavior that only applies to
+some asset types, because either the data it depends on is meaningless
+for other types (the vehicle operational lifecycle has no correct
+reading for a Financial Investment) or a deliberate product decision
+withholds it until a proper canonical operation exists (capital-cost
+recording is withheld from `financial_investment` specifically — see
+below). This must be a real, database-backed distinction, not a UI
+convention: P0-E3-S4 added `assets.status_code` (the vehicle
+awaiting_repair → ... → under_negotiation lifecycle) to the generic
+table with a CHECK constraint on its VALUE vocabulary but no restriction
+on which asset TYPE could hold it — so a Financial Investment, Property,
+or any other type could both display and actually receive vehicle
+status. Manual QA caught this leaking through the shared management UI;
+P0-E3-S4R is the remediation.
+
+**The rule going forward**: any new subtype-only capability must be
+enforced at three independent layers, and all three must agree —
+1. **Database** — a CHECK constraint (or equally strong DB-layer rule)
+   tying the capability's column to the asset types it's actually valid
+   for, e.g. `assets_status_code_requires_vehicle`: `status_code is null
+   or asset_type = 'vehicle'`.
+2. **Repository** — the mutation function itself rejects an attempt to
+   use the capability on an unsupported type, independent of whatever
+   the database would do, via `lib/domain/assets/capabilities.ts`'s
+   `assetCapabilities(assetType)` — the one centralized, typed source of
+   "what can this asset type actually do." `updateAsset()` requires the
+   caller to pass the asset's current type specifically so this check
+   can never be silently skipped.
+3. **UI** — the same `assetCapabilities()` result gates whether the
+   control renders at all (`AssetActionSheet`, `AssetCard`,
+   `PotentialLiquiditySection`) — never a scattered `if (asset.type ===
+   "vehicle")` check repeated per component.
+
+No capability is modeled in `assetCapabilities()` merely because it
+might exist in the future — only ones with a real canonical operation
+behind them today. `supportsCapitalImprovement` (recording an additional
+cost against basis) is genuinely generic at the database level — the
+RPC has no type restriction — and is exposed for every type except
+`financial_investment`, where the brief explicitly withholds it this
+phase: "repair/improvement" framing has no correct meaning for an
+investment, and no separate canonical "additional contribution"
+operation exists yet to expose instead. A future Investment Transactions
+domain may add one; until then, the existing initial cost basis remains
+the only factual figure for that type.
