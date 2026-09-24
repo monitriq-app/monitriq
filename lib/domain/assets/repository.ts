@@ -7,8 +7,10 @@ import type {
   AssetQuickSaleCoverage,
   AssetSummary,
   AssetType,
+  AssetTypeCode,
   AssetUpdate,
   AssetValuation,
+  AssetValueByType,
   CreateAssetInput,
   QuickSaleCoverageStatus,
   RecordBasisEventInput,
@@ -104,6 +106,17 @@ export async function getAssetQuickSaleCoverage(client: Client): Promise<AssetQu
     quickSaleEstimateCount: row.quicksale_estimate_count,
     quickSaleSum: row.quicksale_sum,
     coverageStatus: row.coverage_status as QuickSaleCoverageStatus,
+  }));
+}
+
+/** Current asset value grouped by type and native currency — see asset_value_by_type() in the migration. */
+export async function getAssetValueByType(client: Client): Promise<AssetValueByType[]> {
+  const { data, error } = await client.rpc("asset_value_by_type");
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    assetType: row.asset_type as AssetTypeCode,
+    currencyCode: row.currency_code,
+    totalEstimatedValue: row.total_estimated_value,
   }));
 }
 

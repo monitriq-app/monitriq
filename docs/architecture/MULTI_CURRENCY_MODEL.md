@@ -470,3 +470,28 @@ consolidated figure is never a black box.
 integration exists or is planned by this phase; a future provider-sourced
 rate would need its own `source` value and its own selection logic, not
 a silent upgrade of what `manual` means today.
+
+## 25. Home-only trailing-zero display option (P0-E3-S2)
+
+`formatCurrencyAmount()` (`lib/domain/currency/format.ts`) gained one
+additive, opt-in parameter: `{ trimTrailingZeros: true }`. When set, and
+only when the amount — rounded to the currency's own `decimal_exponent`,
+never a different precision — has an all-zero fractional part (e.g.
+"30850200.00" for a 2-decimal currency), the fractional part is omitted
+from the returned string ("NGN 30,850,200" instead of "NGN 30,850,200.00").
+An amount with any real fractional value after that rounding is always
+shown in full, at the currency's own precision — this never truncates or
+rounds away meaningful digits, it only omits a fraction that would
+otherwise render as all zeros.
+
+This is presentation only: the function still receives and operates on
+the exact decimal string the caller passed in (never a parsed JS number),
+and never touches the underlying NUMERIC value anywhere — it only decides
+whether the formatted STRING's fractional part is worth displaying.
+Omitting the parameter (every pre-existing caller, and every detail/
+transaction view — `/money`'s activity list, `/financial-position`'s full
+breakdown, Home's own Recent Activity preview) reproduces the function's
+prior behavior byte-for-byte; Home's summary-level figures (Liquid
+Position, Net Worth, Safe to Deploy, capital distribution, This Month,
+Goals) opt in, since a whole-currency-unit headline number reads more
+calmly without a redundant ".00" than a specific line-item amount does.

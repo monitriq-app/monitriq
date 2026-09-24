@@ -7,6 +7,7 @@ import type { AssetQuickSaleCoverage } from "../assets/types.ts";
 import type { ReceivableRecoverabilityCoverage } from "../receivables/types.ts";
 import type { ResolvedReportingRate } from "../currency/types.ts";
 import type { ReportingFinancialPosition } from "./aggregate.ts";
+import type { CapitalDistributionResult } from "./capital-distribution.ts";
 
 /**
  * One row per native currency — the composed output of
@@ -86,4 +87,6 @@ export interface FinancialPositionSummary {
   assetQuickSaleCoverage: AssetQuickSaleCoverage[];
   /** Per-currency recoverability-estimate completeness — distinct from receivablesEstimatedRecoverable's plain sum. */
   receivableRecoverabilityCoverage: ReceivableRecoverabilityCoverage[];
+  /** Cash + Assets-by-type + Receivables composed into "Where Your Capital Lives" — see capital-distribution.ts. Liabilities are never a category. */
+  capitalDistribution: CapitalDistributionResult;
 }

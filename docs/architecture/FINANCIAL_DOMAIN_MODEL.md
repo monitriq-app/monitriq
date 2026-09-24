@@ -1408,3 +1408,54 @@ construction — this phase's functions follow the identical pattern, plus
 one ordinary owned-row table (`record_manual_reporting_rate()` inserts
 with `user_id = auth.uid()`, already RLS-enforced by `fx_rates_insert_own`
 from P0-E2-S2).
+
+## 43. Home / Command Center: capital distribution & the production data boundary (P0-E3-S2)
+
+Home is the production consumer of `getFinancialPositionSummary()` — the
+first phase to actually render it as a screen (P0-E3-S1/S1A built the
+boundary; this phase is the first real UI on top of it). Home introduces
+exactly one new canonical capability, `asset_value_by_type()`, plus one
+pure TypeScript composition function; everything else it shows is read
+verbatim from the existing summary.
+
+**`asset_value_by_type()`.** Home's "Where Your Capital Lives" needed
+current asset value grouped by type AND currency — `asset_native_
+currency_totals()` (§20) only groups by currency, combining every type
+together. The new function is the smallest possible addition: the exact
+same "latest `estimated_current_value`, non-archived, never `target_
+value`/`quick_sale_estimate`" subquery `asset_native_currency_totals()`
+already uses, with `asset_type` added as a second `GROUP BY` key. No new
+valuation formula.
+
+**Capital distribution composition.** `buildCapitalDistribution()`
+(`lib/domain/financial-position/capital-distribution.ts`, pure, no I/O)
+composes Cash (`liquidCash`), Assets by type (`asset_value_by_type()`),
+and Receivables (`receivablesOutstanding`) into one distribution —
+Liabilities are never a category (they are not a place capital lives).
+A category only appears for a currency where its amount is greater than
+zero. Percentages are only ever computed where they are mathematically
+sound: within one native currency (no conversion needed — the `single_
+currency` and `native_incomplete` result modes), or across currencies
+once every one of them has a resolved manual reporting rate (the
+`reporting` mode, reusing the exact same `ResolvedReportingRate[]`
+Financial Position's own reporting Net Worth already resolved — no
+second FX resolution). A user with multiple currencies and incomplete FX
+coverage gets `native_incomplete`: one honest distribution per currency,
+never a silently-blended, mathematically-invalid percentage.
+`getFinancialPositionSummary()` composes this in as `capitalDistribution`
+— Home never builds it itself.
+
+**Home's data boundary, restated for this phase.** Every figure Home
+renders is read from `getFinancialPositionSummary()` — Net Worth, Liquid
+Position, Safe to Deploy, allocation shortfall, capital distribution,
+This Month, Goals, Focus Goal, active Decisions, upcoming Obligations,
+liquidity-estimate coverage — plus exactly one canonical call outside
+that summary, `money_recent_activity()` (Recent Activity, deliberately
+excluded from the summary since P0-E3-S1 — see §41). No component under
+`components/home/` performs arithmetic; presentational formatting
+(currency display, percentage-bar widths, date formatting) is the only
+transformation that happens outside the domain layer. Verified explicitly
+in `supabase/tests/home/run.ts`: Home's `nativePositions` and `thisMonth`
+are asserted byte-identical to direct calls to `financial_position_by_
+currency()`/`money_period_summary()` for the same user, and Safe to
+Deploy is asserted byte-identical to `safe_to_deploy_by_currency()`.

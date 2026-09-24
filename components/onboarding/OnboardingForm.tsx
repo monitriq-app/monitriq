@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useSyncExternalStore, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { updateProfile } from "@/lib/domain/profile/repository";
@@ -9,6 +9,7 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { useSupportedTimezones, useDetectedTimezone } from "./useTimezoneOptions";
 
 interface OnboardingFormValues {
   first_name: string;
@@ -20,32 +21,6 @@ interface OnboardingFormValues {
 interface OnboardingFormProps {
   currencies: Currency[];
   initial: OnboardingFormValues;
-}
-
-const noopSubscribe = () => () => {};
-
-/**
- * IANA timezone list and the browser's detected zone are browser-only
- * (Intl data can differ from the server's), so they're read via
- * useSyncExternalStore rather than useState+useEffect: its getServerSnapshot
- * keeps the server-rendered and first client-rendered HTML identical
- * (both empty), avoiding a hydration mismatch, and it updates on its own
- * once mounted without a manual setState-in-effect.
- */
-function useSupportedTimezones(): string[] {
-  return useSyncExternalStore(
-    noopSubscribe,
-    () => Intl.supportedValuesOf("timeZone"),
-    () => [],
-  );
-}
-
-function useDetectedTimezone(): string {
-  return useSyncExternalStore(
-    noopSubscribe,
-    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-    () => "",
-  );
 }
 
 export function OnboardingForm({ currencies, initial }: OnboardingFormProps) {

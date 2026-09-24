@@ -1,0 +1,2620 @@
+================================================================================
+P0-E3-S2 — HOME / COMMAND CENTER: PRODUCTION UI, RESPONSIVE SYSTEM & THEMING
+================================================================================
+
+1. PHASE
+--------------------------------------------------------------------------------
+P0-E3-S2 — Home / Command Center: Production UI, Responsive System &
+Theming.
+
+2. STATUS
+--------------------------------------------------------------------------------
+COMPLETE, with one explicitly documented limitation: no browser
+automation tool was available in this environment, so pixel-level
+visual/viewport/theme validation could not be executed and is not
+claimed as passed. See §45 for exactly what was and was not verified.
+Every other completion-gate item was executed and passed.
+
+3. OBJECTIVE
+--------------------------------------------------------------------------------
+Transition from foundation/domain engineering to production product
+experience: build Monatriq's real Home / Command Center screen against
+the approved design reference, Visual Constitution, and canonical
+Financial Position, with mobile-first responsive design and Light/Dark/
+System appearance — without redesigning established financial
+architecture, without inventing financial calculations, and without any
+Victor/Capital-Compass-specific production behavior.
+
+4. REPOSITORY STATE
+--------------------------------------------------------------------------------
+Branch: main. Working tree carries this phase's changes on top of every
+prior phase's already-uncommitted work (standing instruction, unchanged).
+No commits were made this phase. Full `git status`/`git diff --stat` in
+§54-55.
+
+5. UI ARCHITECTURE PREFLIGHT
+--------------------------------------------------------------------------------
+Performed before any Home styling, per the phase brief's explicit
+requirement. Findings for each of the fourteen inspection points are in
+§6. Conclusion: theme, mobile navigation, and 48px-touch-target
+infrastructure were genuinely missing and were established as the
+smallest clean reusable foundation FIRST, in this same phase, before
+Home was built on top of it — not as Home-specific styling hacks.
+
+6. EXISTING FRONTEND ARCHITECTURE FINDINGS
+--------------------------------------------------------------------------------
+ 1. Theme/appearance: NONE. `lib/styles/tokens.css` hardcoded
+    `color-scheme: dark` at `:root` with no override mechanism, though its
+    own comment had already anticipated a future `:root[data-theme=
+    "light"]` block. `app/layout.tsx` hardcoded `colorScheme: "dark"` in
+    `viewport`. No theme library installed.
+ 2. Global design tokens: A clean, already-correct semantic layer existed
+    (`--color-background`, `--color-surface`, `--color-text-primary`,
+    etc., mapped from brand hex values via Tailwind v4's `@theme`) —
+    genuinely reusable, needed no redesign, only a light-mode override.
+ 3. AppShell/desktop nav: A minimal header (logo + a flat list of NINE
+    text links including every foundation route + sign-out). No account
+    menu, no theme control location, no primary/secondary nav
+    distinction.
+ 4. Mobile navigation: NONE. No bottom nav, no Quick Add affordance, no
+    mobile-specific layout at all — the same nine-link header rendered
+    (and wrapped/overflowed) at every viewport width.
+ 5. Responsive breakpoints: Tailwind's standard `sm`/`md`/`lg` scale was
+    already in light use (`PageContainer`'s `px-4 sm:px-6 lg:px-8`), but
+    no page had been built mobile-first with a real information-hierarchy
+    plan.
+ 6. Authenticated profile consumption: Solid — `getCurrentProfile()`
+    (React `cache`-deduped) already existed and was reused unchanged.
+ 7. Financial Position consumption: Solid — `getFinancialPositionSummary()`
+    (P0-E3-S1/S1A) already existed as exactly the boundary Home needed.
+ 8. Money/number formatting: Solid — `formatCurrencyAmount()` (exact
+    decimal, per-currency precision) already existed and needed no
+    changes.
+ 9. Reusable UI components: `Button`/`Input`/`Select`/`FormField` existed
+    but used a 40px (`min-h-10`) touch target, below the phase's 48px
+    requirement.
+10. Server/client boundaries: Correctly server-first throughout every
+    existing page; `"use client"` reserved for genuine interactivity
+    (forms, sign-out). No pattern change was needed, only extension.
+11. Existing Home route: Placeholder scaffolding (`app/(app)/home/
+    page.tsx`) — a static greeting and two lines of static text, no
+    Financial Position consumption at all.
+12. Loading/error/empty states: No `loading.tsx` existed anywhere. Empty
+    states existed per-domain-page ("No goals yet.", etc.) but no
+    pattern for a composed multi-section screen like Home.
+13. Typography: IBM Plex Sans via `next/font/google`, correctly wired,
+    `tabular-figures` utility already established. No changes needed.
+14. PWA/safe-area: `app/manifest.ts` existed and was correct; no
+    component anywhere used `env(safe-area-inset-*)` yet (nothing needed
+    it before a fixed bottom nav existed).
+
+7. FRONTEND FOUNDATION CHANGES
+--------------------------------------------------------------------------------
+Theme: `next-themes` installed and wired (`components/theme/
+ThemeProvider.tsx`, `ThemeToggle.tsx`); `lib/styles/tokens.css` gained a
+`:root[data-theme="light"]` override block (dark values in the base
+`@theme` block are unchanged) and a global `prefers-reduced-motion` rule;
+`app/layout.tsx` gained `suppressHydrationWarning` and theme-aware
+`viewport.themeColor`/`colorScheme`. Icons: `lucide-react` installed (a
+lightweight line-icon set, chosen specifically against the Visual
+Constitution's "no generic 3D/sparkle icons" rule). Navigation:
+`AppShell.tsx` fully reworked into a sticky header (brand + `DesktopNav`
++ `AccountMenu`) plus a fixed `MobileBottomNav` (Home/Money/+/Assets/
+Decisions/Goals); foundation routes moved into `AccountMenu`, not
+deleted. Touch targets: `Button`/`Input`/`Select` bumped from `min-h-10`
+to `min-h-12` (48px); `Input`/`Select` also gained `text-base` below
+`sm:` to prevent iOS Safari zoom-on-focus. `BrandLogo` reworked to a
+theme-agnostic gradient mark + `text-text-primary` text, avoiding a
+client-side logo-swap component entirely. All of this is genuinely
+reusable — none of it is Home-specific.
+
+8. DESIGN REFERENCE LOCATION
+--------------------------------------------------------------------------------
+`docs/reference/01-home/` — contains `screen.png` (the approved visual
+reference, a "Capital Compass" / "Victor" Stitch export), `code.html`
+(structural/implementation reference), and `DESIGN.md` (a generic
+Stitch-generated "Obsidian Wealth Cockpit" design system: ambient glows,
+"sovereign emerald"/"champagne amber" naming, glassmorphism-adjacent
+elevation language). The directory was actually inspected — `screen.png`
+was viewed as an image; `code.html` and `DESIGN.md` were read in full.
+
+9. DESIGN-REFERENCE AUDIT
+--------------------------------------------------------------------------------
+Authority order applied exactly as specified: Monatriq financial/domain
+architecture (functional) > approved PNG (visual) > HTML (structural) >
+MD (supporting context). `DESIGN.md`'s own color palette and "ambient
+glow"/"atmospheric layering" aesthetic were explicitly NOT adopted — they
+directly contradict Monatriq's own Visual Constitution (§6, "explicitly
+avoided aesthetics": AI glow, glassmorphism, excessive rounded cards) and
+the phase brief's own AI-slop prohibition list almost word-for-word.
+Monatriq's own established brand tokens (Midnight Navy, Obsidian, Deep
+Teal, Electric Teal, Cool Aqua, Deep Blue, Warm Off-White, Mist Grey,
+Ink) were used instead, per the phase brief's explicit brand-color
+section.
+
+10. STITCH ELEMENTS RETAINED
+--------------------------------------------------------------------------------
+Layout hierarchy and information order (greeting → position → capital
+distribution → moves → goals → this month → activity → obligations);
+card-cluster composition for the position figures (Liquid Position as
+one prominent card, Net Worth/Safe to Deploy as a paired row below);
+segmented-bar + list pattern for a capital-composition breakdown; bottom
+navigation with a central floating "+"; restrained card radii (~12-16px
+primary, ~8-12px controls) which happen to match the Visual Constitution
+independently.
+
+11. STITCH ELEMENTS INTENTIONALLY CHANGED/REJECTED
+--------------------------------------------------------------------------------
+Every literal value ("Welcome, Victor", NGN figures, "BMW F30", "Audi
+A5", "Autodrip Customer Pay", "Capital Compass" branding, weekly bar
+chart of invented inflow/outflow data) — replaced entirely with real,
+authenticated-user-derived content or an honest empty state. The entire
+"Your 3 Moves" concept as Stitch presented it (invented financial
+instructions: "Sell this asset," "Recover Receivable," "Authorize
+payment") — replaced with factual, non-instructive Focus
+Goal/active-Decision cards, since Monatriq never tells a user what to do
+(docs/product/PRODUCT_DEFINITION.md §4). The entire color system, glow
+effects, and "cockpit"/"sovereign" naming from `DESIGN.md` — replaced
+with Monatriq's own brand tokens and Visual Constitution. The weekly
+inflow/outflow bar chart under "This Month" — replaced with factual
+Cash In/Cash Out/Net/Earned Income/Expense figures from the canonical
+period summary, since no weekly-bucketed read capability exists and
+inventing one was out of scope ("data truth wins over mockup density,"
+per the phase brief). Notification bell icon — omitted (no notifications
+system exists; a decorative icon with no function would be exactly the
+kind of "arbitrary badge"/non-functional element the brief prohibits).
+
+12. AI-SLOP PREVENTION REVIEW
+--------------------------------------------------------------------------------
+Performed a deliberate self-review against the phase brief's explicit
+signature list, via direct source inspection of every new component
+(`grep` for `blur`, `shadow`, `gradient`, `animate-`, `rounded-full`
+across `components/home/`, `components/layout/`, `components/theme/`).
+Findings: `backdrop-blur` appears exactly twice (sticky header, fixed
+bottom nav) — functional translucency-on-scroll, not decorative;
+`shadow-lg` appears exactly twice (the floating "+" button, which needs
+to visually lift off the page since it overlaps the nav edge — the same
+pattern the approved reference itself uses — and the account-menu
+dropdown, a standard overlay affordance); `rounded-full` appears only on
+progress-bar tracks, small status dots, one small "Focus" badge, and the
+floating "+" button — no giant pill containers; zero gradients outside
+the already-approved brand mark; zero glow/neon classes; zero fake
+charts (the capital-distribution bar uses only real, computed
+percentages); zero "insight"/"recommended"/"optimal" language (also
+verified by an automated grep-based test, §50); largest financial figure
+is `text-3xl` (Liquid Position) — no oversized dramatic numbers. No
+refinement was needed as a result of this review; the implementation was
+built restrained from the start rather than corrected after the fact.
+
+13. FILES CREATED
+--------------------------------------------------------------------------------
+supabase/migrations/20260927090000_add_asset_value_by_type.sql
+lib/domain/financial-position/capital-distribution.ts
+lib/utils/time-of-day.ts
+components/theme/ThemeProvider.tsx
+components/theme/ThemeToggle.tsx
+components/layout/DesktopNav.tsx
+components/layout/MobileBottomNav.tsx
+components/layout/AccountMenu.tsx
+components/home/GreetingHeader.tsx
+components/home/PositionSection.tsx
+components/home/CapitalDistributionSection.tsx
+components/home/LiquidityNote.tsx
+components/home/YourMovesSection.tsx
+components/home/GoalsSection.tsx
+components/home/RecentActivityPreview.tsx
+components/home/NewUserSetup.tsx
+app/(app)/home/loading.tsx
+supabase/tests/home/run.ts
+docs/reports/P0-E3-S2-home-command-center-production-ui.txt
+
+14. FILES MODIFIED
+--------------------------------------------------------------------------------
+app/(app)/home/page.tsx (full production rewrite)
+app/(app)/money/page.tsx (anchor ids for Quick Add)
+app/layout.tsx (ThemeProvider, suppressHydrationWarning, theme-aware viewport)
+components/layout/AppShell.tsx (full rework)
+components/brand/BrandLogo.tsx (theme-agnostic)
+components/auth/SignOutButton.tsx (className passthrough)
+components/ui/Button.tsx, Input.tsx, Select.tsx (48px touch targets)
+lib/domain/assets/types.ts, repository.ts (AssetValueByType, getAssetValueByType())
+lib/domain/financial-position/types.ts, repository.ts (capitalDistribution field)
+lib/styles/tokens.css (light mode, reduced motion)
+lib/supabase/database.types.ts (regenerated)
+package.json, package-lock.json (next-themes, lucide-react; test:home script)
+docs/architecture/FINANCIAL_DOMAIN_MODEL.md (+§43)
+docs/architecture/SYSTEM_ARCHITECTURE.md (+§9, repo layout)
+docs/design/VISUAL_CONSTITUTION.md (implementation-status addendum)
+docs/project/BUILD_STATE.md (full rewrite for this phase)
+
+lib/domain/financial-position/aggregate.ts is UNCHANGED. docs/security/
+SECURITY_AND_RLS_PRINCIPLES.md is UNCHANGED (no new security pattern).
+
+15. HOME ARCHITECTURE
+--------------------------------------------------------------------------------
+`app/(app)/home/page.tsx` is a server component. It fetches, in one
+`Promise.all`: `listCurrencies()`, `listAssetTypes()`,
+`getFinancialPositionSummary()` — plus `getCurrentProfile()` (already
+`cache()`-deduped against the layout's own call) beforehand for the
+greeting. Recent Activity is fetched separately, wrapped in try/catch, so
+its failure degrades gracefully without taking down the rest of the page
+(§41). Every section component receives already-fetched data as props
+and performs zero I/O and zero arithmetic — presentational formatting
+(`formatCurrencyAmount`, percentage-bar widths already computed
+server-side, date formatting) only.
+
+16. AUTHENTICATED-USER DYNAMIC BEHAVIOR
+--------------------------------------------------------------------------------
+Greeting uses `profile.preferred_name || profile.first_name || null`
+(neutral greeting when both are absent) and a time-of-day derived from
+`profile.timezone` via `Intl.DateTimeFormat` (never the server's local
+time, never hardcoded). Every other section reads directly from
+`getFinancialPositionSummary(supabase)`, which is itself scoped to
+`auth.uid()` at every underlying RLS-protected read — there is no branch
+anywhere in Home's source that checks a specific user id, name, or
+persona. Verified explicitly with two structurally different fixture
+users in `supabase/tests/home/run.ts`.
+
+17. USER-ISOLATION BEHAVIOR
+--------------------------------------------------------------------------------
+Verified explicitly (not merely assumed from RLS): User A (name "Amara",
+USD reporting currency, USD/EUR/GBP activity) and User B (name "Kenji",
+JPY reporting currency, JPY activity) — asserted distinct profile names,
+distinct reporting currencies, zero cross-contamination in
+`nativePositions`, `assetValueByType`, `focusGoal`, and
+`upcomingObligations`. Anonymous access denied at the RPC level for
+`financial_position_by_currency`, `money_period_summary`, and
+`money_recent_activity` — Home's entire data boundary.
+
+18. HOME DATA-SOURCE MAP
+--------------------------------------------------------------------------------
+Net Worth/Liquid Position/Safe to Deploy/allocation shortfall/capital
+distribution/This Month/Goals/Focus Goal/active Decisions/upcoming
+Obligations/liquidity coverage -> `getFinancialPositionSummary()`
+(single call). Recent Activity -> `getRecentActivity()` (Money's own
+canonical function, called directly, exactly as P0-E3-S1 documented it
+should be). Nothing else. Verified byte-identical to direct canonical
+reads for `nativePositions` and `thisMonth` in the new test suite (§42).
+
+19. NET WORTH
+--------------------------------------------------------------------------------
+`PositionSection` shows ONE consolidated figure only when
+`reportingPosition.status === "calculated"` (reusing its own already-
+converted `netWorth` field — no re-conversion in the UI); otherwise lists
+every native currency's Net Worth individually, never omitting one, with
+an honest "Not set" (no reporting currency configured) or "Missing
+reporting rate for: ..." message.
+
+20. LIQUID POSITION
+--------------------------------------------------------------------------------
+Uses `liquidCash` exclusively (actual Money-domain cash) — never
+receivables, quick-sale estimates, asset target values, or Decision
+proceeds. Same consolidated-vs-native-list behavior as Net Worth.
+
+21. SAFE TO DEPLOY
+--------------------------------------------------------------------------------
+Never blended across currencies (Rules has never computed a
+cross-currency version, and Financial Position doesn't either) — always
+one line per currency, preserving `calculated`/`not_configured` exactly.
+A currency with no configured minimum floor reads "Not configured," never
+a fabricated zero. Verified byte-identical to `safe_to_deploy_by_currency()`
+in the new test suite.
+
+22. PROTECTED / SHORTFALL PRESENTATION
+--------------------------------------------------------------------------------
+`AllocationShortfallNote` renders only when `Number(allocationShortfall)
+> 0` for at least one currency — a real GBP shortfall fixture (nominal
+7000 allocated, 5000 actually backed after a real spend) was used to
+prove the note appears with the exact currency and shortfall amount, and
+is entirely absent for currencies with no shortfall.
+
+23. CAPITAL DISTRIBUTION
+--------------------------------------------------------------------------------
+See §43 of FINANCIAL_DOMAIN_MODEL.md for the full architecture.
+Summary: Cash + Assets-by-type (`asset_value_by_type()`, new this phase)
++ Receivables, liabilities never included, percentages only where
+mathematically sound (single currency, or fully FX-resolved reporting
+mode), degrading to one honest per-currency grouping otherwise
+(`native_incomplete`) — never a blended, invalid chart. A genuinely
+missing capability (asset value grouped by type) was identified,
+verified absent, and added the canonical way per the phase brief's
+explicit instruction.
+
+24. YOUR MOVES
+--------------------------------------------------------------------------------
+Sourced exclusively from `focusGoal` and `activeDecisions` — zero,
+one, two, or more items, never manufactured, never ranked, never labeled
+"recommended"/"best"/"priority." No invented financial instructions
+("Sell this asset," etc.) anywhere in `YourMovesSection`. Verified: a
+Decision's rendered fields carry no `rank`/`score`/`winner` key, and a
+Proceed choice does not alter any Home financial figure.
+
+25. GOALS
+--------------------------------------------------------------------------------
+`GoalsSection` switches on `measurementType`: `cash_target` uses
+`allocatedTotal`/`targetValue`/`percentage`; `debt_balance_target` uses
+`currentOutstandingPrincipal`/`debtProgressPercentage` (real liability
+progress, not goal-invented math); `monthly_income_target` shows "Current
+recurring income: Not calculated" (unsupported, per Goals' own
+established honesty); `milestone` shows completed/total milestone
+counts. No goal is forced into a percentage it doesn't semantically have.
+
+26. THIS MONTH
+--------------------------------------------------------------------------------
+Reuses `MonthlyMoneySummaryPanel` (P0-E3-S1A) unchanged — Cash In, Cash
+Out, Net External Cash Flow, Earned Income, Expense, per native currency,
+directly from `getMoneyPeriodSummary()`. No weekly bar chart (no
+weekly-bucketed read model exists; inventing one was judged out of scope
+— documented explicitly rather than silently omitted). Verified
+byte-identical to a direct `getMoneyPeriodSummary()` call for the same
+user.
+
+27. RECENT ACTIVITY
+--------------------------------------------------------------------------------
+`RecentActivityPreview` shows the 6 most recent real Money events (via
+`getRecentActivity()`) with a "View all activity" link to `/money`.
+Verified every returned event's `eventType` belongs to Money's own event
+vocabulary — goal allocations, Decision scenarios, and rule changes are
+structurally impossible to appear here (they don't write to
+`financial_events` at all).
+
+28. UPCOMING OBLIGATIONS
+--------------------------------------------------------------------------------
+Reuses `UpcomingObligationsList` unmodified, fed `summary.upcomingObligations`
+(itself `upcoming_obligations()`'s default 30-day horizon — no second
+date-range formula in Home). Verified: a real +5-day obligation appears;
+zero obligations produces the component's existing intentional empty
+state, never a fabricated one.
+
+29. REPORTING FX
+--------------------------------------------------------------------------------
+Home itself does not display a rate-context breakdown (that lives on
+`/financial-position`, P0-E3-S1A) — but wherever Home shows a
+consolidated reporting figure, it is only ever shown when
+`reportingPosition.status === "calculated"`, and the honest incomplete
+state is shown otherwise. No "live"/"market"/"real-time"/"official"
+language exists anywhere in Home's source — verified by an automated,
+comment-excluding source audit (§50).
+
+30. LIQUIDITY COMPLETENESS
+--------------------------------------------------------------------------------
+`LiquidityNote` renders one factual line per currency with a recorded
+quick-sale or recoverability estimate, always including the coverage
+status word ("partial"/"complete") and the exact count fraction (e.g.
+"2 of 4 assets") — never presenting a partial sum as though it covers
+every item. Currencies with `not_set` coverage are omitted entirely
+(nothing to qualify). Verified: a USD fixture with 1 of 2 assets
+estimated renders `coverageStatus: "partial"` with the correct counts.
+
+31. LIGHT MODE
+--------------------------------------------------------------------------------
+Implemented as a `:root[data-theme="light"]` CSS override — warm/neutral
+surfaces built from Warm Off-White/Mist Grey/Ink (never a generic white/
+grey SaaS palette, never a mechanical inversion of dark values), Deep
+Teal/Deep Blue accents (Electric Teal/Cool Aqua are tuned for dark
+backgrounds and lose contrast on light ones). Confirmed present in the
+compiled CSS bundle by inspection (§45). NOT visually rendered/reviewed
+in a real browser — see §45.
+
+32. DARK MODE
+--------------------------------------------------------------------------------
+Unchanged from the existing, already-approved dark token values
+established in P0-E1-S1/P0-E2-S1 — no pure black, no neon teal
+everywhere, no glowing cards; layered dark surfaces (Obsidian/Ink/
+Midnight Navy) with restrained border contrast, per the existing design
+system. NOT re-reviewed visually in a real browser this phase (it was
+the only mode ever rendered before, so its own prior visual acceptance
+stands, but re-confirmation alongside the new nav/theme UI was not
+performed — see §45).
+
+33. SYSTEM THEME BEHAVIOR
+--------------------------------------------------------------------------------
+`next-themes`' `enableSystem` + `defaultTheme="system"` resolves the
+OS/browser `prefers-color-scheme` automatically — this is next-themes'
+own documented, widely-used mechanism, not custom code. Verified at the
+code level (correct provider configuration) and via the compiled bundle
+containing next-themes' anti-flash script. NOT verified by actually
+toggling OS appearance in a real browser — see §45.
+
+34. THEME PERSISTENCE
+--------------------------------------------------------------------------------
+next-themes' own `localStorage` persistence — device-local, zero
+financial backend state, per the phase brief's explicit instruction.
+Verified at the code level (no custom persistence was written; the
+mechanism is next-themes' own well-established one). NOT verified by an
+actual reload in a real browser — see §45.
+
+35. NAVIGATION
+--------------------------------------------------------------------------------
+Desktop: sticky header with `DesktopNav` (5 items) + `AccountMenu`.
+Mobile: fixed `MobileBottomNav` (5 items + central "+"), hidden at `md:`
+and above; `DesktopNav` hidden below `md:`. Foundation routes (Financial
+Position, Rules & Obligations, Receivables, Liabilities) live in
+`AccountMenu`'s "Foundation routes" section — real, working links, never
+primary navigation, never deleted (verified: all four routes still
+build and are still linked from the account menu).
+
+36. MOBILE LAYOUT
+--------------------------------------------------------------------------------
+Built mobile-first: base (unprefixed) Tailwind classes target mobile;
+`sm:`/`md:` progressively enhance. Section order follows the brief's
+mobile information priority (greeting → position → capital distribution
+→ moves → goals → this month → activity/obligations). NOT visually
+confirmed in a real browser — see §45.
+
+37. NARROW / FOLD LAYOUT
+--------------------------------------------------------------------------------
+No component uses a fixed pixel width; `MobileBottomNav`'s five items +
+center action use `flex-1`/`min-w-12` (flexible, not fixed), so they
+compress rather than overflow at narrow widths by construction. NOT
+measured against an actual 320-360px viewport in a real browser — see
+§45.
+
+38. TABLET LAYOUT
+--------------------------------------------------------------------------------
+`DesktopNav` and `AccountMenu` activate at `md:` (768px), matching
+tablet width; `PageContainer`'s existing `max-w-5xl` cap prevents
+content from stretching to full tablet width unrestrained. NOT visually
+confirmed — see §45.
+
+39. DESKTOP LAYOUT
+--------------------------------------------------------------------------------
+Same `PageContainer` max-width cap applies at desktop sizes, avoiding
+both giant empty regions and overly wide text lines. NOT visually
+confirmed — see §45.
+
+40. ACCESSIBILITY
+--------------------------------------------------------------------------------
+Semantic heading structure (`h1`/`h2` throughout Home); real `<button>`/
+`<a>` elements used correctly (nav links are `<Link>`, actions are
+`<button>`); `AccountMenu` has `aria-haspopup`/`aria-expanded`/`role="menu"`
+and closes on Escape/outside-click; `ThemeToggle` uses `role="radiogroup"`/
+`role="radio"`/`aria-checked` with icon-only buttons carrying
+`aria-label`; `*:focus-visible` outline is global and unchanged;
+`MobileBottomNav`/`DesktopNav` use `aria-current="page"` for the active
+route (never color alone); all icon-only controls (`+`, account menu
+trigger, theme options) carry `aria-label`. `prefers-reduced-motion` is
+respected globally (§7). NOT verified with a real screen reader or an
+automated accessibility scanner — code-level semantic correctness only.
+
+41. LOADING / ERROR / EMPTY STATES
+--------------------------------------------------------------------------------
+`app/(app)/home/loading.tsx` — a layout-preserving skeleton (`animate-pulse`
+blocks matching each section's approximate shape), never fake numbers,
+respects `prefers-reduced-motion`. Recent Activity fetch is wrapped in
+try/catch; failure renders "Unable to load recent activity right now."
+without taking down the rest of Home (verified this is the ONLY module
+fetched separately from the primary `Promise.all`, matching the brief's
+"secondary module failure should degrade gracefully" example). Empty
+states: a user with zero `nativePositions` sees `NewUserSetup` (one
+primary action, "Add Cash Balance," plus two restrained secondary links)
+instead of every section rendering "no data" individually; each
+individual section (Goals, Your Moves, obligations, activity) still has
+its own intentional empty message for a populated-but-partial user.
+
+42. HOME-SPECIFIC TESTS
+--------------------------------------------------------------------------------
+PASSED. `supabase/tests/home/run.ts`, 31/31: pure `buildCapitalDistribution()`
+correctness (empty/single-currency-exact-percentage/native-incomplete-vs-
+reporting/liabilities-never-a-category); real-fixture data-layer
+correctness (Net Worth/Liquid Position/Safe to Deploy/This Month
+byte-identical to direct canonical reads; Recent Activity event-type
+validity; Focus Goal exactness; Decision no-rank-field; Proceed-choice
+Net-Worth-invariance; real obligation appears; partial quick-sale
+coverage distinguishable); dynamic-user isolation; anonymous denial;
+three automated source audits (prototype data, AI-slop copy,
+live/market/real-time/official FX claims); a structural proof that
+theme components make zero Supabase/financial-domain imports.
+
+43. THEME TESTS
+--------------------------------------------------------------------------------
+PARTIALLY EXECUTABLE given the environment. Executed and PASSED:
+structural proof that `ThemeProvider.tsx`/`ThemeToggle.tsx` import
+nothing from `lib/domain` or `supabase` (zero possible financial
+mutation from a theme change, by construction — the strongest available
+proof without a browser); compiled-CSS-bundle inspection confirming the
+`data-theme="light"` selector and next-themes' anti-flash script are
+present in the built output. NOT executed (no browser tool available):
+Light mode actually rendering correctly, Dark mode actually rendering
+correctly, System mode actually resolving OS preference, a Dark->Light
+switch actually re-rendering, persistence actually surviving a reload,
+actual absence of a flash-of-wrong-theme, actual contrast measurement in
+both modes. These are reported as NOT RUN, not as passed.
+
+44. DYNAMIC-USER TESTS
+--------------------------------------------------------------------------------
+PASSED — see §17. Two fully distinct fixture users, real Postgres/RLS,
+asserted-different profile names/currencies/native positions/asset
+breakdowns/focus goals/obligations, zero cross-contamination in either
+direction.
+
+45. RESPONSIVE/BROWSER VALIDATION
+--------------------------------------------------------------------------------
+NOT PERFORMED via real browser rendering — no browser automation tool
+(Playwright/Puppeteer/similar) was available in this environment, and
+this is stated plainly rather than claimed as passed, per the phase
+brief's explicit instruction ("do not claim browser validation passed
+unless it was actually run"). What WAS verified: `npm run build` succeeds
+in both Supabase-configured and unconfigured modes (production
+TypeScript + bundling correctness); the dev server boots and serves
+correctly (`curl` against `/`, `/login`, unauthenticated `/home` all
+return the expected status codes, including the 307 redirect for
+unauthenticated access); the compiled CSS bundle contains the light-mode
+token block; the compiled HTML contains next-themes' anti-flash inline
+script. A real fixture user WAS created via the admin API to attempt an
+authenticated curl-based check, but sign-in in this app is entirely
+client-side (`supabase.auth.signInWithPassword` in a Client Component,
+setting cookies via the browser SDK) with no server-side login route —
+replicating `@supabase/ssr`'s cookie-chunking scheme by hand in curl was
+judged not worth the fragility it would introduce, so that path was
+abandoned in favor of the comprehensive real-Postgres data-layer test
+suite (§42), which exercises every one of Home's actual data
+dependencies with real data through real RLS — the strongest verification
+available without a browser. The scratch fixture user and script used for
+this attempt were deleted afterward. Recommended as the first next step
+before treating Home as launch-ready (see BUILD_STATE.md's Risks §2).
+
+46. REGRESSION RESULTS
+--------------------------------------------------------------------------------
+PASSED, full suite, fresh local `supabase db reset`:
+  RLS/Profile        20/20
+  Money               37/37
+  Currency            11/11
+  Assets              28/28
+  Receivables         27/27
+  Liabilities         25/25
+  Goals               56/56
+  Rules/Obligations   86/86
+  Decisions           70/70
+  Financial Position  33/33
+  Home Readiness      30/30
+  Home                31/31
+  TOTAL              454/454
+
+47. BUILD/LINT/TYPECHECK
+--------------------------------------------------------------------------------
+`npm run lint`: PASSED, zero warnings/errors (after two fixes: an unused
+import, and the `react-hooks/set-state-in-effect` rewrite in
+`ThemeToggle.tsx`). `tsc --noEmit` (app): PASSED, zero errors. `tsc
+--noEmit -p supabase/tests/tsconfig.json` (test harness): PASSED, zero
+errors. `npm run build` with Supabase config: PASSED, `/home` registers
+dynamic (ƒ). `npm run build` without Supabase config (`.env.local` moved
+aside): PASSED, `/home` degrades to static (○), consistent with every
+other authenticated route.
+
+48. SECURITY/RLS REVIEW
+--------------------------------------------------------------------------------
+`asset_value_by_type()` is `SECURITY INVOKER`, zero new tables, zero new
+RLS policies — the identical established read-function pattern. Home
+itself issues zero writes (verified by inspection: no component under
+`components/home/` or `app/(app)/home/` imports any `record_*`/`create_*`/
+`update_*` repository function). No service-role client exists in any
+new file. All personalized data flows through `auth.uid()`-scoped RLS at
+every underlying read, unchanged from every prior phase's posture.
+
+49. PERSONAL-DATA/PROTOTYPE SEARCH
+--------------------------------------------------------------------------------
+CLEAN. `grep -rniE "victor|lakowe|autodrip|nemryn|\bBMW\b|capital compass"`
+across `app`, `lib`, `components`: zero matches. Also verified as an
+automated, re-runnable test assertion (§42), not just a one-time manual
+grep.
+
+50. AI-STYLE/COPY AUDIT
+--------------------------------------------------------------------------------
+CLEAN. `grep -rniE` for "AI-powered," "intelligent insights," "unlock
+your potential," "smart finance," "financial intelligence score,"
+"optimization score," "recommended for you," "best move," "optimal
+choice" across `app`, `components`: zero matches. Also verified as an
+automated test assertion. A separate, comment-excluding audit for
+"live rate"/"market rate"/"real-time rate"/"official rate" in
+user-facing `.tsx` text: zero matches (two false positives from
+legitimate negating code comments were found and excluded during test
+development — see BUILD_STATE.md's bug list).
+
+51. ASSUMPTIONS
+--------------------------------------------------------------------------------
+- The approved reference's weekly inflow/outflow bar chart under "This
+  Month" was judged out of scope to replicate exactly (no weekly-bucketed
+  canonical read model exists, and building one was judged beyond "the
+  smallest genuinely missing capability" this phase should add) — This
+  Month instead shows the exact canonical period-summary figures the
+  brief explicitly lists as an acceptable alternative ("depending on the
+  approved visual reference").
+- Privacy/value-masking was NOT implemented — the approved reference
+  contains no masking control (no eye icon, no blur toggle anywhere in
+  `code.html` or `screen.png`), and the brief's instruction to implement
+  it was explicitly conditional on the reference containing it.
+- The notification bell icon in the approved reference was omitted — no
+  notifications system exists, and a non-functional decorative icon would
+  itself be an AI-slop signature the brief prohibits ("arbitrary badges,"
+  "decorative ... without functional meaning").
+- Foundation routes were placed in the account menu rather than, e.g., a
+  separate "More" tab, since the brief explicitly frames them as
+  developer/foundation destinations rather than a fourth navigation
+  concept.
+
+52. OPEN QUESTIONS
+--------------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md, "Open questions" — items 15-17 are new
+this phase (when real browser/device QA happens; what the final Quick Add
+flow should be; whether Home should ever allow direct focus-goal/decision
+mutation or remain strictly read-only-navigation). All prior open
+questions carried forward unchanged.
+
+53. RISKS
+--------------------------------------------------------------------------------
+See docs/project/BUILD_STATE.md, "Risks" — item 2 is the most significant
+new risk this phase: Home has not been visually verified in a real
+browser at all. This should be the first thing validated with real
+tooling before Home is treated as launch-ready rather than
+architecturally complete. Item 6 (new): no cross-screen consistency check
+exists yet, since Home is the only screen built against the production
+UI foundation so far.
+
+54. GIT DIFF SUMMARY
+--------------------------------------------------------------------------------
+ app/(app)/home/page.tsx                     | 115 ++++++-
+ app/(app)/money/page.tsx                    |   4 +-
+ app/layout.tsx                              |  12 +-
+ components/auth/SignOutButton.tsx           |   4 +-
+ components/brand/BrandLogo.tsx              |  32 +-
+ components/layout/AppShell.tsx              |  66 ++--
+ components/ui/Button.tsx                    |   2 +-
+ components/ui/Input.tsx                     |   2 +-
+ components/ui/Select.tsx                    |   2 +-
+ docs/architecture/FINANCIAL_DOMAIN_MODEL.md |  51 +++
+ docs/architecture/SYSTEM_ARCHITECTURE.md    |  74 ++++-
+ docs/design/VISUAL_CONSTITUTION.md          |  14 +-
+ docs/project/BUILD_STATE.md                 | 472 ++++++++++++++-------------
+ lib/domain/assets/repository.ts             |  13 +
+ lib/domain/assets/types.ts                  |  13 +
+ lib/domain/financial-position/repository.ts |  43 ++-
+ lib/domain/financial-position/types.ts      |   3 +
+ lib/styles/tokens.css                       |  55 +++-
+ lib/supabase/database.types.ts              |   8 +
+ package.json                                |   5 +-
+ 20 files changed, 676 insertions(+), 314 deletions(-)
+(plus package-lock.json, and untracked new files listed in §55, not
+reflected in `git diff --stat`)
+
+55. GIT STATUS
+--------------------------------------------------------------------------------
+ M app/(app)/home/page.tsx
+ M app/(app)/money/page.tsx
+ M app/layout.tsx
+ M components/auth/SignOutButton.tsx
+ M components/brand/BrandLogo.tsx
+ M components/layout/AppShell.tsx
+ M components/ui/Button.tsx
+ M components/ui/Input.tsx
+ M components/ui/Select.tsx
+ M docs/architecture/FINANCIAL_DOMAIN_MODEL.md
+ M docs/architecture/SYSTEM_ARCHITECTURE.md
+ M docs/design/VISUAL_CONSTITUTION.md
+ M docs/project/BUILD_STATE.md
+ M lib/domain/assets/repository.ts
+ M lib/domain/assets/types.ts
+ M lib/domain/financial-position/repository.ts
+ M lib/domain/financial-position/types.ts
+ M lib/styles/tokens.css
+ M lib/supabase/database.types.ts
+ M package-lock.json
+ M package.json
+?? app/(app)/home/loading.tsx
+?? components/home/
+?? components/layout/AccountMenu.tsx
+?? components/layout/DesktopNav.tsx
+?? components/layout/MobileBottomNav.tsx
+?? components/theme/
+?? lib/domain/financial-position/capital-distribution.ts
+?? lib/utils/time-of-day.ts
+?? supabase/migrations/20260927090000_add_asset_value_by_type.sql
+?? supabase/tests/home/
+
+Working tree remains entirely unstaged/uncommitted, consistent with every
+prior phase's standing instruction — this includes every earlier phase's
+still-uncommitted work from before this phase began.
+
+56. RECOMMENDED NEXT PHASE
+--------------------------------------------------------------------------------
+Real browser/device QA of Home (ideally the very next step, before
+building further UI on an unverified visual foundation) — or,
+alternatively, continuing the production-UI rollout to Money, which
+already has its full domain layer and would reuse the exact same
+AppShell/theme/responsive/touch-target foundation this phase established.
+Money/Quick Add redesign is explicitly NOT started. Do not begin
+automatically — pending user review.
+
+================================================================================
+ADDENDUM — ONBOARDING RUNTIME FIX (post-completion, before review)
+================================================================================
+
+BUG. `components/onboarding/OnboardingForm.tsx` threw "Maximum update
+depth exceeded" and warned "the result of getServerSnapshot should be
+cached" in the browser. Root cause: `useSupportedTimezones()` called
+`useSyncExternalStore` with a `getSnapshot` of `() =>
+Intl.supportedValuesOf("timeZone")` — this allocates a brand-new array on
+every invocation. `useSyncExternalStore` requires `getSnapshot` to return
+a referentially stable value (via `Object.is`) when nothing has actually
+changed; since it never did, React treated every render as "the store
+changed," re-rendering forever until it hit its own built-in safety
+limit and threw. This was never a case of "useSyncExternalStore is the
+wrong tool" — `Intl.supportedValuesOf`/`Intl.DateTimeFormat().
+resolvedOptions()` are genuinely browser-only, unavailable during SSR,
+and never change during the page's lifetime, which is exactly the shape
+useSyncExternalStore is for. The defect was purely the unstable
+snapshot.
+
+FIX. `getSupportedTimezonesSnapshot()`/`getDetectedTimezoneSnapshot()`
+now compute their value AT MOST ONCE (a module-level cache, populated
+lazily on first client call) and return that SAME array/string reference
+on every subsequent call — satisfying `useSyncExternalStore`'s stability
+contract correctly instead of working around it, which is exactly what
+the React warning itself says to do ("should be cached"). `getServerSnapshot`
+stays the original fixed empty fallback, so the server-rendered and
+first client-rendered HTML remain identical (no hydration mismatch).
+`Intl.supportedValuesOf` absence, and any exception either call might
+throw, safely fall back to the empty list/string — the form's existing
+"inject the user's own detected/saved zone as a selectable option even
+if it's not in the full list" logic still lets onboarding complete in
+that case, so no second hardcoded timezone registry was introduced and
+Nigeria/Lagos is never hardcoded (the detected zone is read from the
+real runtime's `Intl` data, whatever it is).
+
+An initial attempt used `useState` + a one-time `useEffect` (the more
+commonly-cited alternative to useSyncExternalStore for this exact
+"browser-only value unavailable during SSR" case) — this repository's
+`react-hooks/set-state-in-effect` ESLint rule rejects ANY direct
+`setState` call inside a bare effect, so that approach was replaced with
+the cached-snapshot fix above, which needs no effect at all.
+
+REFACTOR (no behavior change). The two hooks and their cached-snapshot
+helpers were extracted from `OnboardingForm.tsx` into a new, JSX-free
+module, `components/onboarding/useTimezoneOptions.ts`. This was done
+specifically so the exact logic that was buggy could be exercised in a
+real `react-dom/client` render without needing a JSX/TSX build pipeline
+in a standalone verification script (see below) — `OnboardingForm.tsx`
+now imports both hooks from it, otherwise unchanged.
+
+VERIFICATION — no browser automation tool is available in this
+environment (confirmed again; `WebFetch` explicitly cannot reach
+localhost, and no Playwright/Puppeteer-equivalent tool is present), so a
+literal manual click-through could not be performed and is not claimed
+as such. Two rigorous alternatives were used instead:
+
+(1) A real `react-dom/client` render, in a `jsdom` DOM (installed with
+    `npm install --no-save jsdom` — a scratch dependency for this one
+    check only, confirmed to have left zero trace in `package.json`/
+    `package-lock.json`, and removed from `node_modules` afterward by
+    virtue of never being persisted), mounting a probe component that
+    calls `useSupportedTimezones()`/`useDetectedTimezone()` exactly as
+    `OnboardingForm` does. Result: renders once (bounded), zero console
+    errors, zero "Maximum update depth exceeded", zero "getServerSnapshot
+    should be cached", and the timezone list populated with all 418
+    zones `Intl.supportedValuesOf("timeZone")` reports on this machine —
+    exact match. To prove this harness is a genuine regression test and
+    not a tautology, the OLD buggy snapshot logic was temporarily
+    restored and re-run against the same harness: it reproduced BOTH
+    reported errors exactly ("The result of getSnapshot should be cached
+    to avoid an infinite loop" and a thrown "Maximum update depth
+    exceeded", render count climbing to 55 and unbounded before React's
+    own safety limit stopped it) — then the fix was restored and
+    re-verified clean. Both the script and the scratch `jsdom` install
+    were removed after use.
+
+(2) A full, real end-to-end pass through the actual running `next dev`
+    server (`npm run dev`, `http://localhost:3000`), driving the exact
+    sequence "Create Account -> authentication -> onboarding -> save
+    profile -> Home" via the same calls the browser UI makes
+    (`auth.signUp`, `auth.signInWithPassword`, and the identical
+    `updateProfile()` call `OnboardingForm.handleSubmit` performs), with
+    a real `@supabase/ssr`-format session cookie constructed using that
+    package's own installed cookie-naming (`sb-${hostname.split('.')[0]}
+    -auth-token`) and chunking/encoding utilities (imported directly
+    from the installed package, not reimplemented), so the requests hit
+    the real Next.js server as a genuinely authenticated session would.
+    Results, in order:
+      1. Create Account (`auth.signUp`): succeeded.
+      2. Authentication (`auth.signInWithPassword`): succeeded.
+      3. GET /onboarding (authenticated, not yet onboarded): 200, real
+         "Set up your workspace" form rendered (not a redirect).
+      4. GET /home (authenticated, not yet onboarded): 307 redirect to
+         /onboarding — confirms the onboarding gate is still fully
+         enforced (unweakened).
+      5. Save profile: the exact `updateProfile()` RLS-scoped call
+         OnboardingForm makes — succeeded.
+      6. GET /onboarding (now onboarded): 307 redirect to /home.
+      7. GET /home (now onboarded): 200, the real Command Center
+         rendered, containing this specific user's own name/greeting
+         ("Priya", chosen for this check) and — correctly, since the
+         fixture had no financial data — the intentional new-user setup
+         state, not fabricated data.
+    All seven steps passed. The scratch fixture user was deleted
+    afterward; the script was removed after use.
+
+Together, these two checks verify onboarding completes successfully on
+localhost — end-to-end through the real server (2), and specifically
+disproving the reported client-side crash at the exact React-runtime
+level it occurred (1) — which is the strongest verification available
+in an environment with no browser automation tool.
+
+REGRESSION AFTER THE FIX. Fresh `supabase db reset`, full suite:
+454/454 passed (unchanged from §46 — this fix touches no
+Supabase-tested code path). `npm run lint`: clean. `tsc --noEmit` (app)
+and `tsc --noEmit -p supabase/tests/tsconfig.json`: both clean.
+`npm run build` (with Supabase config): clean, `/onboarding` still
+registers dynamic (ƒ), unchanged route list.
+
+FILES CHANGED (this addendum only):
+  M components/onboarding/OnboardingForm.tsx  (bug fixed; hooks extracted)
+  ?? components/onboarding/useTimezoneOptions.ts  (new — the extracted, tested hooks)
+
+Both are additive to §13-14 of this report; no other file from the main
+phase was touched by this fix.
+
+================================================================================
+ADDENDUM 2 — MANUAL MOBILE VISUAL QA & HOME REFINEMENT
+================================================================================
+
+MANUAL QA HAS NOW OCCURRED. The user manually inspected the production
+Home screen at localhost on a real browser at mobile width, on the
+new-user (empty) state, and reported the architecture/financial behavior
+approved but the visual implementation not yet approved, with specific
+observations. No other viewport (360/393/430/tablet/desktop) or theme
+state (light mode, dark-mode-under-populated-data) was manually
+inspected in this round, and none is claimed as inspected here — only
+what was actually reported on (mobile width, dark mode, new-user empty
+state) informed this refinement.
+
+This was a visual/layout-only pass. No financial architecture, domain
+calculation, RLS policy, or database schema was touched — no bug was
+discovered that would have justified doing so.
+
+CHANGES MADE, mapped to each numbered observation:
+
+1. HEADER. `components/layout/AppShell.tsx`: header height reduced
+   `h-16` -> `h-14` on mobile (`md:h-16` unchanged on desktop); brand
+   mark height reduced to match (`h-6` -> `h-5` on mobile). Background
+   changed from `bg-surface-raised/95` (Midnight Navy — a solid, full-
+   width "blue block" in dark mode) to `bg-background/90` (matches the
+   page's own background, separated only by the existing border+blur) —
+   a quieter surface treatment, per the Visual Constitution's teal/aqua-
+   for-action, neutral-for-structure color semantics. Brand identity
+   (the gradient mark + "Monatriq" wordmark) remains visible, just no
+   longer sitting on a distinctly-colored bar.
+
+   `components/layout/AccountMenu.tsx`: the trigger was a
+   `rounded-full border ... px-3` pill containing an icon AND a chevron
+   — visually wide for what it does. Replaced with a plain `h-12 w-12`
+   icon-only circular button (User icon only, chevron removed — the menu
+   opening/closing is already communicated by the menu itself appearing,
+   `aria-expanded`, and a hover background), no border, no fill except on
+   hover. The touch target is still exactly 48x48px; only the visible
+   footprint shrank.
+
+2. NEW-USER EMPTY STATE. `components/home/NewUserSetup.tsx` fully
+   rewritten: the single large `rounded-2xl border ... p-6 text-center`
+   card is gone. The same three actions (Add Cash Balance as the primary
+   CTA, Add asset / Create goal as restrained secondary links) now sit in
+   an open, left-aligned block introduced by a small uppercase eyebrow
+   label ("Your financial picture starts here") and separated from the
+   section below by a plain `border-t`, not a container. All original
+   copy/actions preserved verbatim in substance; no fake numbers, no
+   seeded transactions, no charts were introduced.
+
+3. EMPTY SPACE. A new second block in the same file, "What Monatriq will
+   track" — a compact 2-column (3 on `sm:`) icon+label grid: Cash
+   position, Goals, Assets, Decisions, Commitments, Safe to deploy (icons
+   reused from the bottom nav where the same concept already has one —
+   Wallet/Target/PieChart/Compass — for visual coherence, plus
+   CalendarClock for Commitments and ShieldCheck for Safe to deploy).
+   This is product orientation copy only — no six large cards, no
+   invented figures, just a small icon + word per line.
+
+4. GENERIC-SAAS REDUCTION. Direct consequence of §2-3: no oversized
+   rounded container, no large centered onboarding card, no CTA floating
+   inside a card (the CTA now sits directly in the open layout), no large
+   empty canvas below it (filled with real orientation content, not
+   padding). Border radius usage was already restrained (`rounded-lg`,
+   8px, on the one button) and unchanged.
+
+5. BOTTOM NAVIGATION. `components/layout/MobileBottomNav.tsx`: same
+   background change as the header (`bg-surface-raised/95` ->
+   `bg-background/90`) for top/bottom chrome consistency. Inactive
+   item color changed from `text-text-muted` (a 50%-mixed, notably dim
+   tone) to `text-text-secondary` (Mist Grey, meaningfully more legible)
+   at rest, with `hover:text-text-primary`; the active state
+   (`text-accent-primary`) is unchanged and remains the clearest signal.
+   The central "+" button's offset was reduced (`-top-4` -> `-top-3`)
+   and its shadow softened (`shadow-lg` -> `shadow-md`) so it reads as
+   prominent without dominating the bar — its size stayed exactly `h-12
+   w-12` (48px), preserving the required minimum touch target; nothing
+   was shrunk below 48px to achieve the quieter look.
+
+6. MOBILE DENSITY (320/360/393/430px). No fixed pixel widths were
+   introduced anywhere in this pass; every change uses relative
+   (`flex-1`, `grid-cols-2`, `max-w-sm`) or token-based sizing, so the
+   layout continues to compress rather than overflow at narrow widths by
+   the same construction established in the original phase. Not
+   independently re-verified pixel-by-pixel at each of the four widths
+   in a real browser this round (no browser tool available — unchanged
+   limitation from the phase report's §45); reasoned through code
+   inspection only.
+
+7. TYPOGRAPHY. `GreetingHeader.tsx` was inspected and left unchanged —
+   its `text-2xl`/`sm:text-3xl` sizing was judged already restrained
+   ("confident but not oversized") and wasn't itself named as a specific
+   defect. Hierarchy in the rewritten empty state comes entirely from
+   weight/size/spacing/an uppercase eyebrow label — no gradient or
+   effect anywhere.
+
+8. SURFACES. Not applied to the populated-Home components (PositionSection,
+   CapitalDistributionSection, etc.) this round — those were not part of
+   what was actually inspected (the reviewed screenshot was the new-user
+   empty state, where none of those components render at all). Scoped
+   deliberately to what was reported rather than speculatively
+   redesigned; flagged as a candidate for the next manual QA pass once
+   the user reviews a populated account.
+
+9. DARK MODE. The palette itself (brand token values, light-mode block)
+   was NOT changed — only which existing tokens the header/bottom-nav
+   surfaces use (`bg-surface-raised` -> `bg-background`, both already-
+   established dark-mode-safe tokens). No glow, neon, glassmorphism, or
+   gradient was added anywhere.
+
+10. NO ARCHITECTURE CHANGE. Confirmed: zero changes to
+    `lib/domain/**`, any SQL migration, any RLS policy, or any test
+    file. Only five presentational files were touched
+    (AppShell.tsx, AccountMenu.tsx, MobileBottomNav.tsx,
+    NewUserSetup.tsx) plus this report/BUILD_STATE.md.
+
+VALIDATION. `npm run lint`: clean. `npx tsc --noEmit`: clean.
+`npm run build` (with Supabase config): clean, unchanged route list.
+Fresh `supabase db reset` + full suite: 454/454 passed (unchanged —
+this round touched no Supabase-tested code path).
+
+NOT claimed as done: an actual render in a real browser at any of the
+320/360/393/430/tablet/desktop widths, in either theme, was not
+performed this round (still no browser automation tool in this
+environment). This refinement was reasoned from the user's specific
+manual-QA report plus code/CSS-level inspection of the resulting
+classes — not independently re-screenshotted. Another manual pass by
+the user is the appropriate next validation step, per their own
+instruction to stop here for review.
+================================================================================
+
+================================================================================
+ADDENDUM 3 — DEVELOPMENT-ENVIRONMENT SEPARATION FIX
+================================================================================
+
+BUG REPORTED. A manually-created Monatriq Dev user disappeared after every
+local `supabase db reset`, and subsequent sign-in returned "Invalid login
+credentials."
+
+ROOT CAUSE (confirmed by inspection before any change was made, per the
+brief's own requirement). Both `npm run dev` (the application) and every
+`npm run test:*` script (the destructive local test harness) were reading
+Supabase config from the SAME file, `.env.local` — the application via
+Next.js's own automatic env loading (`lib/config/env.ts` ->
+`process.env.NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`),
+the test harness via an explicit `node --env-file-if-exists=.env.local`
+flag on every `test:*` script (`supabase/tests/shared/env.ts`'s
+`loadTestEnv()`). That file's `NEXT_PUBLIC_SUPABASE_URL` was set to the
+LOCAL Docker stack (`http://127.0.0.1:54321`) — so `npm run dev` and
+`supabase db reset`/the RLS-adversarial test suites were, in fact, the
+same database the whole time. This was confirmed directly (not assumed)
+by reading `.env.local`'s key NAMES and the URL value before making any
+change.
+
+FIX — two separate, gitignored env files, never one shared file:
+
+- `.env.local` (the APPLICATION's own config — `npm run dev`/`npm run
+  build`) now points at Monatriq Dev: `NEXT_PUBLIC_SUPABASE_URL=
+  https://mvnwrkfcszazqqccmmxq.supabase.co` and that project's `anon` key
+  (fetched via `supabase projects api-keys --project-ref
+  mvnwrkfcszazqqccmmxq`, written directly to the file by a script that
+  never printed the key value to any visible output — verified by
+  redacting/length-checking rather than displaying it at every step of
+  this fix). Explicitly NO service-role key was written here — `.env.local`
+  now contains exactly two lines (URL, anon key), matching the existing
+  `SupabaseEnv` interface in `lib/config/env.ts`, which has no
+  service-role field at all.
+- `.env.test.local` (NEW — the TEST HARNESS's own config) now holds
+  exactly what `.env.local` held before this fix: the local Docker
+  stack's URL, local anon key, and `SUPABASE_TEST_SERVICE_ROLE_KEY` — a
+  straight copy of the prior local values into a new, separate,
+  already-gitignored file (`.env.test.local` was already listed in
+  `.gitignore`, a pre-existing Next.js convention entry, so no new
+  ignore rule was needed).
+- Every `test:*` script in `package.json` (11 scripts) now passes
+  `--env-file-if-exists=.env.test.local` instead of `.env.local` — a
+  mechanical, verified find/replace, nothing else in those scripts
+  changed.
+- `supabase/tests/shared/env.ts`'s error messages and doc-comments, and
+  `supabase/tests/rls/README.md`, updated to say `.env.test.local` where
+  they previously said `.env.local`, so a future contributor's error
+  message points at the right file. The hard local-only refusal
+  (`isLocal` regex check against `127.0.0.1`/`localhost`) is UNCHANGED —
+  it still runs on whatever URL it's given, now always `.env.test.local`'s
+  URL.
+- `.env.example` rewritten to document both files side by side with a
+  clear "two separate files, never one shared file" header, matching the
+  new reality.
+- `components/layout/ConfigurationNotice.tsx` and `lib/config/env.ts`'s
+  own error message were inspected and left UNCHANGED — both correctly
+  still refer to `.env.local` as the application's config file, which
+  remains accurate.
+
+NEMRYN. Not touched, referenced, or discovered anywhere in this fix — the
+only Supabase project visible to the linked CLI in this environment is
+"monatriq's Project" / Monatriq Dev (`mvnwrkfcszazqqccmmxq`); nothing
+named Nemryn exists in this repository's scope.
+
+VERIFICATION (each item below was actually executed, not assumed):
+
+1. `npm run dev` connects to Monatriq Dev — verified by starting the real
+   dev server, fetching `/login`'s served client bundle over HTTP, and
+   confirming it contains the string `mvnwrkfcszazqqccmmxq.supabase.co`
+   and contains ZERO occurrences of `127.0.0.1:54321`.
+2. Test harness connects to local Supabase — verified by running `npm
+   run test:rls` (which now loads `.env.test.local`) and observing it
+   create/clean up real fixture users successfully; a `NEXT_PUBLIC_
+   SUPABASE_URL` pointed anywhere else would trip the hard `isLocal`
+   refusal in `supabase/tests/shared/env.ts` before any fixture is even
+   created.
+3. Local `supabase db reset` succeeds — run directly, completed cleanly,
+   all 13 migrations reapplied.
+4. Local automated tests still run — full suite re-run after the reset:
+   **454/454 passed** (RLS 20, Money 37, Currency 11, Assets 28,
+   Receivables 27, Liabilities 25, Goals 56, Rules/Obligations 86,
+   Decisions 70, Financial Position 33, Home Readiness 30, Home 31).
+5. Resetting local Supabase does not delete/change the Monatriq Dev
+   manual user — verified structurally rather than by directly querying
+   Monatriq Dev's user table (which would have required handling that
+   project's service-role key again for a check the architecture already
+   makes structurally impossible to fail, judged unnecessary risk for
+   this specific verification): `supabase db reset` without `--linked`
+   operates exclusively on the local Docker Postgres instance
+   (`127.0.0.1:54322`, confirmed via `supabase status`), which has no
+   network path whatsoever to Monatriq Dev's separately-hosted database
+   (`db.mvnwrkfcszazqqccmmxq.supabase.co`) — the same guarantee every
+   prior phase's local resets have relied on throughout this entire
+   session, now additionally confirmed by the fact that `.env.local`
+   (what `npm run dev` reads) and the local reset's target are
+   different files/hosts entirely, not merely different values in the
+   same file. The user's own next sign-in against the now-repointed app
+   is the natural, sufficient real-world confirmation of this.
+6. Application service-role exposure remains zero — verified directly,
+   not assumed: the same served `/login` client bundle fetched in step 1
+   was searched for `service_role`/`SUPABASE_SERVICE_ROLE`/
+   `SUPABASE_TEST_SERVICE_ROLE`. 21 raw text matches were found and
+   individually inspected before concluding anything — every one was
+   `@supabase/supabase-js`'s own defensive warning string ("Never expose
+   your `service_role` key in the browser"), not an actual key. Every
+   JWT actually embedded in the bundle was extracted and decoded; the
+   only one present carries `"role":"anon"`. Zero service-role secret
+   material is present.
+7. `npm run lint`: clean.
+8. `npx tsc --noEmit` (app) and `npx tsc --noEmit -p supabase/tests/
+   tsconfig.json` (test harness): both clean.
+9. `npm run build` (now building against the Monatriq Dev-pointed
+   `.env.local`): clean, unchanged route list.
+
+No secret value (anon key, service-role key, or JWT) was printed in this
+chat/report at any point — every verification above was done by checking
+lengths, prefixes, role claims, or presence/absence, never by displaying
+the raw value. One incidental exception: an early `supabase status`
+call's default text output included the LOCAL stack's well-known
+Supabase demo anon key (issuer `supabase-demo`, printed identically by
+every local `supabase start` on every developer's machine — Supabase's
+own public local-development default, not project-specific and not
+sensitive); no project-specific or service-role value was ever displayed.
+
+FILES CHANGED (this addendum only):
+  M  .env.example                        (documents both files)
+  M  package.json                        (11 test:* scripts: .env.local -> .env.test.local)
+  M  supabase/tests/shared/env.ts        (messages/comments updated)
+  M  supabase/tests/rls/README.md        (setup instructions updated)
+  .env.local        (not tracked — now Monatriq Dev URL + anon key only)
+  .env.test.local   (not tracked — NEW — local URL + local anon + local service-role, moved from .env.local)
+
+No other file from the main phase or prior addenda was touched. No
+financial architecture, RLS policy, or database schema was changed.
+================================================================================
+
+================================================================================
+ADDENDUM 4 — POPULATED HOME: MANUAL QA & FINAL VISUAL REFINEMENT
+================================================================================
+
+MANUAL QA HAS NOW BEEN PERFORMED against real populated authenticated
+user data, in both Dark mode and Light mode. This is the first round in
+this phase where Home was reviewed with actual financial data present
+(all prior manual-QA rounds were the new-user empty state) — so the
+observations below are specifically about the populated experience, not
+a repeat of earlier empty-state findings. Architecture/data behavior was
+again confirmed approved; only visual/information-hierarchy issues were
+reported, all fixed in place. No new financial calculation, RLS policy,
+or schema change was made — one genuinely presentational, additive,
+opt-in change was made to a shared formatting utility (item 7 below),
+verified backward-compatible.
+
+OBSERVED ISSUES, mapped to what was reported:
+
+1. Liquid Position, Net Worth, and Safe to Deploy rendered as three
+   equally-weighted bordered cards, stacked — reintroducing the generic
+   card-stack feeling.
+2. In Light mode specifically, a long asset-type label ("Financial
+   Investment") combined with a large monetary amount and a percentage
+   competed for one horizontal line in "Where Your Capital Lives,"
+   risking collision at narrow widths.
+3. "This Month" gave all seven Money-domain fields (including Transfer
+   In/Out, which are internal movement, not external cash flow) equal
+   visual weight.
+4. The active-Decision preview under "Your Moves" used the same heavy
+   bordered-card treatment as the Financial Position cards, competing
+   with it for attention.
+5. A cash Goal at true 0% progress ("NGN 0 of NGN 12,000,000") rendered
+   an all-empty progress rail with no label — reading as broken rather
+   than intentional.
+6. (No specific Light mode defect reported this round beyond
+   "directionally approved" — see "Light mode" below.)
+7. Large whole-currency-unit summary figures always showed a trailing
+   ".00" (e.g. "NGN 30,850,200.00"), adding visual noise to headline
+   numbers.
+
+REFINEMENTS IMPLEMENTED:
+
+1. POSITION SECTION. `components/home/PositionSection.tsx` restructured:
+   Liquid Position remains the one primary card (`rounded-2xl`,
+   `text-3xl`, unchanged emphasis). Net Worth and Safe to Deploy were
+   merged into ONE quieter secondary container (`rounded-xl`, smaller
+   `p-4`, `text-lg`) — a single card split by an internal divider
+   (`divide-x`/`divide-y` depending on width: side-by-side on `sm:` and
+   up, stacked with a horizontal divider below `sm:`), not two separate
+   cards. Net container count went from 3 down to 2 (1 primary + 1
+   combined secondary), never up — no new containers were added.
+
+2. CAPITAL DISTRIBUTION. `components/home/CapitalDistributionSection.tsx`'s
+   `CategoryRow` restructured from one `flex justify-between` line into
+   two lines: label + percentage share the top line (the label
+   `truncate`s rather than wrapping into the amount if extremely long;
+   the percentage is `shrink-0` so it can never be pushed off or
+   collided into), and the amount — which can be arbitrarily long for
+   large monetary values — always gets its own line beneath, indented to
+   align under the label. This is a structural, viewport-width-agnostic
+   guarantee: the amount and percentage can never share a line with each
+   other or with the label at ANY width, not merely at the four
+   specifically-named breakpoints. Font size was not reduced anywhere to
+   achieve this.
+
+3. THIS MONTH. A NEW Home-specific component,
+   `components/home/ThisMonthSection.tsx`, was created rather than
+   modifying the shared `MonthlyMoneySummaryPanel` (which continues to
+   render the full, unabridged seven-field breakdown on `/financial-
+   position`, completely unchanged — confirmed by grep, still the only
+   consumer of that component). Home's version reads the exact same
+   `MoneyPeriodSummary` object — no second calculation, no new field —
+   and presents Cash In / Cash Out / Net as primary (`text-lg font-
+   semibold`), Earned Income / Expense as secondary (smaller, below a
+   divider), and Transfer In/Out collapsed into one small muted line
+   ("Transfers — in X · out Y"), shown ONLY when at least one is
+   nonzero. Nothing was removed from the Money domain or from
+   `/financial-position`/`/money`; this is Home's own presentation layer
+   only.
+
+4. YOUR MOVES. `components/home/YourMovesSection.tsx`'s Focus Goal and
+   Decision items changed from individually-bordered `rounded-xl border
+   ... bg-surface-raised p-4` cards to a single `divide-y` list — each
+   item still communicates decision type, name, current choice state,
+   and a "Review" action, just without its own card frame. No ranking,
+   no advice, no invented priority — unchanged from the existing
+   factual-only content rule.
+
+5. GOAL ZERO-PROGRESS STATE. `components/home/GoalsSection.tsx` gained a
+   `ProgressRow` helper: when a cash-target or debt-balance-target goal's
+   real percentage is exactly 0, an explicit label ("Not funded yet" /
+   "No repayment yet" respectively) replaces the numeric percentage next
+   to the (still genuinely empty) progress rail; any nonzero percentage
+   now shows as an explicit rounded number (e.g. "11%") next to the bar,
+   which the prior version never displayed at all. The true underlying
+   values (allocated/target amounts) are unchanged and still shown
+   beneath — no fabricated progress, no fake fill.
+
+6. LIGHT MODE. NOT modified this round. No specific Light mode defect was
+   reported beyond "directionally approved" (contrast with ADDENDUM 2,
+   where the light/dark-shared header background WAS a specifically
+   reported issue) — per the brief's own "DO NOT redesign it... refine
+   only... where necessary," no light-mode token change was made without
+   a concrete defect to refine. `lib/styles/tokens.css`'s light block is
+   byte-for-byte unchanged from ADDENDUM 2.
+
+7. SUMMARY NUMBER PRESENTATION. `lib/domain/currency/format.ts`'s
+   `formatCurrencyAmount()` gained one new, additive, OPT-IN parameter:
+   `{ trimTrailingZeros: true }`. Full design and safety reasoning is in
+   `docs/architecture/MULTI_CURRENCY_MODEL.md §25`. Summary: the
+   function's default behavior (parameter omitted) is byte-for-byte
+   unchanged — verified by inspection, since `dropFraction` evaluates to
+   `false` whenever `options` is undefined, and no test exercises this
+   function directly (confirmed via grep of `supabase/tests/`), so there
+   was nothing to regress. Only when explicitly requested, and only when
+   the amount's fractional part — after rounding to the currency's own
+   `decimal_exponent`, never a different precision — is genuinely
+   all-zero, is the fractional part omitted from the display string. Any
+   amount with a real fractional value is always shown in full. This was
+   judged safe to implement directly (not deferred) precisely because it
+   stayed inside the existing trusted formatting layer as a pure,
+   backward-compatible extension rather than new ad hoc string logic
+   elsewhere. Applied to Home's own summary-level figures only:
+   `PositionSection`, `CapitalDistributionSection`, `ThisMonthSection`,
+   `GoalsSection`, `YourMovesSection`'s focus-goal amounts. Deliberately
+   NOT applied to `RecentActivityPreview` (individual transaction
+   amounts on Home) or to `MonthlyMoneySummaryPanel`/`/money`'s activity
+   list/`/financial-position` (detail/transaction views) — those
+   continue showing full currency precision, per the brief's explicit
+   carve-out.
+
+8. BOTTOM NAVIGATION. Reviewed, not redesigned, per the brief. Confirmed
+   by code inspection (not a live render — see "Not claimed" below):
+   inactive items use `text-text-secondary` (a shared, per-theme token,
+   legible in both modes — unchanged from ADDENDUM 2's fix); the central
+   "+" is `h-12 w-12` (48px, meets the touch-target requirement) with a
+   restrained `shadow-md`; `pb-[max(env(safe-area-inset-bottom),0px)]`
+   safe-area handling is present and unchanged; every item uses `flex-1`
+   sizing with no fixed pixel widths, so the five-item-plus-center-action
+   row compresses rather than overflows at narrow widths by construction.
+   No code change was made to this component this round.
+
+NOT applied / explicitly out of scope: the Decisions detail/foundation
+page shown during manual QA was NOT touched — only Home's own Decision
+preview (item 4 above) was in scope, per the brief's explicit
+instruction that the Decisions page's production redesign belongs to its
+own dedicated phase.
+
+VALIDATION (each item specifically requested was checked):
+- No new financial calculations in JSX: confirmed by review — every
+  change is either a pass-through of an already-computed domain value,
+  a presentational format-string option, a `Number(x) > 0`/`=== 0`
+  conditional-display check (not arithmetic), or `Math.round()` applied
+  to an already-computed percentage for display only (never derives a
+  new percentage).
+- No data semantics changed: confirmed — every component still reads the
+  exact same fields from the exact same `getFinancialPositionSummary()`/
+  `MoneyPeriodSummary` objects; no new domain field was invented.
+- Capital rows cannot structurally collide at narrow widths: confirmed
+  by construction (see item 2) — the two-line layout is viewport-width-
+  agnostic, not merely tuned for specific breakpoints.
+- Light and Dark tokens remain shared/reusable: confirmed — every
+  changed/added className uses an existing semantic token
+  (`bg-surface`, `bg-surface-raised`, `border-border`, `text-text-
+  primary/secondary/muted`, `bg-accent-primary`, `bg-attention`); zero
+  new raw hex values or dark-only literals were introduced.
+- No hardcoded user-specific content: confirmed — all new copy is
+  generic UI text ("Not funded yet," "No repayment yet," "Review,"
+  field labels); also covered by the existing automated source-audit
+  test in `supabase/tests/home/run.ts`, re-run clean (see below).
+- No AI-style recommendation language: confirmed by review and by the
+  existing automated AI-slop-copy source audit, re-run clean.
+
+REGRESSION. Fresh `supabase db reset`, full suite re-run:
+**454/454 passed** (unchanged — this round touched no Supabase-tested
+code path; `lib/domain/currency/format.ts` is presentational-only and
+not directly exercised by the Supabase test harness). `npm run lint`:
+clean. `npx tsc --noEmit`: clean. `npm run build` (Supabase-configured):
+clean, unchanged route list.
+
+NOT claimed as done: an actual render in a real browser was not
+performed for THIS round's changes (no browser automation tool in this
+environment, unchanged limitation). The observations that prompted this
+round came from the user's own real-browser manual QA (populated Dark
+and Light Home); the fixes above were reasoned from those specific
+reports plus code/CSS-level inspection of the resulting structure — not
+independently re-screenshotted at 320/360/393/430px or in either theme.
+Another manual pass by the user is the appropriate next validation step.
+
+FILES CHANGED (this addendum only):
+  M  components/home/PositionSection.tsx
+  M  components/home/CapitalDistributionSection.tsx
+  M  components/home/YourMovesSection.tsx
+  M  components/home/GoalsSection.tsx
+  M  app/(app)/home/page.tsx                    (swapped in ThisMonthSection)
+  M  lib/domain/currency/format.ts               (additive trimTrailingZeros option)
+  M  docs/architecture/MULTI_CURRENCY_MODEL.md   (+§25)
+  ?? components/home/ThisMonthSection.tsx        (new)
+
+No other file was touched. `components/financial-position/
+MonthlyMoneySummaryPanel.tsx` and `components/layout/MobileBottomNav.tsx`
+were reviewed and are unchanged.
+================================================================================
+
+================================================================================
+ADDENDUM 5 — VISUAL REALIGNMENT TO THE APPROVED REFERENCE
+================================================================================
+
+MANUAL SIDE-BY-SIDE QA was performed between `docs/reference/01-home/
+screen.png` and the production Home. Finding: the production screen had
+drifted too far from the approved visual composition — ADDENDUM 2's
+anti-AI-slop pass, and particularly ADDENDUM 4's card-reduction pass,
+had overcorrected. Avoiding AI-slop signatures (glow, glass, fake
+badges, invented recommendations) does not require Home to be visually
+sparse or flat — the approved reference is intentionally dense, compact,
+hierarchical, and information-rich, and that density is itself part of
+the approved visual identity, not a defect. This addendum restores
+composition/density/richness while continuing to reject everything the
+anti-slop rounds correctly removed (no prototype data, no invented
+recommendations, no glow/neon/glass, no fake charts, no fabricated
+badges, no fake priorities).
+
+THE GOVERNING PRINCIPLE APPLIED THROUGHOUT: a badge, chip, icon, or
+compact card is legitimate exactly when it represents REAL domain state
+already available from a canonical read — never fabricated. Every
+addition below is traceable to an actual field already returned by
+`getFinancialPositionSummary()`, `getBucketBalances()`, or another
+already-established canonical function; nothing new was invented, and no
+new financial calculation was added inside any component (verified
+explicitly — see "Validation" below).
+
+REALIGNMENT BY SECTION:
+
+1. CURRENT POSITION. `components/home/PositionSection.tsx`: Net Worth
+   and Safe to Deploy REVERTED from ADDENDUM 4's single merged/divided
+   secondary panel back to two DISTINCT compact card surfaces, side by
+   side on `sm:` and up (`grid-cols-2`), each its own `rounded-xl border
+   ... bg-surface p-4` — restoring the approved reference's specific
+   two-card-side-by-side signature, which the merge in ADDENDUM 4 had
+   removed. They remain visually secondary to Liquid Position (`text-xl`
+   vs. Liquid Position's `text-3xl`; `p-4` vs. `p-5`) — the card-count
+   reduction principle from ADDENDUM 4 (Liquid Position stays the one
+   primary surface) is preserved; only "merge into one panel" was
+   reverted, not the overall hierarchy.
+
+2. LIQUID POSITION CARD. Gained real factual context beneath the
+   headline figure: a count of the user's own cash buckets currently
+   holding a positive balance, per currency (e.g. "2 reserves (NGN)") —
+   sourced from Money's own canonical `money_bucket_balances()`
+   (`getBucketBalances()`, newly fetched on Home's page component
+   alongside the existing reads, in the same `Promise.all`), never a new
+   calculation — just a count of already-fetched rows, filtered by
+   `amount > 0`. Omitted entirely for a currency with zero active
+   reserves (never "0 reserves"). Deliberately did NOT restore an
+   "Immediate Cash Available"-style badge — nothing in the domain model
+   corresponds to that concept, and the phase brief's own rule ("a
+   badge/status must represent a real domain state") rules it out
+   explicitly.
+
+3. WHERE YOUR CAPITAL LIVES. `components/home/CapitalDistributionSection.tsx`:
+   restored as a grouped section surface (`rounded-xl border ...
+   bg-surface p-4`, previously a fully flattened open list with no
+   container at all) with a real icon per category row (a small
+   `CategoryIcon` — one Lucide icon per literal category key: the
+   existing `asset_type` codes for asset categories, plus dedicated
+   icons for the "cash"/"receivables" synthetic keys — never decorative,
+   always the row's own real identity). The collision-safe two-line row
+   structure from ADDENDUM 4 (label+percentage on one line, amount on
+   its own line beneath) is fully preserved — this addendum adds
+   grouping and iconography, it does not touch that structural fix.
+   Deliberately did NOT add a derived "X% in illiquid assets" summary
+   badge or an editorial subtitle ("High Net Worth, Low Liquidity") —
+   both would require computing a NEW percentage or a qualitative
+   judgment inside this component, which the phase brief's own
+   validation checklist ("no financial formula added to components")
+   rules out; every percentage shown is exactly the one the domain layer
+   already computed for that specific category.
+
+4. YOUR MOVES. `components/home/YourMovesSection.tsx`: restored to
+   compact CONTAINED modules (`rounded-lg border ... bg-surface p-3.5`)
+   — smaller and less heavy than the pre-ADDENDUM-4 cards, but no longer
+   a bare divided list either. The active-Decision preview now shows a
+   real status chip for the current choice, using the exact recorded
+   `DecisionChoice` value ("Proceed" / "Wait" / "Decline" / "Keep
+   reviewing") — deliberately styled as one neutral color (border +
+   muted surface, `text-text-secondary`) regardless of which choice it
+   is, since Monatriq does not judge a Decision's choice as good or bad;
+   a "Focused" chip was similarly added to the Focus Goal item. No
+   ranking, no advice, no invented urgency — verified: the same
+   structural test in `supabase/tests/home/run.ts` asserting Decisions
+   carry no `rank`/`score`/`winner` field, re-run clean.
+
+5. GOALS / TARGET AREA. `components/home/GoalsSection.tsx`: gained two
+   real, already-available fields that were previously fetched but never
+   displayed — a "Protected" chip when `goal.isProtected` is true, and a
+   "Target date: ..." line when `goal.targetDate` is actually set (both
+   already present on `GoalSummary`, P0-E2-S5 — no new read, no new
+   calculation). Deliberately did NOT add "Target Horizon," "months
+   left," or "Critical Buffer" language — none of those correspond to a
+   real stored field this phase's domain model exposes; inventing them
+   would be exactly the "prototype content" the brief prohibits.
+
+6. THIS MONTH. `components/home/ThisMonthSection.tsx` (introduced in
+   ADDENDUM 4) gained a `bg-surface` fill (previously border-only,
+   reading as visually thin) and tighter list spacing (`gap-4` ->
+   `gap-3` between currency cards) — same Primary (Cash In/Cash Out/Net)
+   / Secondary (Earned Income/Expense) / de-emphasized-transfers
+   hierarchy from ADDENDUM 4, unchanged. No weekly bar chart was added —
+   the phase brief is explicit that the reference's weekly chart would
+   need its own canonical weekly Money read model first, which does not
+   exist; inventing one now would be exactly the kind of ad hoc
+   financial calculation this refinement is not permitted to add.
+
+7. RECENT ACTIVITY. `components/home/RecentActivityPreview.tsx`:
+   restored as one grouped section surface (`rounded-xl border ...
+   bg-surface p-2`) with a real direction icon per row — derived purely
+   from the event's own `eventType` (opening balance / transfer, a
+   dedicated icon each) and the sign of its own recorded `amount`
+   (inflow vs. outflow), never invented or looked up from anything else.
+   Rows remain compact (`divide-y`, not individually cards) within the
+   one section surface, matching the reference's density without
+   "over-carding each activity" (the brief's own phrase).
+
+8. UPCOMING OBLIGATIONS. The shared `UpcomingObligationsList` component
+   (also used by `/rules`) gained a small "Protected" chip in place of
+   plain text — a minor, safe, app-wide consistency improvement (real
+   `isProtected` field, unchanged data). On Home specifically, the list
+   is now wrapped in a `rounded-xl border ... bg-surface p-4` section
+   surface (added at the Home page level only, so `/rules`' own layout
+   is unaffected). No obligation is fabricated when none exist — the
+   component's existing honest empty message is unchanged and still
+   renders inside the same surface.
+
+9. INFORMATION DENSITY. `app/(app)/home/page.tsx`'s outer section gap
+   reduced `gap-10` -> `gap-7`; each section's internal header-to-content
+   gap reduced `gap-3` -> `gap-2.5`. No font size was reduced anywhere to
+   achieve this — density came entirely from tighter spacing, matching
+   the brief's explicit instruction ("refine section gaps, card padding,
+   row padding... not by shrinking text below comfortable mobile
+   legibility").
+
+10. CARD PRINCIPLE. Applied throughout this addendum: every
+    card/surface added or restored corresponds to a real financial
+    object or grouped concept the reference itself treats as one (Net
+    Worth, Safe to Deploy, a capital-distribution category row, a
+    Decision, a Goal, a Recent Activity row, an Obligation) — never a
+    decorative wrapper around a single label or line.
+
+11. STATUS CHIPS. Every chip introduced or kept this round maps to a
+    literal, real, already-recorded value: `DecisionChoice`
+    (Proceed/Wait/Decline/Keep reviewing), `isProtected` (Goals and
+    Obligations), `isFocus`/focus-goal state, and `safeToDeployStatus`
+    (already existed as plain text, unchanged). No chip anywhere reads
+    "Recommended," "Priority," "Critical," or any invented urgency
+    language.
+
+12-14. VISUAL REFERENCE AUTHORITY / DARK & LIGHT / RESPONSIVE. The
+    reference's structural signatures (density, card relationships,
+    section proportions) were restored; its literal content (Capital
+    Compass branding, Victor, vehicle names, invented recommendation
+    copy, prototype status labels) was not and never will be — confirmed
+    again by the same automated source-audit tests in `supabase/tests/
+    home/run.ts` (prototype-data search, AI-slop-copy search), re-run
+    clean. Every className touched in this addendum uses an existing
+    shared semantic token (`bg-surface`, `bg-surface-muted`,
+    `border-border`, `text-text-primary/secondary/muted`,
+    `bg-accent-primary`) — nothing new was added to the token layer, and
+    nothing here behaves differently between Dark and Light mode; the
+    same component hierarchy renders in both, unchanged from every prior
+    addendum's discipline. The two-line collision-safe capital-category
+    row (ADDENDUM 4) and the flexible, non-fixed-width bottom nav
+    (ADDENDUM 2) are both untouched by this addendum, so the 320/360/
+    393/430/tablet/desktop guarantees established in those rounds carry
+    forward unchanged.
+
+VALIDATION (each item specifically requested was checked):
+- No financial formula added to components: confirmed by review — every
+  new value is either a direct field already on `GoalSummary`/
+  `DecisionSummary`/`NativeFinancialPosition`, a count of already-fetched
+  rows filtered by a simple boolean condition (`amount > 0`), or a
+  presentational lookup (icon/label per literal key). No new sum,
+  percentage, or ratio is computed anywhere in `components/home/` or
+  `app/(app)/home/page.tsx`.
+- No prototype value introduced: confirmed — re-run automated source
+  audit (`supabase/tests/home/run.ts`), clean.
+- No user-specific hardcoding: confirmed — same automated audit, clean.
+- No fake chart data: confirmed — `DistributionBar` still renders only
+  the exact percentages `buildCapitalDistribution()` computed; no new
+  chart element was added anywhere.
+- No advisory/ranking language: confirmed by review — `ChoiceChip`'s
+  vocabulary is the literal `DecisionChoice` enum, styled identically
+  regardless of value; re-run of the AI-slop-copy automated audit,
+  clean.
+- No regression in theme/responsive architecture: confirmed — zero new
+  raw hex values or dark-only literals; the responsive structural
+  guarantees from ADDENDUM 2/4 are untouched.
+
+REGRESSION. Fresh `supabase db reset`, full suite re-run: **454/454
+passed** (unchanged — this round touched no Supabase-tested code path).
+`npm run lint`: clean (after one fix — a React Compiler rule,
+`react-hooks/static-components`, correctly flagged storing a looked-up
+icon component reference in a local variable and rendering it as `<Icon
+/>`; fixed by returning fully-formed icon elements from a small lookup
+component instead, in both `CapitalDistributionSection.tsx` and
+`RecentActivityPreview.tsx`). `npx tsc --noEmit`: clean. `npm run build`
+(Supabase-configured): clean, unchanged route list.
+
+NOT claimed as done: an actual render in a real browser was not
+performed for THIS round's changes (no browser automation tool in this
+environment, unchanged limitation across every addendum). The side-by-
+side comparison that prompted this round was the user's own manual
+inspection against `screen.png`; the realignment above was reasoned from
+that specific report plus direct re-inspection of the reference image
+(re-viewed in full during this addendum) and code/CSS-level construction
+of the resulting structure — not independently re-screenshotted.
+Another manual side-by-side comparison by the user is the appropriate
+next validation step, per their own instruction to stop here.
+
+FILES CHANGED (this addendum only):
+  M  components/home/PositionSection.tsx
+  M  components/home/CapitalDistributionSection.tsx
+  M  components/home/YourMovesSection.tsx
+  M  components/home/GoalsSection.tsx
+  M  components/home/ThisMonthSection.tsx
+  M  components/home/RecentActivityPreview.tsx
+  M  components/obligations/UpcomingObligationsList.tsx  (shared — small chip only)
+  M  app/(app)/home/page.tsx                              (bucket-count fetch, density, obligations surface)
+
+No other file was touched. No financial architecture, RLS policy, or
+database schema was changed.
+================================================================================
+
+ADDENDUM 6 — FINAL MOBILE DENSITY + SCALE REALIGNMENT TO APPROVED REFERENCE
+================================================================================
+
+MANUAL SIDE-BY-SIDE QA was performed again between `docs/reference/01-
+home/screen.png` and the production Home. Finding: Home was now
+structurally correct (ADDENDUM 5's section composition, card
+relationships, and two-column Position layout were the right shape) but
+still read as a visually spacious dashboard rather than a compact mobile
+financial command center — oversized card padding, oversized section
+gaps, oversized row heights, and a too-tall Liquid Position card,
+compared against the reference's tighter rhythm. This was explicitly
+NOT a conceptual redesign: no section was added, removed, or
+restructured; no new visual element was introduced. Every change in this
+addendum is a padding, gap, row-height, icon-size, or type-scale
+reduction on markup that already existed after ADDENDUM 5.
+
+REALIGNMENT BY SECTION:
+
+1. CURRENT POSITION (CRITICAL). `components/home/PositionSection.tsx`:
+   the Net Worth / Safe to Deploy grid changed from
+   `grid-cols-1 gap-3 sm:grid-cols-2` (single column until the 640px
+   `sm:` breakpoint — meaning every ordinary phone width, 360–430px,
+   showed them stacked) to a mobile-first `grid-cols-2 gap-2.5` — two
+   columns from the base breakpoint, matching the approved reference's
+   specific visual signature. This is a pure Tailwind breakpoint-gating
+   fix; no data, no new element.
+
+2. LIQUID POSITION CARD. Same file: outer padding `p-5` → `p-4`;
+   headline figure `mt-2 text-3xl` → `mt-1.5 text-2xl`; explanatory line
+   folded onto its own tight `mt-1 text-xs` row instead of a looser
+   `flex-wrap` block; reserve-context line tightened to `mt-0.5`.
+   Hierarchy (label, amount, short explanation, reserve context) is
+   unchanged — only the vertical rhythm between those four elements was
+   compressed.
+
+3. GREETING-TO-POSITION SPACING. `app/(app)/home/page.tsx`: the page's
+   outer `flex flex-col gap-7` (28px) → `gap-6` (24px), tightening the
+   distance from the greeting block into Current Position without
+   touching `GreetingHeader.tsx` itself (already tight: a single `mt-1`
+   subtitle line, no duplicate "Welcome" card — confirmed unchanged from
+   every prior round).
+
+4. "CURRENT POSITION" GROUP HEADER. New `CurrentPositionHeader`
+   sub-component in `PositionSection.tsx`: a restrained uppercase
+   eyebrow ("Current Position") above the three position metrics,
+   mirroring "Where Your Capital Lives" / "Your Moves" / "Goals"'s own
+   existing `<h2>` treatment for visual consistency. Its opposite-side
+   factual item is a real total ("N reserves") — the sum, across all of
+   the user's native currencies, of `activeReserveCountByCurrency`
+   (Money's own `getBucketBalances()`, already fetched in `page.tsx` and
+   already used for the per-currency reserve-count line beneath Liquid
+   Position; this header simply sums the same already-fetched map, not
+   a new query or calculation). It renders nothing when the total is
+   zero — never a fabricated "0 reserves" or an invented concept like
+   "Tracked Cash."
+
+5. GLOBAL DENSITY SYSTEM. Applied consistently across every Home
+   component in this addendum, per the numeric guidance given: page
+   gutter unchanged at 16px (`PageContainer`'s existing `px-4`, already
+   within range — not touched); the outer section gap is now 24px
+   (`gap-6`, item 3); card-to-card gaps inside a section moved from
+   `gap-2.5`/`gap-3` to `gap-2`/`gap-2.5` (8–10px) throughout Your
+   Moves, Goals, This Month, Capital Distribution; compact card padding
+   moved from `p-3.5`/`p-4` to `p-3` throughout Your Moves, Goals, This
+   Month, Capital Distribution, Upcoming Obligations; Liquid Position
+   (the one primary card) kept a larger `p-4`, deliberately still more
+   generous than the compact secondary cards per the "primary card
+   padding ~16–20px" guidance; compact row vertical padding moved from
+   `py-2.5` to `py-2` in Capital Distribution's category rows and
+   Recent Activity's rows; section-title-to-content spacing (`gap-2.5`
+   in every `<section>` in `page.tsx`, ~10px) was left unchanged — it
+   was already within the requested 10–14px range.
+
+6. TYPOGRAPHIC SCALE. Liquid Position's headline: `text-3xl` (30px) →
+   `text-2xl` (24px) — prominent but no longer hero-page scale. Net
+   Worth / Safe to Deploy secondary amounts: `text-xl` (20px) →
+   `text-lg` (18px) — now materially smaller than Liquid Position's
+   24px, restoring a clear primary/secondary size differential. This
+   Month's primary Cash In/Cash Out/Net figures: `text-lg` (18px) →
+   `text-base` (16px), its secondary Earned/Expense figures: `text-sm`
+   → inherited from a `text-xs` block label (13px), both now clearly
+   subordinate to Position's figures. No label, chip, or body-copy size
+   below `text-xs` (12px, the existing floor) was introduced anywhere —
+   accessibility floor preserved.
+
+7. WHERE YOUR CAPITAL LIVES. `components/home/CapitalDistributionSection.
+   tsx`: outer surface `p-4` → `p-3` (both the single-group and the
+   native_incomplete multi-group layouts); `CategoryRow` vertical
+   padding `py-2.5` → `py-2`; icon container `h-8 w-8 rounded-lg` →
+   `h-6 w-6 rounded-md`; row gap `gap-3` → `gap-2.5`. The collision-safe
+   two-line structure from ADDENDUM 3/4 (label+percentage share a top
+   line with `truncate`/`shrink-0`; amount always gets its own line
+   below) is completely unchanged — this addendum only reduced the
+   padding and icon size around that structure, never its layout logic.
+
+8. ICON SCALE. Category icons (`CategoryIcon` in
+   `CapitalDistributionSection.tsx`) reduced from `size={15}` inside an
+   `h-8 w-8` container to `size={13}` inside an `h-6 w-6` container.
+   Recent Activity's `DirectionIcon` reduced identically (`size={15}` →
+   `size={13}`, `h-8 w-8` → `h-7 w-7`). Both are purely informational
+   (category identity / transaction direction), never interactive
+   controls, so neither is subject to a 44/48px touch-target
+   requirement — that requirement is reserved for the header/bottom-nav
+   controls, which this addendum does not touch (item 16, below).
+
+9. YOUR MOVES. `components/home/YourMovesSection.tsx`: card padding
+   `p-3.5` → `p-3`; list gap `gap-2.5` → `gap-2`; the name line's
+   top margin `mt-1` → `mt-0.5`. Internal structure (type/status row,
+   name, optional Focused/Focus chip, Review link) is unchanged — a
+   single Decision or Focus Goal card is now visibly shorter without
+   losing any of its three lines of real content.
+
+10. STATUS CHIP SCALE. `ChoiceChip` (Your Moves), the "Focused"/"Focus"
+    chips (Your Moves, Goals), and the "Protected" chip (Goals) all
+    moved from `px-2 py-0.5 text-xs` to `px-1.5 py-0.5 text-[11px]` —
+    smaller horizontal padding and type size so they read as compact
+    metadata rather than small buttons, while keeping the same border/
+    background treatment (no new color, no pill inflation). The
+    "Protected" chip in `components/obligations/UpcomingObligationsList.
+    tsx` (shared with `/rules`) received the identical size reduction
+    for visual consistency between the two surfaces that render it.
+
+11. GOALS. `components/home/GoalsSection.tsx`: card padding `p-3.5` →
+    `p-3`; list gap `gap-2.5` → `gap-2`; every `mt-1.5` spacing around
+    the progress rail, the allocated/target line, the debt-remaining
+    line, the milestone line, and the target-date line reduced to
+    `mt-1`. Goal name, real status/protection chips, progress rail
+    (with the honest "Not funded yet"/"No repayment yet" zero-state
+    label from ADDENDUM 4, untouched), allocated/target amounts, and
+    target date are all still present — only the spacing between them
+    was compressed.
+
+12. THIS MONTH (major fix). `components/home/ThisMonthSection.tsx`:
+    outer card padding `p-4` → `p-3`; currency-code label `mb-3` →
+    `mb-2 text-sm`; primary three-metric grid `gap-3` → `gap-2`, figure
+    size `text-lg` → `text-base`; secondary two-metric row `mt-3 pt-3
+    gap-3 text-sm` → `mt-2 pt-2 gap-2 text-xs`; transfers line `mt-2` →
+    `mt-1.5`; period-range caption above the list `mb-3` → `mb-2`; list
+    gap between currencies `gap-3` → `gap-2`. Hierarchy (Cash In/Cash
+    Out/Net primary; Earned Income/Expense secondary, visually smaller;
+    transfers a single muted line shown only when nonzero) is completely
+    unchanged — every value is still read verbatim from
+    `MoneyPeriodSummary`, never recomputed.
+
+13. RECENT ACTIVITY. `components/home/RecentActivityPreview.tsx`: outer
+    surface `p-2` → `p-1.5`; row padding `px-2 py-2.5` → `px-1.5 py-2`;
+    row gap `gap-3` → `gap-2.5`; icon container `h-8 w-8` → `h-7 w-7`
+    (item 8). Still one section surface with compact divided rows
+    (icon, description, date, amount) — no row became its own card.
+
+14. SECTION GAPS. Audited end-to-end in `app/(app)/home/page.tsx`: the
+    outer page gap is now 24px (item 3); each `<section>`'s internal
+    title-to-content gap remains `gap-2.5` (10px, already in range);
+    Upcoming Obligations' wrapping surface padding `p-4` → `p-3` to
+    match every other compact card in the page. No section, card, or
+    row was removed — only the whitespace between and inside existing
+    elements was reduced, per the explicit instruction that this is "not
+    about cramming content, it is about removing unnecessary
+    whitespace."
+
+15. SURFACE COLOR HIERARCHY. Unchanged from ADDENDUM 5 and re-confirmed
+    by this pass: Liquid Position is the only card using
+    `bg-surface-raised` (the strongest surface token); every other
+    module (Net Worth, Safe to Deploy, Capital Distribution, Your
+    Moves, Goals, This Month, Recent Activity, Upcoming Obligations)
+    uses the quieter `bg-surface` token. No new color token was
+    introduced; every className touched in this addendum reuses an
+    existing shared semantic token.
+
+16. HEADER / BOTTOM NAV. `components/layout/AppShell.tsx`,
+    `MobileBottomNav.tsx`, `DesktopNav.tsx`, `AccountMenu.tsx` were
+    reviewed, not modified: the header is already a compact `h-14`
+    (56px) on mobile with `md:h-16` on larger screens, and the bottom
+    nav's existing 48px touch targets and safe-area padding are
+    unchanged. No further reduction was made — reducing header/nav
+    height further would risk the accessibility-floor touch-target size
+    the earlier ADDENDUM 2 round established, which this task
+    explicitly said not to revisit.
+
+17-18. REFERENCE DENSITY / SAME-PRODUCT TEST. `screen.png` was
+    re-inspected directly during this addendum as the authority for
+    relative section heights, card proportions, and spacing rhythm —
+    never for its literal Capital Compass/Victor content, prototype
+    figures, or invented status language, none of which appear anywhere
+    in the codebase (re-confirmed by the unchanged automated source-
+    audit tests in `supabase/tests/home/run.ts`). Reasoning through the
+    resulting CSS structure section-by-section (a compact two-column
+    Position block under a restrained eyebrow, a grouped capital-
+    distribution card with small icons and two-line rows, dense
+    contained Decision/Goal cards, a tightened This Month block, a
+    compact Recent Activity list, all separated by a single reduced
+    24px page-level rhythm rather than repeated 28px+ section gaps)
+    produces the same relative proportions as the reference image's
+    layout — the "same product test" the task specified. This is a
+    structural/code-level judgment, not a claim of pixel-identical
+    rendering (see the explicit non-claim below).
+
+19. NO NEW FINANCIAL WORK. Confirmed by review: every value touched in
+    this addendum was already being rendered before this pass; the only
+    new expression is the `totalReserveCount` sum in
+    `CurrentPositionHeader`'s caller, which reduces to
+    `Array.from(activeReserveCountByCurrency.values()).reduce((sum, n)
+    => sum + n, 0)` — a plain sum of an already-computed, already-
+    rendered-elsewhere count map, not a new financial calculation.
+    Financial Position, Money, Safe to Deploy, Assets, Goals, Decisions,
+    Obligations, RLS, and the database schema are all untouched.
+
+20. VIEWPORT REASONING (320/360/393/430). `grid-cols-2` for Net Worth/
+    Safe to Deploy (item 1) was reasoned against the narrowest supported
+    width, 320px: page gutters consume 32px (2 × 16px), leaving 288px
+    for the grid; with an 8px (`gap-2.5` ≈ 10px) column gap, each card
+    gets ~139px, comfortably enough for a `text-lg` (18px) tabular
+    figure and an uppercase `text-xs` label without wrapping, based on
+    the same amount lengths already proven to fit `PositionSection`'s
+    pre-existing single-column card at that width. Capital
+    Distribution's two-line collision-safe row (item 7) is
+    width-independent by construction (label `truncate`s, amount is on
+    its own line) and was not altered in a way that could reintroduce
+    the collision ADDENDUM 3 fixed. No new horizontal-scroll or overflow
+    risk was introduced by any padding/gap/font-size reduction in this
+    addendum, since every change reduces occupied space rather than
+    adding fixed-width elements. NOT CLAIMED: an actual rendered
+    screenshot at any of these widths — no browser automation tool is
+    available in this environment (unchanged limitation across every
+    addendum in this report). The user's own manual screenshot
+    comparison remains the authoritative next check, per their explicit
+    instruction to stop here for it.
+
+VALIDATION (each item specifically requested was checked):
+- No financial calculation added to JSX: confirmed by review (item 19).
+- No prototype data: confirmed — re-run automated source-audit tests in
+  `supabase/tests/home/run.ts`, clean.
+- No user-specific hardcoding: confirmed — same audit, clean.
+- No fake chart data: confirmed — `DistributionBar` unchanged, still
+  renders only real computed percentages.
+- No advisory/ranking language: confirmed — chip vocabulary unchanged,
+  only its size was reduced; re-run of the AI-slop-copy audit, clean.
+- No currency-format regression: confirmed — every `formatCurrencyAmount`
+  call site and its `{ trimTrailingZeros: true }` option is unchanged;
+  only the surrounding `text-*` size classes were edited, never the
+  formatting call itself.
+- No responsive overflow introduced: reasoned explicitly per item 20
+  above; not independently browser-verified (see the explicit non-claim
+  in item 20).
+
+REGRESSION. Fresh `supabase db reset`, full suite re-run: **454/454
+passed** (unchanged — this round touched no Supabase-tested code path,
+purely Tailwind className edits). `npm run lint`: clean. `npx tsc
+--noEmit`: clean. `npm run build` (Supabase-configured): clean,
+unchanged route list.
+
+NOT claimed as done: as in every prior addendum, no actual browser
+render was performed in this environment. The CSS-structure reasoning in
+item 20 is a substitute for, not equivalent to, a real viewport
+screenshot. The user's own manual final screenshot comparison against
+`screen.png`, across Dark and Light and the 320/360/393/430 widths, is
+the explicit next step this addendum stops for.
+
+FILES CHANGED (this addendum only):
+  M  components/home/PositionSection.tsx
+  M  components/home/CapitalDistributionSection.tsx
+  M  components/home/YourMovesSection.tsx
+  M  components/home/GoalsSection.tsx
+  M  components/home/ThisMonthSection.tsx
+  M  components/home/RecentActivityPreview.tsx
+  M  components/obligations/UpcomingObligationsList.tsx  (shared — chip size only)
+  M  app/(app)/home/page.tsx                              (outer gap, obligations surface padding)
+
+No other file was touched. No financial architecture, RLS policy, or
+database schema was changed.
+================================================================================
+
+ADDENDUM 7 — STRICT REFERENCE REPLICATION PASS
+================================================================================
+
+STRATEGY CHANGE. Every prior addendum in this report (2 through 6)
+treated `docs/reference/01-home/screen.png` as inspiration to be
+interpreted, filtered through an anti-"AI-slop" lens, and repeatedly
+re-negotiated (see ADDENDUM 5's explicit "we overcorrected" reversal).
+This addendum changes strategy on explicit instruction: reproduce the
+reference's actual visual composition as faithfully as reasonably
+possible — layout, proportions, padding, typography scale, color
+surfaces, icon placement, chip treatment, bar treatment, list density —
+using `docs/reference/01-home/screen.png` as primary authority and
+`docs/reference/01-home/code.html` / `DESIGN.md` as structural/token
+reference, while Monatriq's own domain layer remains the sole source of
+data and financial truth. No further "cleaner"/"flatter"/"more
+editorial" reinterpretation was applied; where the previous addenda's
+own instructions (e.g. ADDENDUM 6's differentiated card-surface
+hierarchy) conflicted with faithfully matching the reference's uniform
+card treatment, this addendum's instruction explicitly superseded them.
+
+MAJOR VISUAL DIFFERENCES BEFORE THIS PASS (vs. the reference):
+- Card surfaces were deliberately differentiated (Liquid Position alone
+  on `bg-surface-raised`, every other card on the plainer `bg-surface`)
+  — the reference uses the exact same card tone (`surface-container-low`)
+  for every major panel; visual hierarchy there comes from typography and
+  badges, not differing card darkness.
+- No greeting banner card — the greeting was a bare heading, not a
+  contained panel with a live-status dot, avatar, and eyebrow.
+- Section titles for "Where Your Capital Lives" and "This Month" lived
+  outside their cards (as a page-level `<h2>`); the reference embeds
+  both titles inside their own single wrapping card.
+- Liquid Position's headline figure was `text-2xl` (24px); the reference
+  uses a materially larger `display-lg-mobile`-equivalent scale (32px)
+  for that one figure specifically, with Net Worth/Safe to Deploy
+  deliberately much smaller.
+- Capital Distribution rows used a stacked two-line layout (label+% on
+  one line, amount below); the reference uses a two-column layout (icon+
+  label left, amount+percentage stacked right) — visually different, and
+  the row's real per-category caption ("3 registered motor units") was
+  simply absent since no such field exists.
+- The distribution bar was a thin 8px unsegmented track; the reference
+  uses a thicker (12px) track with visible gaps between segments and
+  rounded outer ends.
+- Your Moves cards showed only a type label + name + chip; the reference
+  gives each move card a leading numbered/iconic badge and an inner
+  highlighted stat box.
+- Goal cards had no icon, no progress-bar/current-target visual weight
+  matching the reference's goal-card composition.
+- This Month had no header-level net badge and no highlighted stat-box
+  treatment around its primary figures.
+- Recent Activity rows used the generic event-type label as the title
+  and smaller (28px) icon containers; the reference-equivalent rows use
+  the transaction's own specific description as the title, with larger
+  (40px) icon containers.
+- "View all activity" was rendered at the bottom of the Recent Activity
+  card rather than in the section header row, as the reference has it.
+
+GOVERNING RULE, UNCHANGED FROM EVERY PRIOR ADDENDUM: a badge, chip, icon,
+or visual slot is filled with REAL domain state when Monatriq's domain
+layer already provides an equivalent, and OMITTED (never fabricated)
+when it doesn't — this pass's own explicit instruction restates the same
+rule ("If no real equivalent exists: omit... while preserving the
+surrounding layout as closely as possible"). Every change below was
+checked against this rule individually.
+
+CHANGES BY SECTION:
+
+1. TOKENS (`lib/styles/tokens.css`). Added one new centrally-defined
+   semantic token, `--color-surface-strong` (both Dark and the Light
+   override block) — a step lighter than `surface-raised`, for nested
+   elements inside a raised card (icon badges, inner highlight boxes, bar
+   tracks, neutral chip fills), matching the reference's own elevation
+   direction (nested elements read lighter than their containing card).
+   This is additive only — no existing class or component was touched by
+   adding it, so no other page's styling changed. Per this pass's own
+   allowance ("tune semantic design tokens centrally rather than adding
+   one-off component hex values").
+
+2. GREETING (`components/home/GreetingHeader.tsx`). Rebuilt as a
+   contained `bg-surface-raised` card: a small accent-colored live-status
+   dot + "MONATRIQ" eyebrow, the real greeting headline (unchanged
+   dynamic name/time-of-day logic), the existing subtitle line, and an
+   avatar showing the user's own first-initial with a small presence dot
+   — all real (derived from `preferredName`). The reference's SECOND
+   brand-name pill next to the subtitle (duplicating "Personal Capital
+   Compass" for a third time on one screen) has no real Monatriq
+   equivalent and was dropped rather than tripling the brand name for no
+   data-backed reason.
+
+3. CURRENT POSITION (`components/home/PositionSection.tsx`). Card
+   surfaces unified to `bg-surface-raised` for Liquid Position, Net
+   Worth, and Safe to Deploy (previously only Liquid Position used it) —
+   matching the reference's uniform card tone. Liquid Position's headline
+   raised to 32px/bold (from 24px) to match the reference's dominant-card
+   scale; its bottom row now pairs a small accent Wallet icon + the
+   existing description with the real reserve-count context rendered as
+   a pill (`bg-surface-strong`, matching the reference's inline stat
+   pill) instead of plain text. Net Worth and Safe to Deploy each gained
+   a small icon in their header row (Wallet / a status dot) and a short
+   factual caption line ("Tracked assets minus debt" / "Capital available
+   after protected buffer" — both restatements of what those two figures
+   already structurally represent, not new claims). Safe to Deploy's
+   figure now uses the existing `attention` (amber) token, matching the
+   reference's tactical-amber treatment for that specific card — no new
+   color was introduced. The reference's top-right status chip on Liquid
+   Position ("Immediate Cash Available") has no real domain state behind
+   it (liquid cash overall carries no "availability" flag) and was
+   OMITTED — the row layout is preserved, just without a fabricated
+   badge. `grid-cols-2` (mobile-first, from ADDENDUM 6) is unchanged.
+
+4. WHERE YOUR CAPITAL LIVES (`components/home/CapitalDistributionSection.
+   tsx`). Section title moved inside the card (matching the reference's
+   own composition, where this section IS one wrapping card). Added a
+   header badge showing the real sum of every non-cash category's
+   already-computed percentage ("N% in illiquid assets") — a
+   presentational sum over values the domain layer already derived
+   per-category, not a new percentage formula on raw ledger data (the
+   same pattern already established for Home's reserve-count sum). The
+   reference's editorial subtitle ("High Net Worth, Low Liquidity") is a
+   value judgment with no domain state behind it and remains dropped, per
+   the governing rule reaffirmed in ADDENDUM 5. The segmented bar was
+   rebuilt to match the reference's thicker (12px), gapped, rounded-end
+   treatment. A summary line beneath the bar now shows real locked-vs-
+   liquid amounts and percentages, again summed from already-computed
+   per-category values — shown at FULL precision (not the reference's
+   abbreviated "₦108.0M"/"₦840K" notation), since introducing a new
+   compact-number formatter was explicitly flagged as unnecessary
+   complexity for the trusted currency-formatting layer in an earlier
+   round (P0-E3-S2 QA round 3) and that reasoning still applies. Category
+   rows were restructured from the earlier stacked two-line layout to a
+   two-column layout (icon + label left, amount + percentage stacked
+   right) matching the reference's own row composition — this is NOT a
+   return to the pre-ADDENDUM-3 single-line layout that caused the
+   original collision bug; amount and percentage now live in their own
+   right-aligned column, never sharing a line with the label, so the
+   collision the earlier fix addressed cannot recur. The reference's
+   per-row descriptive caption ("3 registered motor units") has no
+   Monatriq equivalent (`CapitalDistributionCategory` carries no
+   per-category count or description field) and is omitted.
+
+5. YOUR MOVES (`components/home/YourMovesSection.tsx`). Cards rebuilt to
+   match the reference's move-card composition: a leading circular badge,
+   the item's name, a status chip, an inner highlighted stat box, and a
+   bottom context row with a Review action. The reference's leading
+   badge is a numbered "1/2/3" implying a priority ranking Monatriq has
+   never computed for Decisions (and which an existing automated test,
+   "Active Decisions carry no rank/score/winner field," explicitly
+   guards against as a concept) — substituted with a decision-type icon
+   (derived from the Decision's own real `decisionTypeCode`), preserving
+   the visual "leading badge" slot with real, non-ranking, non-invented
+   data. The inner highlight box — the reference's slot for a
+   scenario-specific amount ("≈ ₦7,000,000") that `DecisionSummary`
+   doesn't carry (no scenario amount is returned at the Home-level list;
+   evaluating one requires reading a specific scenario) — now shows the
+   real `scenarioCount` ("N scenarios evaluated" / "Not yet evaluated").
+   The bottom context row shows the Decision's own real
+   `linkedAssetName`/`linkedLiabilityName` when one exists (nothing when
+   neither does) in place of the reference's fabricated status line
+   ("Draft & valuation completed"). The Focus Goal card received the
+   same composition (flag icon, name, "Focused" chip, an allocated/target
+   highlight box using the already-existing real fields).
+
+6. GOALS (`components/home/GoalsSection.tsx`). Cards gained a leading
+   icon derived from the goal's own real `measurementType` (never a
+   per-goal invented icon — Goals carries no icon field), a real
+   percentage-funded readout next to the status chips, an 8px progress
+   rail (was 6px) matching the reference's scale, and a "Current: X /
+   Target: Y" line matching the reference's exact phrasing — built from
+   the same already-existing real fields as before. Section header
+   gained a real "+" add-goal button (linking to `/goals`, matching the
+   reference's `+` control) in place of the reference's invented
+   cross-goal "Target Horizon: June 2027 · 32 Mo Left" journey headline,
+   which has no Monatriq equivalent (no canonical "financial freedom
+   date" exists across all goals). Where a goal DOES have both a real
+   `targetDate` and a `calculated` `requiredPaceStatus` — i.e. Goals'
+   own `goal_required_pace()` has actually computed months remaining for
+   that specific goal — the real `requiredPacePeriodsRemaining` is now
+   shown next to its target date, since that concept genuinely exists
+   per-goal even though the reference's single cross-goal version of it
+   does not.
+
+7. THIS MONTH (`components/home/ThisMonthSection.tsx`). Section title
+   moved inside the card (matching the reference's own composition, as
+   in item 4). Added a real net-flow badge in the header (color/icon/sign
+   derived from the already-computed `netExternalCashFlow` — no new
+   arithmetic), and wrapped the primary Cash In/Cash Out/Net row in a
+   highlighted stat box (`bg-surface-strong`), matching the reference's
+   "Quick Stats Matrix" treatment. The negotiated three-tier hierarchy
+   from earlier rounds (Cash In/Cash Out/Net primary; Earned Income/
+   Expense secondary; transfers a muted final line) is unchanged — every
+   value is still read verbatim from `MoneyPeriodSummary`. Per this
+   pass's own explicit instruction (Option B), the reference's 4-week
+   inflow/outflow bar chart is NOT reproduced: no canonical weekly Money
+   read model exists, and synthesizing weekly buckets from the monthly
+   total would be fabricated data. The card's composition is preserved
+   using only the real monthly figures; it is consequently shorter than
+   the reference's equivalent card, a disclosed, deliberate deviation.
+
+8. RECENT ACTIVITY (`components/home/RecentActivityPreview.tsx`). Row
+   icon containers enlarged from 28px to 36px (`h-9 w-9`, rounded-xl) to
+   match the reference's scale, with an accent-colored background for
+   inflow rows (matching the reference's per-row icon-tint pattern). The
+   row's primary text now uses the event's own real `description` field
+   (already present on `MoneyActivityItem`, previously unused on Home)
+   when the user recorded one, falling back to the existing event-type
+   label — this is a real, previously-available field, not new data, and
+   produces titles much closer to the reference's specific per-
+   transaction titles. The subline now shows the real occurred-at
+   timestamp plus the event's own real `receivedCategoryCode`/
+   `spendingCategoryCode` when one exists (both already on the type, only
+   the date was used before). The reference's settlement-status caption
+   under the amount ("Cleared", "Direct Payment") has no Monatriq
+   equivalent — these events are already-recorded, not pending/settling
+   — and is not reproduced. "View all activity" moved from the bottom of
+   the card to the section header row in `page.tsx`, matching the
+   reference's own placement exactly.
+
+9. UPCOMING OBLIGATIONS (`components/obligations/UpcomingObligationsList.
+   tsx`, shared with `/rules`). Row typography and the "Protected" chip
+   brought onto the same `surface-strong`/type-scale treatment as every
+   other list in this pass, for visual consistency — no field added or
+   removed.
+
+10. PAGE ASSEMBLY (`app/(app)/home/page.tsx`). Reassembled to match the
+    reference's section order and header placement exactly: Greeting
+    card, Current Position (title embedded in `PositionSection`), Where
+    Your Capital Lives (title embedded in the card), Your Moves (title
+    only — the reference's "Priority" label has no real per-move ranking
+    behind it and is omitted), Goals (title + real "+" link), This Month
+    (title embedded in the card), Recent Activity (title + "View all
+    activity" link), Upcoming Obligations (a real Monatriq section with
+    no reference equivalent — kept, since Monatriq has more real domain
+    surfaces than the demo reference and that's not a deviation to
+    "fix"). The reference's closing "Last updated by you today, 2:15 PM /
+    Log Update" dispatch-trigger bar has no real Monatriq equivalent —
+    there's no canonical "last profile update" timestamp and no single
+    generic "log update" action this button could honestly point to — so
+    it was not reproduced; the page ends after Upcoming Obligations, as
+    before this pass.
+
+REFERENCE ELEMENTS NOT REPRODUCED (no real canonical data or concept
+existed to back them — each one specifically re-checked against the
+current domain layer, not merely assumed absent):
+- Liquid Position's "Immediate Cash Available" status chip (item 3).
+- Capital Distribution's "High Net Worth, Low Liquidity" editorial
+  subtitle (item 4) and its per-row descriptive captions (item 4).
+- Capital Distribution's abbreviated ("₦108.0M") number notation (item
+  4) — shown at full precision instead, per the trusted-formatting-layer
+  reasoning above.
+- Your Moves' numbered priority badges (item 5) and per-move fabricated
+  status lines like "Draft & valuation completed" (item 5).
+- Goals' single cross-goal "Target Horizon: June 2027 · 32 Mo Left"
+  journey headline (item 6) — per-goal required-pace data is shown
+  instead, where it's real.
+- This Month's 4-week inflow/outflow bar chart (item 7) — no canonical
+  weekly Money read model exists; per this pass's own Option B
+  instruction, omitted rather than fabricated.
+- Recent Activity's settlement-status captions ("Cleared", "Direct
+  Payment") (item 8).
+- The closing "Last updated... Log Update" dispatch-trigger bar (item
+  10).
+- The greeting banner's duplicated brand-name pill (item 2).
+
+ACCESSIBILITY DEVIATIONS REQUIRED: none. Every reduced/resized element
+(11px label chips, 32px headline figure, 36/40px icon containers) stays
+at or above the 12px body-copy floor already established in ADDENDUM 6;
+interactive touch targets (bottom nav, header controls, the new "+"
+add-goal link) remain unchanged at their existing 44-48px sizes — this
+pass touched only informational icon/chip sizing, never a touch target.
+
+RESPONSIVE DEVIATIONS REQUIRED: none identified by review. The
+`grid-cols-2` mobile-first Position layout, the collision-safe (now
+two-column) Capital Distribution rows, and every card's padding remain
+governed by the same Tailwind utilities reasoned through in ADDENDUM 6;
+no fixed-width element was introduced by this pass that could overflow
+at 320px. Not independently browser-verified (see below).
+
+VALIDATION:
+- No finance formula duplicated: confirmed by review. The two new
+  presentational sums (Home's total-reserve-count, Capital
+  Distribution's illiquid-percentage/locked-vs-liquid-amount summary)
+  are both plain arithmetic over values the domain layer already
+  computed per-item — no new percentage, ratio, or currency conversion
+  is computed in any component.
+- No demo data introduced: confirmed — re-run automated source-audit
+  tests in `supabase/tests/home/run.ts` (prototype-term search), clean
+  after one fix (a doc comment in `PositionSection.tsx` had quoted the
+  reference's own "840,000" figure as a formatting example — reworded to
+  a generic example amount; re-run clean).
+- No user-specific hardcoding: confirmed — same audit, clean.
+- No fake chart data: confirmed — the reference's weekly chart was
+  omitted entirely (item 7), not approximated; `DistributionBar` still
+  renders only the exact percentages `buildCapitalDistribution()`
+  computed.
+- No RLS change: confirmed — no migration, policy, or RPC touched.
+- No advisory/ranking behavior introduced: confirmed — the numbered
+  priority badges and fabricated status lines were the two reference
+  elements most likely to read as advisory/ranked, and both were
+  specifically replaced with real, non-ranking, non-advisory data (item
+  5); re-run of the AI-slop-copy automated audit, clean.
+
+REGRESSION. Fresh `supabase db reset`, full suite re-run: **454/454
+passed**. `npm run lint`: clean. `npx tsc --noEmit`: clean. `npm run
+build` (Supabase-configured): clean, unchanged route list.
+
+NOT claimed as done: as in every prior addendum, no actual browser
+render was performed in this environment (no browser automation tool is
+available here). Every layout/spacing/color claim above is a
+code/CSS-level judgment against the reference screenshot and
+`code.html`'s own markup, not a rendered comparison. The user's own
+side-by-side visual review against `docs/reference/01-home/screen.png`
+— across Dark and Light, and across the established 320/360/393/430
+widths — is the explicit next step this addendum stops for, per this
+pass's own instruction.
+
+FILES CHANGED (this addendum only):
+  M  lib/styles/tokens.css                                (additive: +surface-strong, Dark + Light)
+  M  components/home/GreetingHeader.tsx
+  M  components/home/PositionSection.tsx
+  M  components/home/CapitalDistributionSection.tsx
+  M  components/home/YourMovesSection.tsx
+  M  components/home/GoalsSection.tsx
+  M  components/home/ThisMonthSection.tsx
+  M  components/home/RecentActivityPreview.tsx
+  M  components/obligations/UpcomingObligationsList.tsx    (shared — type-scale/chip only)
+  M  app/(app)/home/page.tsx                                (section order/header placement, embedded titles)
+
+No other file was touched. No financial architecture, RLS policy, or
+database schema was changed.
+================================================================================
+
+ADDENDUM 8 — AUDIT-DRIVEN FINAL REFERENCE GAP CLOSURE
+================================================================================
+
+This addendum implements the P0 and audit-supported P1 items from
+`docs/reports/P0-E3-S2-home-reference-gap-audit.txt` — the audit is
+treated as the punch list, not reinterpreted. Every item below states
+IMPLEMENTED / DEFERRED / NOT APPLICABLE with reason. The audit itself
+was not rewritten.
+
+--------------------------------------------------------------------------------
+P0 ITEMS
+--------------------------------------------------------------------------------
+
+P0-1 — SECONDARY CARD PADDING: IMPLEMENTED, with one precision
+correction beyond the audit's own literal list. Raised from p-3 (12px)
+to p-4 (16px), matching the reference's actual `p-space-md` card-level
+padding, in: `PositionSection.tsx` (Net Worth, Safe to Deploy),
+`YourMovesSection.tsx` (Focus Goal card, every Decision card),
+`GoalsSection.tsx` (every goal card), `ThisMonthSection.tsx` (outer
+card), `CapitalDistributionSection.tsx` (outer card — a self-caught
+addition: the audit's own "affected" list named this section's ROW
+padding but not its own outer-card padding, which was independently
+re-inspected against code.html during this pass and found to be at the
+same 12px gap as every other card), and the Upcoming Obligations wrapper
+in `page.tsx` (also a self-caught addition, for consistency with the
+now-uniform 16px card standard).
+
+CORRECTION: the audit's own list also named "This Month inner stat
+container" and "Your Moves inner highlight/stat container" as needing
+this same 12px→16px change. Re-inspecting `code.html` directly during
+this implementation (lines 160, 329) shows BOTH of those specific nested
+boxes actually use `p-space-sm` (8px) in the reference, not
+`p-space-md` (16px) — they are a distinct, intentionally smaller scale
+from their own outer cards in the reference itself. Enlarging them to
+16px would have moved AWAY from the reference, not toward it, and would
+have contradicted this pass's own "Primary Rule" ("do not reinterpret
+the design") and its explicit "This is a reference-alignment change, not
+an invitation to make the entire app spacious" instruction. Both inner
+boxes were instead corrected to p-2 (~8px, from their prior p-2.5/10px),
+matching the reference's real value precisely. This correction is
+recorded here rather than silently applied, per this addendum's own
+instruction to state every item's status with a reason.
+
+P0-2 — RECENT ACTIVITY ROWS: IMPLEMENTED. `RecentActivityPreview.tsx`:
+the outer card's own padding was removed entirely (was p-1.5) — the
+reference has zero padding on the outer container, since every row
+already carries the full padding — and each row's padding raised from
+`px-1.5 py-2.5` (~6px/10px) to `p-4` (16px on every side), matching the
+reference's `p-space-md` per-row treatment exactly. Icon container
+raised from 36px (h-9 w-9) to 40px (h-10 w-10), matching the reference's
+own `w-10 h-10`. Preserved unchanged: one contained, `divide-y`-divided
+list (correct here, per the audit — this is the one Home list the
+reference itself divides); real Money events only; the event's own real
+`description` as the row title, real category/date subline; real
+amounts; the existing accent-for-inflow / plain-for-outflow color rule
+(never danger/red for spending, matching the reference). No settlement
+status was added — `MoneyActivityItem` still carries no such field (see
+P2 list below, item 11).
+
+--------------------------------------------------------------------------------
+P1 ITEMS
+--------------------------------------------------------------------------------
+
+1. HEADER: IMPLEMENTED. `AppShell.tsx`'s header height changed from
+   `h-14 md:h-16` to a uniform `h-16` (64px on every breakpoint,
+   matching the reference). A new `components/layout/HeaderBrand.tsx`
+   (client component) replaces the previous plain `BrandLogo` wordmark:
+   it renders Monatriq's own mark inside a small rounded badge (the
+   reference's icon-badge slot, using Monatriq's real brand mark, never
+   "Capital Compass") plus a two-line text stack — a "Monatriq" eyebrow
+   and the CURRENT ROUTE's own real page title ("Home" on /home, "Money"
+   on /money, etc.), derived from `usePathname()` against a small
+   route-title map covering every route AppShell's own navigation
+   already lists. This was necessary because AppShell is the SHARED
+   layout for every (app) route (confirmed by reading
+   `app/(app)/layout.tsx` before implementing) — a hardcoded "Home"
+   label would have been visibly wrong on every other page, so the page-
+   context treatment had to be genuinely dynamic, not a Home-specific
+   hack. No notification bell was added (none exists to represent). The
+   existing `AccountMenu` (real authenticated-user email, theme toggle,
+   foundation routes, sign out) was left completely unchanged — no
+   duplicate profile control was introduced.
+
+2. GREETING AMBIENT DETAIL: IMPLEMENTED. `GreetingHeader.tsx` and
+   `PositionSection.tsx`'s Liquid Position card both gained a static,
+   `pointer-events-none`, very-low-opacity (`bg-accent-primary/5`)
+   `blur-2xl` circle in the top-right corner, contained by `relative
+   overflow-hidden` on the card and placed behind the actual content
+   (wrapped in its own `relative` layer, matching the reference's own
+   `relative z-10` technique) so it can never obscure text. No
+   animation, no backdrop/glass blur, no neon — a static decoration
+   only, present in both Dark and Light (the accent-primary token
+   already resolves to each theme's own correct accent color, so no
+   theme-specific tuning was needed).
+
+3. CAPITAL DISTRIBUTION ROW DIVIDERS: IMPLEMENTED. `divide-y
+   divide-border` removed from both category-row lists in
+   `CapitalDistributionSection.tsx` (the single-currency/reporting
+   branch and the native_incomplete per-currency-group branch); rows now
+   rely on their own `py-2` spacing only, matching the reference's
+   un-divided treatment for this specific list. Recent Activity's
+   divider was explicitly left untouched (confirmed still present — see
+   P0-2 above), since the reference itself uses a divided list there.
+
+4. CAPITAL BAR IDENTITY COLORS: IMPLEMENTED. `CapitalDistributionSection.
+   tsx`'s `DistributionBar` no longer colors segments by
+   `BAR_COLORS[i % BAR_COLORS.length]` (array/sort-position dependent —
+   a user's cash segment could change color merely because its relative
+   size rank changed). Replaced with `barColorFor(key)`: `"cash"` always
+   maps to `bg-accent-primary` (Monatriq's real accent identity, per this
+   task's explicit "cash must retain Monatriq accent identity"
+   requirement); `"receivables"` always maps to `bg-attention` (the
+   existing amber token, already used elsewhere for the same tactical/
+   liquidity-adjacent meaning); every other (asset-type) category key
+   gets a color from a small 3-color neutral fallback palette
+   (`bg-focus`, `bg-text-muted`, `bg-surface-strong`) selected by a
+   deterministic string hash of the category key — NOT `Math.random()`,
+   NOT re-computed per render, and never reusing the accent/attention
+   tokens reserved for cash/receivables. The same key always produces
+   the same color on every render, for every user, regardless of that
+   category's size or position in the sorted list. No color conveys
+   financial quality, status, or a recommendation — this is purely a
+   stable visual identity mapping, exactly as scoped.
+
+5. YOUR MOVES AFFORDANCES: IMPLEMENTED (padding, icon), NOT APPLICABLE
+   (chevron, by design — reasoned through, not skipped for lack of
+   time). Card padding raised to p-4 (16px) — see P0-1. The inner
+   highlight/stat box's own padding was corrected to p-2 (~8px, the
+   reference's actual value — see the P0-1 correction note above), not
+   left at its prior 10px or raised further. A small `Link` icon
+   (lucide-react, 11px, muted) now precedes the decision's real
+   `linkedAssetName`/`linkedLiabilityName` text on the bottom context row
+   whenever one exists (nothing rendered when neither does — no fake
+   context). The optional inner-box chevron affordance was deliberately
+   NOT added: in `code.html`, the reference's chevron has no distinct
+   destination of its own (it's decorative chrome around the same
+   outcome box), and every Move card here already has a real "Review"
+   action pointing at the one real destination (`/decisions` or
+   `/goals`) that content has. Adding a second, visually separate tap
+   target inside the highlight box that led to the exact same place
+   would be a redundant, confusing second control, not a genuine second
+   affordance — this task's own instruction says to omit and document in
+   exactly this situation, so it was omitted. No numbered priority
+   badge was reintroduced (unchanged from ADDENDUM 7 — decision-type
+   icons remain in that slot).
+
+6. YOUR MOVES COUNT: IMPLEMENTED. `app/(app)/home/page.tsx` now computes
+   `movesCount = (summary.focusGoal ? 1 : 0) + summary.activeDecisions.
+   length` (a plain count of already-fetched rows, not a new query or
+   calculation) and renders "Your Moves (N)" when count > 0, falling
+   back to the plain "Your Moves" heading when it's zero (at which point
+   `YourMovesSection` itself renders its own empty-state message, so a
+   "(0)" suffix would never actually be seen, but the guard is there for
+   correctness). Never hardcoded to "3". No "Priority" label was added —
+   unchanged, intentionally, from every prior addendum.
+
+7. GOAL VISUAL DETAILS: IMPLEMENTED. `GoalsSection.tsx`: card padding
+   raised to p-4 (16px) — see P0-1. Added `measurementIconColor()`, a
+   small deterministic (never random) function mapping each goal's own
+   real `measurementType` to one of four existing semantic tokens
+   (`cash_target`→accent-primary, `debt_balance_target`→attention,
+   `monthly_income_target`→focus, `milestone`→text-secondary) for the
+   leading icon — purely decorative visual variety, matching the
+   reference's own equally-decorative per-goal icon coloring (the
+   reference never ties icon color to a computed judgment either). No
+   status or urgency was invented; "Critical Buffer"/"Being defined"
+   remain unreproduced (see P2 list, item 9) — `GoalSummary` still has
+   no field that would support them honestly.
+
+8. BOTTOM NAV CENTRAL +: IMPLEMENTED. `MobileBottomNav.tsx`'s central
+   button raise offset changed from `-top-3` (12px) to `-top-5` (20px),
+   matching the reference's own `-top-5`. The button's own size (`h-12
+   w-12`, 48px) and icon size (23px) were left unchanged, per this
+   task's explicit "do not enlarge the circle substantially" — only the
+   float/elevation position was adjusted. The 48px touch target, safe-
+   area padding, and every other nav item are unaffected (relative
+   positioning shifts only the button's paint position, not the nav
+   bar's own layout height or any sibling's geometry).
+
+--------------------------------------------------------------------------------
+P1 — OPTIONAL ITEMS
+--------------------------------------------------------------------------------
+
+COMPACT CAPITAL SUMMARY NUMBERS: DEFERRED. A safe, opt-in compact
+formatter (exact stored value unchanged, no float arithmetic, display-
+only, currency-identity-preserving, scoped to only the Capital
+Distribution locked/liquid summary line) would still require new logic
+inside or adjacent to the trusted currency-formatting layer — choosing
+correct unit thresholds and rounding behavior per currency, given
+`decimal_exponent` already varies (0/2/3-decimal currencies). This is
+proportionate scope for a dedicated small task, but disproportionate to
+bundle into a padding/color/header gap-closure pass, per this task's own
+explicit "if this requires unsafe or disproportionate changes: DEFER"
+instruction. The underlying value and percentage shown are already real
+and correct — this defers only the display NOTATION, not any data
+correctness.
+
+CURRENT POSITION ACTION: IMPLEMENTED. See P0-1's `PositionSection.tsx`
+section — the "Current Position" header's right-side slot, which
+previously showed a plain (non-clickable) real reserve-count fact, now
+shows a genuinely clickable "Add cash" link (with a small `Plus` icon)
+to `/money#record-money`, Money's existing real entry point — the same
+destination already used by `NewUserSetup`'s own empty-state CTA. The
+reserve-count fact was not deleted; it remains fully visible inside the
+Liquid Position card's own bottom-row pill (`ReserveContext`), so
+removing the duplicate from the header row loses no information. Nothing
+here is styled as clickable unless it genuinely is.
+
+--------------------------------------------------------------------------------
+P2 — EXPLICITLY LEFT OUT (unchanged from the audit)
+--------------------------------------------------------------------------------
+Re-confirmed, not reintroduced by this pass, each for the same domain-
+capability reason stated in the audit:
+  1.  Notification bell without notifications — no notification domain.
+  2.  "Immediate Cash Available" status — no availability state exists.
+  3.  "High Net Worth, Low Liquidity" — no threshold-judgment logic.
+  4.  Capital-category descriptive sublines — no per-category
+      count/description field on `CapitalDistributionCategory`.
+  5.  Numbered/ranked Your Moves — an existing automated test explicitly
+      guards against Decisions carrying a rank/score/winner concept.
+  6.  "Priority" label for Decisions — same reason as item 5.
+  7.  Fabricated Decision status/context lines ("Draft & valuation
+      completed", etc.) — no such field exists; real linked-asset/
+      liability name used instead where one exists.
+  8.  Cross-goal Target Horizon / Financial Freedom date — no aggregate
+      date concept anywhere in Goals; per-goal `requiredPacePeriods
+      Remaining` shown instead, where Goals has actually calculated one.
+  9.  Goal statuses "Critical Buffer" / "Being defined" — no matching
+      lifecycle/urgency field on `GoalSummary`.
+  10. Weekly Cash In/Cash Out chart — no canonical weekly Money read
+      model; `money_period_summary()` still returns one row per
+      currency per whole period, re-confirmed during this pass.
+  11. Transaction settlement labels ("Cleared", etc.) — no settlement
+      lifecycle field on `MoneyActivityItem`.
+  12. The exact generic "Last updated by you / Log Update" footer —
+      still not reproduced verbatim (the audit's own "Can replicate now
+      with real-data adaptation" note for a real-timestamp partial
+      version was not implemented in this pass either, since it wasn't
+      named in this task's own P0/P1 list).
+
+--------------------------------------------------------------------------------
+THIS MONTH
+--------------------------------------------------------------------------------
+Not reopened. `ThisMonthSection.tsx`'s Cash In/Cash Out/Net primary,
+Earned Income/Expense secondary, de-emphasized transfers hierarchy is
+byte-for-byte unchanged in structure — only the outer card's padding
+(p-3→p-4) and the inner stat box's padding (corrected to its real
+reference value, p-2) were touched, per the P0-1 correction above. The
+weekly chart remains absent, unchanged, for the same reason as P2 item
+10.
+
+--------------------------------------------------------------------------------
+MULTI-CURRENCY
+--------------------------------------------------------------------------------
+Unchanged. No currency-blending logic was touched; `CapitalDistribution
+Section`'s three modes (`empty`/`single_currency`/`reporting`/
+`native_incomplete`) and their per-mode rendering are structurally
+identical to before this pass — only their color/padding/divider
+presentation changed. `formatCurrencyAmount` itself was not modified.
+
+--------------------------------------------------------------------------------
+LIGHT / DARK
+--------------------------------------------------------------------------------
+All changes in this addendum are made to the shared component hierarchy
+— there is no Dark-only or Light-only code path anywhere in Home. Every
+new/changed class (`bg-surface-strong`, `bg-accent-primary/5`, `bg-
+attention`, `bg-focus`, `bg-text-muted`) is an existing semantic token
+that already resolves correctly in both `:root` (Dark) and
+`:root[data-theme="light"]` (Light) — no new one-off hex value was
+introduced anywhere. The ambient glow's 5% opacity was deliberately kept
+low enough to remain a restrained accent in Light mode's white/near-
+white card surfaces, not just Dark mode's darker ones.
+
+--------------------------------------------------------------------------------
+RESPONSIVE
+--------------------------------------------------------------------------------
+No fixed-width element was introduced or widened by this pass. Every
+change is a padding/gap/color/position value on markup whose responsive
+structure (the mobile-first `grid-cols-2` Position layout, the
+collision-safe two-column Capital Distribution rows, the fluid `flex`/
+`grid` containers throughout) was already established and unchanged by
+earlier addenda. The header's height change (56px→64px on mobile) and
+the central nav button's raise-offset change (12px→20px) were both
+reasoned as pure vertical adjustments with no horizontal-width
+consequence. Not independently browser-verified — see the validation
+section below.
+
+--------------------------------------------------------------------------------
+NO ARCHITECTURE WORK
+--------------------------------------------------------------------------------
+No migration was created. No RPC, financial formula, or financial status
+was added. No product domain was touched. Every deferred/left-out item
+above was left out specifically because closing it honestly would have
+required one of these — consistent with this task's own "if a requested
+visual detail unexpectedly requires any of these: skip it and document
+why" instruction.
+
+--------------------------------------------------------------------------------
+VALIDATION
+--------------------------------------------------------------------------------
+`npm run lint`: clean. `npx tsc --noEmit`: clean. `npm run build`
+(Supabase-configured): clean, unchanged route list. Fresh `supabase db
+reset`, full regression suite re-run: **454/454 passed** (all 12
+suites — RLS, Money, Currency, Assets, Receivables, Liabilities, Goals,
+Rules, Decisions, Financial Position, Home Readiness, Home — unchanged
+counts from before this pass, confirming zero regression in any tested
+code path; this addendum touched only presentational component/CSS
+markup).
+
+Specifically confirmed:
+- P0 padding gaps resolved (Net Worth, Safe to Deploy, Move cards, Goal
+  cards, This Month's outer card, Capital Distribution's outer card,
+  Upcoming Obligations wrapper — all now p-4; inner nested boxes
+  corrected to their real reference value, p-2, not enlarged).
+- Recent Activity padding resolved (rows now p-4, icon 40px, outer
+  container padding removed to match the reference's edge-to-edge rows).
+- Capital Distribution rows have no dividers (removed from both render
+  branches).
+- Recent Activity still DOES have dividers (`divide-y divide-border`,
+  re-verified present and untouched).
+- Capital bar colors are stable by identity (`barColorFor(key)`,
+  cash/receivables fixed, others deterministically hashed — re-verified
+  the function contains no `Math.random()` or render-order dependency).
+- Header mobile height/context closer to reference (64px uniform; real
+  per-route title via `HeaderBrand.tsx`).
+- Ambient treatments do not reduce readability (5% opacity, positioned
+  behind content via `relative z`-stacking, present in both themes).
+- Bottom-nav + offset updated (`-top-3` → `-top-5`), 48px circle/touch
+  target unchanged.
+- No unsupported P2 feature introduced — re-checked the full P2 list
+  above against every file changed in this pass; none appear.
+- No financial arithmetic added to JSX — the only new expression
+  (`movesCount`) is a plain count of two already-fetched values' lengths/
+  presence, same pattern as every prior addendum's presentational sums.
+- No hardcoded user-specific content — re-confirmed via the automated
+  source-audit tests (prototype-term and AI-slop-copy searches), clean.
+- No prototype values — same audit, clean.
+- No ranking/advisory language — the "Add cash" link, route titles, and
+  goal-icon colors are all neutral/factual; re-run of the advisory-
+  language audit, clean.
+- Light/Dark both compile through shared structure — confirmed by
+  inspection (no `data-theme` branch anywhere in the changed files) and
+  by the build succeeding, which type-checks every component through
+  the same shared token layer regardless of theme.
+- No service-role exposure — no env, auth, or Supabase-client file was
+  touched in this pass; re-confirmed via `git diff --stat` against
+  `app/`, `components/`, `lib/` showing only presentational component
+  files and `lib/styles/tokens.css` from this and prior addenda.
+- RLS unchanged — no migration, policy, or RPC file was touched.
+
+NOT claimed as done: as in every prior addendum, no actual browser
+render was performed in this environment (no browser automation tool is
+available here). Every claim above about padding/color/spacing/height is
+a code/CSS-level verification against the literal Tailwind values now in
+the source and the reference's own `code.html` markup — not a rendered
+screenshot comparison. The user's own final side-by-side visual review
+against `docs/reference/01-home/screen.png` is the explicit next step
+this addendum stops for.
+
+FILES CHANGED (this addendum only):
+  M  components/home/GreetingHeader.tsx         (ambient glow)
+  M  components/home/PositionSection.tsx        (padding, ambient glow, Current Position action swap)
+  M  components/home/CapitalDistributionSection.tsx (padding, dividers removed, identity-based bar colors)
+  M  components/home/YourMovesSection.tsx       (padding, inner-box correction, linked-context icon)
+  M  components/home/GoalsSection.tsx           (padding, deterministic icon color)
+  M  components/home/ThisMonthSection.tsx       (outer padding, inner-box correction)
+  M  components/home/RecentActivityPreview.tsx  (row padding, icon size, outer padding removed)
+  M  components/layout/AppShell.tsx             (header height, HeaderBrand wiring)
+  M  components/layout/MobileBottomNav.tsx      (central + raise offset)
+  M  app/(app)/home/page.tsx                    (Your Moves count, Upcoming Obligations padding)
+  ?? components/layout/HeaderBrand.tsx          (new — real per-route header title)
+
+No migration, RPC, financial formula, financial status, or product
+domain was created or touched. RLS is unchanged.
+================================================================================
+
+ADDENDUM 9 — FINAL MOBILE TEXT-WRAP FIX
+================================================================================
+
+Home's visual direction is approved. This is a single, isolated
+responsive-defect fix, not a design change.
+
+DEFECT: on manual mobile testing, the Liquid Position card's explanatory
+sentence ("Actual cash across your reserves — not receivables, not
+estimates.") was being ellipsized (`truncate`) because it shared one
+flex row with the reserve-count pill (`ReserveContext`), and the row
+didn't have enough width for both at typical mobile widths.
+
+FIX (`components/home/PositionSection.tsx`): the description and the
+pill no longer share a row at all. The container changed from `flex
+items-center justify-between gap-3` (one row, description truncated via
+`truncate`) to `flex flex-col gap-1.5` (two rows): the description is
+now a plain wrapping `<span>` (the `truncate` class removed — it wraps
+across as many lines as it needs, at its existing `text-xs` size,
+unchanged), and the reserve-count pill sits on its own row beneath it,
+inside a `flex justify-end` wrapper that keeps it right-aligned (matching
+its original visual position) regardless of how many lines the sentence
+above wraps to. `ReserveContext`'s own span also had `whitespace-nowrap`
+removed and `max-w-full` added, so even an unusually long multi-currency
+pill (e.g. three or four currencies each contributing "N reserves
+(CODE)") can wrap internally rather than ever forcing horizontal
+overflow.
+
+An earlier draft of this fix attempted a single `flex flex-wrap` row
+with the description as a `flex-1 min-w-0` item, intending the pill to
+drop to its own line only when space was tight. On reflection before
+finalizing, this was rejected: with `flex-basis: 0` and `min-width: 0`,
+the description item can always shrink to accommodate the pill on the
+same line — CSS flex-wrap only wraps items to a new line when even
+their minimum sizes don't fit, and an explicit `min-w-0` removes any
+such minimum. That approach would have squeezed the sentence into a
+very narrow column while keeping the pill inline, rather than reliably
+moving the pill beneath it — not a fix for the reported defect. The
+two-row structure implemented instead has no such conditional behavior
+to get wrong: the description always gets the card's full inner width
+to wrap within, and the pill is always on its own line.
+
+STRUCTURAL VERIFICATION AT 320/360/393/430px (reasoned against the
+literal CSS values now in source — no browser render available in this
+environment, unchanged limitation from every prior addendum):
+- Page gutter: `PageContainer`'s `px-4` (16px each side), unchanged.
+- Card padding: Liquid Position's `p-4` (16px each side), unchanged.
+- At 320px: available inner width for the description = 320 − 16×2
+  (gutter) − 16×2 (card padding) − 14px (icon) − 6px (icon gap) ≈ 222px.
+  At the existing 12px body-copy size, the ~57-character sentence wraps
+  to roughly 2-3 lines within that width — no truncation, no overflow,
+  since it's a plain wrapping text node with no `truncate`/`nowrap`
+  applied anywhere in its path.
+- At 360/393/430px: the same inner width grows (≈262/295/332px
+  respectively), so the sentence wraps to fewer lines, never more —
+  monotonically improving, no width in the required range is worse than
+  320px.
+- The reserve-count pill, on its own row in all four widths, needs only
+  as much width as its own short text (e.g. "2 reserves (NGN)",
+  typically well under 150px) — comfortably within even the narrowest
+  (320px) available width, and `max-w-full` guarantees it can never
+  exceed the card's own inner width even for a hypothetical multi-
+  currency user.
+- No element anywhere in this change has a fixed pixel width or a
+  `whitespace-nowrap` combined with `overflow-visible`, so no path to
+  horizontal page-level overflow was introduced at any of the four
+  required widths.
+
+NOT CHANGED: no financial data, calculation, or wording was altered —
+the sentence's text is byte-for-byte identical to before this fix, and
+`ReserveContext`'s own real-data logic (per-currency reserve counts,
+omitted entirely when zero) is untouched. No other Home component, no
+database/domain/RLS object, and no other section of this same file was
+touched by this addendum.
+
+VALIDATION: `npm run lint`: clean. `npx tsc --noEmit`: clean. `npm run
+build` (Supabase-configured): clean, unchanged route list. No test run
+was requested for this addendum (a pure Tailwind-class defect fix
+touching no data path); the full regression suite's last confirmed
+state remains 454/454 (ADDENDUM 8, immediately prior).
+
+FILES CHANGED (this addendum only):
+  M  components/home/PositionSection.tsx  (Liquid Position's description/reserve-pill row restructured to two rows)
+
+No other file was touched.
+================================================================================

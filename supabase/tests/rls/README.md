@@ -13,10 +13,12 @@ uses are shared with `supabase/tests/money/` — see
 ## What it needs
 
 - A running local Supabase stack: `npm run db:start` (requires Docker).
-- A `.env.local` with `NEXT_PUBLIC_SUPABASE_URL`,
+- A `.env.test.local` (test-harness-only, separate from the application's
+  own `.env.local` — see docs/project/BUILD_STATE.md, "Environment
+  separation") with `NEXT_PUBLIC_SUPABASE_URL`,
   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and `SUPABASE_TEST_SERVICE_ROLE_KEY`.
   `supabase start` prints the first two directly and the local
-  `SERVICE_ROLE_KEY` under that name — put it in `.env.local` as
+  `SERVICE_ROLE_KEY` under that name — put it in `.env.test.local` as
   `SUPABASE_TEST_SERVICE_ROLE_KEY` (see `.env.example`). **This key is
   test-harness-only** — it creates and deletes temporary auth fixture
   users via the Auth admin API. It is never imported by anything under
@@ -24,7 +26,11 @@ uses are shared with `supabase/tests/money/` — see
   `SUPABASE_SERVICE_ROLE_KEY`) specifically so it reads as obviously
   test-only, and must never be pointed at a real project (the local-only
   guard in `../shared/env.ts` exists to make that mistake fail loudly
-  instead of silently creating/deleting real users).
+  instead of silently creating/deleting real users). `.env.local` (the
+  application's own env file) is never read by this suite — `npm run
+  test:*` loads `.env.test.local` explicitly, precisely so a real project
+  can sit in `.env.local` for `npm run dev` without the destructive test
+  harness ever touching it.
 
 ## Running it
 

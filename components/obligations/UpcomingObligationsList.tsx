@@ -21,12 +21,16 @@ export function UpcomingObligationsList({ obligations, currencies }: UpcomingObl
           ? formatCurrencyAmount(obligation.amount, currency)
           : `${obligation.currencyCode} ${obligation.amount}`;
         return (
-          <li key={obligation.obligationId} className="flex items-center justify-between py-2 text-sm">
-            <span className="text-text-primary">
+          <li key={obligation.obligationId} className="flex items-center justify-between gap-3 py-2">
+            <span className="flex min-w-0 items-center gap-2 truncate text-base font-semibold text-text-primary">
               {obligation.name}
-              {obligation.isProtected ? <span className="ml-2 text-text-muted">Protected</span> : null}
+              {obligation.isProtected ? (
+                <span className="inline-flex shrink-0 items-center rounded-full bg-surface-strong px-1.5 py-0.5 text-[11px] font-semibold text-text-secondary">
+                  Protected
+                </span>
+              ) : null}
             </span>
-            <span className="tabular-figures text-text-secondary">
+            <span className="tabular-figures shrink-0 text-xs text-text-secondary">
               {formatted} — Due {obligation.dueDate}
             </span>
           </li>

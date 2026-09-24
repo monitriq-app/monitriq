@@ -12,10 +12,12 @@
  * A brand teal is not automatically "positive" everywhere it appears — see
  * docs/design/VISUAL_CONSTITUTION.md #5 (color semantics).
  *
- * Dark is the only implemented mode this phase (V1 is dark-first per the
- * visual constitution). Token names are semantic rather than dark-specific
- * so a future `:root[data-theme="light"]` override block can redefine the
- * same custom properties without touching component code.
+ * The `@theme` block below defines the DARK values (dark-first, per the
+ * visual constitution) — component code never branches on theme, only on
+ * these semantic classes. Light mode (P0-E3-S2) is a `:root[data-theme=
+ * "light"]` override further down this file that redefines the same
+ * custom properties, exactly as anticipated when this file was first
+ * written.
  */
 
 @theme {
@@ -24,6 +26,11 @@
   --color-surface: var(--monatriq-ink);
   --color-surface-raised: var(--monatriq-midnight-navy);
   --color-surface-muted: color-mix(in srgb, var(--monatriq-ink) 65%, var(--monatriq-midnight-navy));
+  /* One step lighter than surface-raised — nested/elevated elements sitting
+     inside a raised card (icon badges, inner highlight boxes, bar tracks,
+     neutral chip fills), matching the P0-E3-S2 reference's own
+     surface-container-low → surface-container-high elevation direction. */
+  --color-surface-strong: color-mix(in srgb, var(--monatriq-midnight-navy) 88%, var(--monatriq-mist-grey));
 
   --color-border: color-mix(in srgb, var(--monatriq-mist-grey) 16%, var(--monatriq-obsidian));
 
@@ -54,9 +61,55 @@
   color-scheme: dark;
 }
 
+/*
+ * Light mode (P0-E3-S2) — the override block the comment above
+ * anticipated. Intentionally designed, not an inversion: warm/neutral
+ * surfaces (built from the same Warm Off-White/Mist Grey/Ink brand
+ * tokens, never a generic white/grey SaaS palette), Ink text, and Deep
+ * Teal/Deep Blue accents (Electric Teal/Cool Aqua are tuned for dark
+ * backgrounds and lose contrast on light ones — see docs/design/
+ * VISUAL_CONSTITUTION.md #5 and the P0-E3-S2 report's "Light mode"
+ * section). Selected via next-themes setting `data-theme` on <html>;
+ * next-themes resolves "system" to one of "light"/"dark" before paint, so
+ * only these two concrete states ever need styling here.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-background: var(--monatriq-warm-off-white);
+  --color-surface: color-mix(in srgb, white 88%, var(--monatriq-warm-off-white));
+  --color-surface-raised: white;
+  --color-surface-muted: color-mix(in srgb, var(--monatriq-mist-grey) 35%, white);
+  --color-surface-strong: color-mix(in srgb, var(--monatriq-mist-grey) 55%, white);
+
+  --color-border: color-mix(in srgb, var(--monatriq-mist-grey) 70%, white);
+
+  --color-text-primary: var(--monatriq-ink);
+  --color-text-secondary: color-mix(in srgb, var(--monatriq-ink) 62%, white);
+  --color-text-muted: color-mix(in srgb, var(--monatriq-ink) 38%, white);
+
+  --color-accent-primary: var(--monatriq-deep-teal);
+  --color-positive: var(--monatriq-deep-teal);
+  --color-focus: var(--monatriq-deep-blue);
+}
+
 @layer base {
   *:focus-visible {
     outline: 2px solid var(--color-focus);
     outline-offset: 2px;
+  }
+
+  /* Respect prefers-reduced-motion globally (P0-E3-S2) — covers Tailwind's
+     animate-* utilities (e.g. the Home loading skeleton's animate-pulse)
+     and any transition/animation anywhere in the app. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }

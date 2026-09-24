@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
-import Link from "next/link";
-import { BrandLogo } from "@/components/brand/BrandLogo";
+import { HeaderBrand } from "@/components/layout/HeaderBrand";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { SignOutButton } from "@/components/auth/SignOutButton";
+import { DesktopNav } from "@/components/layout/DesktopNav";
+import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
+import { AccountMenu } from "@/components/layout/AccountMenu";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
 
 interface AppShellProps {
@@ -10,59 +11,35 @@ interface AppShellProps {
 }
 
 /**
- * Minimal authenticated shell: brand header + sign-out + content area.
- * This is scaffolding, not the final Home design — Home's real aggregation
- * layer belongs to a future domain phase (see
- * docs/architecture/SYSTEM_ARCHITECTURE.md #4).
+ * Production authenticated shell (P0-E3-S2): sticky header (brand +
+ * real page-context + desktop nav + account menu), content area, and a
+ * fixed mobile bottom nav. Conceptual production navigation is Home/
+ * Money/+/Assets/Decisions/Goals (docs/product/PRODUCT_DEFINITION.md
+ * #3) — Financial Position/Rules/Receivables/Liabilities remain real
+ * routes, surfaced from the account menu instead of primary navigation
+ * (see AccountMenu.tsx). Header height is 64px (h-16) on every
+ * breakpoint, matching the approved Home reference's own header
+ * proportion (P0-E3-S2 gap-audit item [1]) — this shell is shared by
+ * every (app) route, so the height applies everywhere, not just Home.
+ * Bottom padding on <main> reserves room for the fixed mobile nav so
+ * content is never hidden behind it.
  */
 export async function AppShell({ children }: AppShellProps) {
   const user = await getCurrentUser();
 
   return (
     <div className="flex min-h-dvh flex-col bg-background text-text-primary">
-      <header className="border-b border-border">
-        <PageContainer className="flex items-center justify-between py-4">
-          <div className="flex items-center gap-6">
-            <BrandLogo variant="wordmark" className="h-6 w-auto" />
-            <nav className="flex items-center gap-4 text-sm text-text-secondary">
-              <Link href="/home" className="hover:text-text-primary">
-                Home
-              </Link>
-              <Link href="/money" className="hover:text-text-primary">
-                Money
-              </Link>
-              <Link href="/assets" className="hover:text-text-primary">
-                Assets
-              </Link>
-              <Link href="/receivables" className="hover:text-text-primary">
-                Receivables
-              </Link>
-              <Link href="/liabilities" className="hover:text-text-primary">
-                Liabilities
-              </Link>
-              <Link href="/goals" className="hover:text-text-primary">
-                Goals
-              </Link>
-              <Link href="/rules" className="hover:text-text-primary">
-                Rules
-              </Link>
-              <Link href="/decisions" className="hover:text-text-primary">
-                Decisions
-              </Link>
-              <Link href="/financial-position" className="hover:text-text-primary">
-                Financial Position
-              </Link>
-            </nav>
-          </div>
-          <div className="flex items-center gap-4 text-sm text-text-secondary">
-            {user?.email ? <span>{user.email}</span> : null}
-            <SignOutButton />
-          </div>
+      <header className="sticky top-0 z-30 border-b border-border bg-background/90 pt-[max(env(safe-area-inset-top),0px)] backdrop-blur">
+        <PageContainer className="flex h-16 items-center justify-between gap-4">
+          <HeaderBrand />
+          <DesktopNav />
+          <AccountMenu email={user?.email ?? null} />
         </PageContainer>
       </header>
-      <main className="flex-1">
-        <PageContainer className="py-8">{children}</PageContainer>
+      <main className="flex-1 pb-24 md:pb-8">
+        <PageContainer className="py-6 md:py-8">{children}</PageContainer>
       </main>
+      <MobileBottomNav />
     </div>
   );
 }

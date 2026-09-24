@@ -30,12 +30,14 @@ implementation phase.
 
 ## 2. Repository layout (proposed, for future phases)
 
-This is a target layout to build toward incrementally. As of P0-E3-S1A,
+This is a target layout to build toward incrementally. As of P0-E3-S2,
 `lib/supabase/`, `lib/domain/{profile,money,assets,currency,receivables,
 liabilities,goals,rules,obligations,decisions,financial-position}/`,
 `supabase/migrations/`, and `supabase/tests/{shared,rls,money,currency,
 assets,receivables,liabilities,goals,rules,decisions,financial-position,
-home-readiness}/` exist for real. `lib/domain/financial-position/` is a
+home-readiness,home}/` exist for real, plus `components/{home,theme}/`
+and `lib/utils/` (small framework-agnostic presentational helpers, e.g.
+`time-of-day.ts` — never financial calculations). `lib/domain/financial-position/` is a
 composition-only domain — it owns no tables and reads every other
 domain's canonical functions rather than re-deriving them (§4).
 `lib/domain/currency/reporting-rates.ts` (P0-E3-S1A) is a small, pure
@@ -285,3 +287,71 @@ phase begins:
 - Testing framework choices beyond "RLS and isolation tests are mandatory"
   (see security doc)
 - CI/CD pipeline
+
+## 9. Frontend / UI architecture (P0-E3-S2)
+
+Established when Home became the first production screen. Governs every
+screen built from this phase forward — the smallest reusable foundation,
+not a Home-only set of hacks.
+
+**Theme.** [`next-themes`](https://github.com/pacocoursey/next-themes) —
+a mature, actively-maintained library, not a hand-rolled one — provides
+Light/Dark/System appearance. `components/theme/ThemeProvider.tsx` wraps
+`app/layout.tsx`'s children with `attribute="data-theme"
+defaultTheme="system" enableSystem`; `<html>` carries
+`suppressHydrationWarning` (required by next-themes' own documented
+pattern, since it sets `data-theme` via an inline blocking script before
+React hydrates — this is what avoids a flash of the wrong theme, not
+anything bespoke). Persistence is next-themes' own `localStorage` key —
+device-local, no financial backend state, per standing product
+instruction. `lib/styles/tokens.css`'s dark values (unchanged) live in
+the base `@theme` block; a `:root[data-theme="light"]` override block
+(anticipated by that file's own comment since it was first written)
+redefines the same semantic custom properties. Component code never
+branches on theme — every component already consumed semantic classes
+(`bg-surface`, `text-text-primary`, ...) rather than raw colors, so
+adding light mode required zero component changes, only the token layer.
+`components/theme/ThemeToggle.tsx` is the one user-facing control,
+deliberately placed in `AccountMenu.tsx` (account/profile menu), never in
+the financial dashboard body.
+
+**Navigation.** `components/layout/AppShell.tsx` composes a sticky header
+(brand + `DesktopNav.tsx`, hidden below `md:` + `AccountMenu.tsx`) and a
+fixed `MobileBottomNav.tsx` (hidden at `md:` and above). Conceptual
+production navigation is five items — Home, Money, Assets, Decisions,
+Goals — plus a central "+" quick-add action on mobile only (docs/product/
+PRODUCT_DEFINITION.md §3). Foundation/development routes (Financial
+Position, Rules & Obligations, Receivables, Liabilities) remain real,
+fully working routes — they live in `AccountMenu.tsx`'s "Foundation
+routes" section rather than primary navigation, never deleted.
+
+**Responsive strategy.** Mobile-first Tailwind, no device-specific CSS —
+breakpoints are Tailwind's standard `sm`/`md`/`lg` scale, tested against
+the viewport matrix in
+[docs/reports/P0-E3-S2-home-command-center-production-ui.txt](../reports/P0-E3-S2-home-command-center-production-ui.txt)
+rather than named devices. `components/ui/Button.tsx`/`Input.tsx`/
+`Select.tsx` all guarantee a `min-h-12` (48px) touch target; `Input`/
+`Select` use `text-base` (16px) below `sm:` specifically to prevent
+unwanted iOS Safari zoom-on-focus. `MobileBottomNav.tsx` and
+`AppShell.tsx`'s header both respect `env(safe-area-inset-*)` so the app
+stays usable when installed as a PWA.
+
+**Reduced motion.** A global `@media (prefers-reduced-motion: reduce)`
+rule in `lib/styles/tokens.css` neutralizes animation/transition duration
+app-wide — covers Tailwind's `animate-*` utilities (e.g. the Home loading
+skeleton) and any future transition, in one place, rather than requiring
+every component to remember it individually.
+
+**Icons.** [`lucide-react`](https://lucide.dev) — a lightweight,
+tree-shakeable, line-icon set — is the one icon library, chosen
+specifically to avoid the "generic 3D icons"/"sparkle icons" aesthetic
+[VISUAL_CONSTITUTION.md §6](../design/VISUAL_CONSTITUTION.md#6-explicitly-avoided-aesthetics)
+prohibits.
+
+**Component boundary.** Server components remain the default (data
+fetching, layout); `"use client"` is reserved for genuinely
+browser-specific state — theme (`ThemeToggle`), the account-menu
+open/close interaction (`AccountMenu`), active-link highlighting
+(`DesktopNav`/`MobileBottomNav`, which need `usePathname()`), and form
+interactivity already established in prior phases. No financial
+calculation exists in any client component.

@@ -63,14 +63,14 @@ export default async function MoneyPage() {
         <CashByCurrency totals={currencyTotals} currencies={currenciesByCode} />
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section id="cash-buckets" className="flex flex-col gap-3 scroll-mt-20">
         <h2 className="text-sm font-medium text-text-secondary">Cash Buckets</h2>
         <BucketList buckets={buckets} balances={bucketBalances} currencies={currenciesByCode} />
         <CreateBucketForm currencies={currencies} />
       </section>
 
       {activeBuckets.length > 0 ? (
-        <section className="flex flex-col gap-3">
+        <section id="record-money" className="flex flex-col gap-3 scroll-mt-20">
           <h2 className="text-sm font-medium text-text-secondary">Record Money</h2>
           <RecordMoneyForm
             buckets={activeBuckets}

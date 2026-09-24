@@ -1,17 +1,29 @@
-type BrandLogoVariant = "wordmark" | "mark";
-
-const SOURCES: Record<BrandLogoVariant, string> = {
-  wordmark: "/brand/monatriq-logo-white.svg",
-  mark: "/brand/monatriq-mark-gradient.svg",
-};
+import { cn } from "@/lib/utils/cn";
 
 interface BrandLogoProps {
-  variant?: BrandLogoVariant;
+  /** "mark" (icon only) or "wordmark" (icon + name). Both use the gradient mark, which reads correctly on light and dark surfaces alike — see docs/design/VISUAL_CONSTITUTION.md #2. */
+  variant?: "mark" | "wordmark";
   className?: string;
 }
 
-/** Renders an approved Monatriq brand asset from public/brand. Never redraws the mark. */
+/**
+ * Renders the approved Monatriq gradient mark from public/brand — never
+ * redraws it. Deliberately theme-agnostic: the gradient mark itself
+ * doesn't need a light/dark variant, and "Monatriq" (when shown) uses the
+ * semantic `text-text-primary` token, which already flips per theme — so
+ * no client-side theme branching is needed just to render the logo.
+ */
 export function BrandLogo({ variant = "wordmark", className }: BrandLogoProps) {
-  // eslint-disable-next-line @next/next/no-img-element -- static brand SVG, no optimization needed
-  return <img src={SOURCES[variant]} alt="Monatriq" className={className} />;
+  if (variant === "mark") {
+    // eslint-disable-next-line @next/next/no-img-element -- static brand SVG, no optimization needed
+    return <img src="/brand/monatriq-mark-gradient.svg" alt="Monatriq" className={className} />;
+  }
+
+  return (
+    <span className={cn("inline-flex items-center gap-2", className)}>
+      {/* eslint-disable-next-line @next/next/no-img-element -- static brand SVG, no optimization needed */}
+      <img src="/brand/monatriq-mark-gradient.svg" alt="" className="h-full w-auto" />
+      <span className="font-semibold text-text-primary">Monatriq</span>
+    </span>
+  );
 }

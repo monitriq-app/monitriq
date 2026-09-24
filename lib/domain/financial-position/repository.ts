@@ -7,11 +7,12 @@ import { getGoalSummaries } from "../goals/repository.ts";
 import { getDecisionSummaries } from "../decisions/repository.ts";
 import { getUpcomingObligations } from "../obligations/repository.ts";
 import { getMoneyPeriodSummary } from "../money/repository.ts";
-import { getAssetQuickSaleCoverage } from "../assets/repository.ts";
+import { getAssetQuickSaleCoverage, getAssetValueByType } from "../assets/repository.ts";
 import { getReceivableRecoverabilityCoverage } from "../receivables/repository.ts";
 import { getReportingFxRates } from "../currency/repository.ts";
 import { resolveReportingRates, toRatesMap } from "../currency/reporting-rates.ts";
 import { convertFinancialPositionToReportingCurrency, type ReportingFinancialPosition } from "./aggregate.ts";
+import { buildCapitalDistribution } from "./capital-distribution.ts";
 
 type Client = SupabaseClient<Database>;
 
@@ -84,17 +85,27 @@ export async function getFinancialPositionByCurrency(client: Client): Promise<Na
  * new capability.
  */
 export async function getFinancialPositionSummary(client: Client): Promise<FinancialPositionSummary> {
-  const [profile, nativePositions, goals, decisions, upcomingObligations, thisMonth, assetQuickSaleCoverage, receivableRecoverabilityCoverage] =
-    await Promise.all([
-      getProfile(client),
-      getFinancialPositionByCurrency(client),
-      getGoalSummaries(client),
-      getDecisionSummaries(client),
-      getUpcomingObligations(client),
-      getMoneyPeriodSummary(client),
-      getAssetQuickSaleCoverage(client),
-      getReceivableRecoverabilityCoverage(client),
-    ]);
+  const [
+    profile,
+    nativePositions,
+    goals,
+    decisions,
+    upcomingObligations,
+    thisMonth,
+    assetQuickSaleCoverage,
+    receivableRecoverabilityCoverage,
+    assetValueByType,
+  ] = await Promise.all([
+    getProfile(client),
+    getFinancialPositionByCurrency(client),
+    getGoalSummaries(client),
+    getDecisionSummaries(client),
+    getUpcomingObligations(client),
+    getMoneyPeriodSummary(client),
+    getAssetQuickSaleCoverage(client),
+    getReceivableRecoverabilityCoverage(client),
+    getAssetValueByType(client),
+  ]);
 
   const activeGoals = goals.filter((g) => g.status === "active");
   const focusGoal = goals.find((g) => g.isFocus) ?? null;
@@ -114,6 +125,13 @@ export async function getFinancialPositionSummary(client: Client): Promise<Finan
     );
   }
 
+  const capitalDistribution = buildCapitalDistribution(
+    nativePositions,
+    assetValueByType,
+    reportingCurrency,
+    toRatesMap(reportingRateContext),
+  );
+
   return {
     asOf: new Date().toISOString(),
     reportingCurrency,
@@ -127,5 +145,6 @@ export async function getFinancialPositionSummary(client: Client): Promise<Finan
     activeDecisions,
     assetQuickSaleCoverage,
     receivableRecoverabilityCoverage,
+    capitalDistribution,
   };
 }

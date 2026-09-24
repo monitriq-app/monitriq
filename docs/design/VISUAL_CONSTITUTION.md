@@ -1,7 +1,19 @@
 # Monatriq — Visual Constitution
 
 Status: Canonical. Established P0-E1-S1. Governs future UI implementation
-phases. No screens are built in this phase.
+phases. No screens were built in that phase.
+
+**Implementation status (P0-E3-S2):** Home is the first production screen
+built against this document. Light mode (§4-5) and the theme foundation
+(Light/Dark/System, via `next-themes`) are now implemented —
+`docs/architecture/SYSTEM_ARCHITECTURE.md §9` documents the mechanism;
+this document's own color/typography/surface/motion rules were not
+changed to build it, only wired into a token layer as §10 already
+anticipated. The approved design reference for Home lives at
+`docs/reference/01-home/` — see the P0-E3-S2 report for how it was
+audited against Stitch-vs-Monatriq authority (functional architecture
+wins, then the approved PNG, then the HTML/MD as structural/supporting
+reference only).
 
 ## 1. Identity stance
 

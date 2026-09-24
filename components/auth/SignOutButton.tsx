@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 
-export function SignOutButton() {
+export function SignOutButton({ className }: { className?: string }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
@@ -22,7 +22,7 @@ export function SignOutButton() {
   }
 
   return (
-    <Button variant="secondary" onClick={handleSignOut} disabled={pending}>
+    <Button variant="secondary" onClick={handleSignOut} disabled={pending} className={className}>
       {pending ? "Signing out…" : "Sign out"}
     </Button>
   );

@@ -1,0 +1,1451 @@
+================================================================================
+P0-E3-S2 — HOME DESIGN IMPLEMENTATION GAP AUDIT
+================================================================================
+Audit only. No source file was modified to produce this report.
+
+--------------------------------------------------------------------------------
+1. AUDIT STATUS
+--------------------------------------------------------------------------------
+Complete. Diagnosis only, as instructed — no code, CSS, tests, tokens, or
+database objects were changed to produce this report. This audit follows
+directly after the "STRICT REFERENCE REPLICATION PASS" (ADDENDUM 7 of
+docs/reports/P0-E3-S2-home-command-center-production-ui.txt), so the
+"current production" described below reflects that pass's actual output,
+not an earlier round.
+
+SCREENSHOT LIMITATION (stated up front, per this audit's own instruction):
+this environment has no browser-rendering capability. Nothing below is a
+comparison of a freshly rendered production screenshot against the
+reference screenshot. Every finding is a comparison between (a) the
+approved reference screenshot's pixels/composition as visually inspected,
+(b) the reference's own markup in code.html (exact Tailwind classes,
+padding, sizes, colors), and (c) the current production source files read
+in full for this audit — reasoned at the CSS/component level, not
+observed in a live browser. Where a finding depends on visual judgment
+(e.g. "looks roomier"), that judgment is against the reference screenshot
+pixels and the current source's literal Tailwind spacing scale, not a
+rendered comparison of the two.
+
+--------------------------------------------------------------------------------
+2. SOURCES INSPECTED
+--------------------------------------------------------------------------------
+Reference (read in full for this audit):
+  docs/reference/01-home/screen.png   (viewed directly, primary authority)
+  docs/reference/01-home/code.html    (read in full, 469 lines)
+  docs/reference/01-home/DESIGN.md    (read in full, 251 lines)
+
+Current production Home (read in full for this audit):
+  app/(app)/home/page.tsx
+  app/(app)/home/loading.tsx
+  components/home/GreetingHeader.tsx
+  components/home/PositionSection.tsx
+  components/home/CapitalDistributionSection.tsx
+  components/home/LiquidityNote.tsx
+  components/home/YourMovesSection.tsx
+  components/home/GoalsSection.tsx
+  components/home/ThisMonthSection.tsx
+  components/home/RecentActivityPreview.tsx
+  components/home/NewUserSetup.tsx
+  components/obligations/UpcomingObligationsList.tsx (shared with /rules)
+  components/layout/AppShell.tsx
+  components/layout/PageContainer.tsx
+  components/layout/MobileBottomNav.tsx
+  components/layout/DesktopNav.tsx
+  components/layout/AccountMenu.tsx
+  components/theme/ThemeToggle.tsx
+  components/theme/ThemeProvider.tsx (referenced, not re-read — unchanged since original theme-foundation work)
+  components/brand/BrandLogo.tsx
+  lib/styles/tokens.css
+
+Documented history (read for context, not re-verified against the live
+app): docs/reports/P0-E3-S2-home-command-center-production-ui.txt,
+including all 7 addenda (onboarding fix; mobile visual QA round 1;
+environment separation; populated-Home QA round 1; visual realignment to
+the approved reference; final mobile density + scale realignment; strict
+reference replication pass).
+
+Git status at time of audit: see section 27.
+
+--------------------------------------------------------------------------------
+3. APPROVED REFERENCE ANATOMY
+--------------------------------------------------------------------------------
+Top to bottom, as composed in screen.png / code.html:
+  1. Fixed header (h-16/64px): brand icon-badge + "CAPITAL COMPASS" eyebrow
+     + "Home" title, left; notification bell + avatar circle, right.
+  2. Greeting/welcome banner card: live-dot + brand eyebrow, "Welcome,
+     Victor" headline, subtitle + duplicate brand pill, avatar w/ status
+     dot, decorative ambient glow.
+  3. "CURRENT POSITION" eyebrow row + right-aligned "Tracked Cash" link.
+  4. Liquid Position card (dominant, p-16px): label + status chip, 32px
+     bold figure + currency-code suffix, description + reserve-count
+     pill, decorative ambient glow.
+  5-6. Net Worth / Safe to Deploy: two p-16px cards, grid-cols-2, 18px
+     figures, icon/dot, one-line caption.
+  7-8. "Where Your Capital Lives" card: title + editorial subtitle +
+     illiquid-percentage badge, inside one card.
+  9. Segmented allocation bar: 12px thick, gapped segments, rounded ends,
+     colored by category IDENTITY (cash always the accent color).
+  10. Category rows (no dividers, py-1, space-y-8px): icon(32px) + title
+      + descriptive subline, left; amount + percentage stacked, right.
+  11. "Your 3 Moves" header: title + subtitle + "PRIORITY" label.
+  12. Move cards (p-16px): numbered badge, title, status chip, inner
+      highlighted stat box w/ chevron-button, bottom icon+text + action.
+  13. "Target Horizon: June 2027 · 32 Mo Left" header + subtitle + "+".
+  14-15. Goal cards (p-16px): icon, title, %/status chip, 8px progress
+      bar, Current/Target line.
+  16-18. "This Month" card: title+subtitle, Net badge, 2-stat highlighted
+      box (Total In/Total Out only), 4-week inflow/outflow bar chart +
+      legend.
+  19-20. "Recent Activity": header + "View all activity" link outside a
+      divided card; rows p-16px, 40px icon, title+subline, amount +
+      settlement-status caption.
+  21. Footer bar: "Last updated by you today, 2:15 PM" + "Log Update".
+  22-23. Bottom nav: h-16/64px, 5 items + central raised (+) button
+      (48px, -20px raise, 26px icon).
+
+--------------------------------------------------------------------------------
+4. CURRENT PRODUCTION ANATOMY
+--------------------------------------------------------------------------------
+Top to bottom, as currently composed in app/(app)/home/page.tsx and its
+components (post-ADDENDUM-7):
+  1. Fixed header (h-14 mobile/h-16 desktop): BrandLogo wordmark, left;
+     DesktopNav (desktop only) + AccountMenu, right. No page title, no
+     header avatar, no notification control.
+  2. GreetingHeader card: live-dot + "MONATRIQ" eyebrow, dynamic
+     greeting headline, subtitle, avatar w/ initial + presence dot. No
+     ambient glow, no duplicate brand pill.
+  3. "Current Position" eyebrow row + real total-reserve-count on the
+     right (no icon, muted color, not a link).
+  4. Liquid Position card: label (no chip), 32px bold figure (code
+     embedded via "CODE amount"), description + reserve-count pill. No
+     ambient glow.
+  5-6. Net Worth / Safe to Deploy: two p-12px cards, grid-cols-2, 18px
+     figures, icon/dot, one-line caption.
+  7-8. CapitalDistributionSection: title + illiquid-percentage badge
+     inside one card (no editorial subtitle).
+  9. DistributionBar: 12px thick, gapped, rounded ends, colored by
+     ARRAY-SORT-POSITION (largest category first), not category identity.
+  10. CategoryRow list (WITH dividers, py-8px): icon(32px) + title only
+      (no subline), left; amount + percentage stacked, right.
+  11. "Your Moves" header: title only.
+  12. Move cards (p-12px): decision-type-icon badge, title, status chip,
+      inner highlighted stat box (no chevron button), bottom text (no
+      icon) + Review link.
+  13. "Goals" header: title + real "+" link to /goals.
+  14-15. Goal cards (p-12px): icon, title, %/chips, 8px progress bar,
+      Current/Target line, target-date + real required-pace line.
+  16-18. ThisMonthSection: title+period-dates, Net badge, 3-stat
+      highlighted box (Cash In/Cash Out/Net), secondary Earned/Expense
+      row, transfers line. No chart (intentionally).
+  19-20. RecentActivityPreview: header + "View all activity" link
+      outside a divided card (correctly matching reference's own
+      divided-list treatment here); rows p-6px/10px, 36px icon,
+      description-based title+subline, amount. No settlement caption.
+  21. No footer bar.
+  22-23. MobileBottomNav: h-16/64px, 5 items + central raised (+) button
+      (48px, -12px raise, 23px icon).
+
+--------------------------------------------------------------------------------
+5. SECTION-BY-SECTION COMPARISON TABLE
+--------------------------------------------------------------------------------
+
+[1] TOP APP HEADER
+
+Reference:
+Fixed h-16 (64px). Left: w-9 h-9 rounded-xl icon badge (explore glyph) +
+two-line text block ("CAPITAL COMPASS" label-sm eyebrow / "Home"
+headline-sm title). Right: w-11 h-11 notification-bell button, w-8 h-8
+primary-colored avatar circle with person glyph.
+
+Current:
+AppShell.tsx: sticky h-14 mobile / h-16 desktop. Left: BrandLogo
+wordmark (gradient mark + "Monatriq" text, single line, no eyebrow, no
+"Home" page-title). Right (desktop only): DesktopNav; AccountMenu
+(h-12 w-12 button, User glyph, opens a dropdown with theme toggle +
+foundation routes + sign out). No notification control. No header-level
+avatar (an avatar exists, but only inside the GreetingHeader card below
+the header, not in the header itself).
+
+Status: PARTIAL
+
+Visual difference:
+- Height: 56px mobile vs reference's 64px.
+- Left side: single wordmark line vs reference's icon-badge + two-line
+  eyebrow/title block — no per-page "Home" title exists anywhere in the
+  header.
+- Right side: reference's bell+avatar pair vs current's nav+account-menu
+  button — structurally different controls entirely, not just resized.
+
+Data support:
+- Page title "Home": SUPPORTED NOW (a static string per route).
+- Notification bell: NOT SUPPORTED — no notification/alert domain or
+  feature exists anywhere in Monatriq's backend.
+- Header avatar: SUPPORTED NOW (same real initial already used in
+  GreetingHeader).
+
+Can replicate now:
+- Page title: YES.
+- Notification bell: NO — NEEDS DOMAIN/PRODUCT CAPABILITY (a real
+  notification system). Per this audit's own instruction, do not
+  recommend a decorative/non-functional bell.
+- Header avatar: YES WITH REAL-DATA ADAPTATION (reuse the same initial
+  logic already in GreetingHeader; would need a decision on whether to
+  show it in both places or only one, since the reference's greeting
+  banner also has its own avatar).
+
+Next action: add a real "Home" page-title element to the header (static,
+zero data risk); leave the notification control absent, or explicitly
+mark its slot INTENTIONALLY UNSUPPORTED in any future visual pass rather
+than filling it with a non-functional icon.
+
+--------------------------------------------------------------------------------
+
+[2] WELCOME/PROFILE BLOCK
+
+Reference:
+Contained card (bg-surface-container-low, p-16px), decorative ambient
+glow blob (top-right, blurred, primary/5% opacity). Live-dot + "Personal
+Capital Compass" eyebrow. "Welcome, Victor" headline-md (22px/600).
+Subtitle line + a second small pill repeating "Personal Capital Compass".
+Right: avatar circle (w-11 h-11 outer ring, w-9 h-9 inner, initial glyph)
+with a small bottom-right presence dot.
+
+Current:
+GreetingHeader.tsx: contained card (bg-surface-raised, p-16px). Live-dot
++ "MONATRIQ" eyebrow (11px/600 uppercase). Dynamic greeting headline
+("Good {morning/afternoon/evening}[, name]"), 22px/600 — exact scale
+match. Subtitle line ("Here's where you stand today."). Right: avatar
+circle (h-11 w-11 outer, h-9 w-9 inner, real first-initial) with a small
+presence dot. No ambient glow. No duplicate eyebrow-text pill next to the
+subtitle.
+
+Status: CLOSE
+
+Visual difference:
+- No decorative glow blob (purely cosmetic, CSS-only).
+- No second brand-name pill (deliberately dropped in ADDENDUM 7 — see
+  reasoning there: a real second instance of the brand name in the same
+  card has no data behind it and would just triple the wordmark on one
+  screen).
+- Greeting copy differs ("Good afternoon, X" vs "Welcome, X") — both are
+  real, dynamic per-user text; this was an early, already-settled
+  decision, not a new gap.
+- Padding, card shape, avatar composition, dot placement: all match.
+
+Data support: SUPPORTED NOW (every element is either static brand text
+or the authenticated user's own real name).
+
+Can replicate now: YES (the glow blob is pure decoration; the dropped
+pill has no real content to fill it with unless the second eyebrow
+instance is simply accepted as literal brand-name repetition).
+
+Next action: add the ambient glow blob (a `blur-2xl` radial gradient
+div, absolutely positioned, `pointer-events-none`) if closer visual
+fidelity is wanted — zero data risk, matches the same technique already
+used nowhere else in current Home. Leave the duplicate pill omitted
+unless product explicitly wants the brand name shown a third time on one
+screen.
+
+--------------------------------------------------------------------------------
+
+[3] CURRENT POSITION HEADING/CONTEXT
+
+Reference:
+Eyebrow "CURRENT POSITION" (label-sm, uppercase, wide tracking), left.
+Right: "Tracked Cash" text + a small edit-note icon, styled as an
+accent-colored (primary) tappable link.
+
+Current:
+PositionSection.tsx's CurrentPositionHeader: "Current Position" eyebrow
+(11px/600 uppercase), left. Right: real total reserve count ("N
+reserves"), same neutral muted color as the left label, no icon, not a
+link.
+
+Status: CLOSE
+
+Visual difference:
+- Right-side item is neutral-colored text, not an accent-colored link —
+  deliberate: a fact ("N reserves") styled as if it were an action would
+  misrepresent it. No icon present on the right side.
+- Otherwise composition (eyebrow left / small item right, same row)
+  matches exactly.
+
+Data support: SUPPORTED NOW (reserve count is a real, already-computed
+sum). The reference's specific right-side AFFORDANCE — a shortcut into
+editing the cash position — has no dedicated Monatriq deep-link from
+Home today, but /money#record-money already exists as a real
+destination.
+
+Can replicate now: YES WITH REAL-DATA ADAPTATION — a small icon +
+"Add cash" or "Edit" link to /money#record-money could occupy that exact
+visual slot with a real destination, alongside (or instead of) the
+reserve-count fact, without inventing anything.
+
+Next action: decide whether the right-side slot should carry the fact
+(current choice) or a real action link; if the latter is preferred for
+closer fidelity, wire it to /money#record-money with a small icon.
+
+--------------------------------------------------------------------------------
+
+[4] LIQUID POSITION CARD
+
+Reference:
+p-16px, decorative top-right glow. Row 1: label (left) + "Immediate Cash
+Available" status chip (right, pulsing dot + accent pill). Figure:
+32px/700 tracking-tight + a small "NGN" code suffix. Bottom row: wallet
+icon + description (left), reserve-count pill (right).
+
+Current:
+PositionSection.tsx: p-16px (bg-surface-raised). Row 1: label only, no
+chip. Figure: 32px/700 tracking-tight — exact scale match (raised from
+24px specifically to match the reference in ADDENDUM 7); currency code
+is embedded as a prefix inside the figure itself via
+`formatCurrencyAmount` ("NGN 12,000") rather than shown as a separate
+suffix — same information, different position, driven by the trusted
+currency-formatting layer, not a visual choice. Bottom row: accent
+Wallet icon + description (left), reserve-count pill (right) — matches
+composition closely. No decorative glow.
+
+Status: CLOSE
+
+Visual difference:
+- No status chip (see Data support below).
+- No decorative glow.
+- Currency code position (prefix vs suffix) — a byproduct of the
+  currency-formatting architecture, not a spacing/layout choice.
+- Padding, figure scale, bottom-row composition: all match.
+
+Data support: status chip — NOT SUPPORTED (Monatriq's Financial Position
+domain has no "immediate availability" flag for liquid cash as a
+whole — it's either counted as liquid cash or it isn't; there's no
+partial-availability concept). Glow — decorative, no data needed.
+
+Can replicate now: chip — NO — NEEDS DOMAIN/PRODUCT CAPABILITY (would
+require inventing a concept Financial Position doesn't compute). Glow —
+YES.
+
+Next action: add the ambient glow if desired (cosmetic only); leave the
+status chip absent rather than fabricate one.
+
+--------------------------------------------------------------------------------
+
+[5] NET WORTH CARD
+
+Reference:
+p-16px (same padding as Liquid Position — NOT reduced for secondary
+cards). Row 1: label (left) + Wallet icon (18px, muted), right.
+Figure: 18px/600 (headline-sm). Caption: "Tracked assets minus debt"
+(12px, muted).
+
+Current:
+PositionSection.tsx: p-12px — smaller than the reference's 16px. Row 1:
+label + Wallet icon (14px, muted) — same composition, smaller icon.
+Figure: 18px/600 (text-lg font-semibold) — exact scale match. Caption:
+"Tracked assets minus debt" (12px, muted) — exact text and scale match.
+
+Status: CLOSE
+
+Visual difference:
+- Padding: 12px vs reference's 16px. This is the single most consistent
+  gap in this audit — see section 17 (Density/spacing gap) for the full
+  pattern across almost every "secondary" card in Home.
+- Icon size: 14px vs reference's 18px — minor.
+- Figure scale, caption text, card structure: all match.
+
+Data support: SUPPORTED NOW (Net Worth is already read verbatim from
+Financial Position's calculated/native result).
+
+Can replicate now: YES — this is a pure padding/icon-size adjustment,
+no data change required.
+
+Next action: raise this card's padding to p-4 (16px) to match Liquid
+Position and the reference exactly; bump the icon to ~18px.
+
+--------------------------------------------------------------------------------
+
+[6] SAFE TO DEPLOY CARD
+
+Reference:
+p-16px. Row 1: label (left) + small amber dot (right). Figure: 18px/600,
+amber/secondary color. Caption: "Capital available after protected
+liquidity buffer" (12px, muted).
+
+Current:
+p-12px. Row 1: label + small amber dot (`bg-attention`, matching
+reference's secondary/amber intent almost exactly) — composition
+matches. Figure: 18px/600, `text-attention` (amber) — matches color
+intent and scale exactly. Caption: "Capital available after protected
+buffer" (12px, muted) — near-identical text, exact scale match.
+
+Status: CLOSE
+
+Visual difference: same 12px-vs-16px padding gap as Net Worth (see
+section 17). Otherwise a very close match — color, scale, and dot
+treatment all line up.
+
+Data support: SUPPORTED NOW (Safe to Deploy is read verbatim from
+Rules' own safe_to_deploy_by_currency()).
+
+Can replicate now: YES — padding adjustment only.
+
+Next action: raise padding to p-4 (16px) to match Net Worth/Liquid
+Position/reference.
+
+--------------------------------------------------------------------------------
+
+[7-8] WHERE YOUR CAPITAL LIVES — HEADER, SUBTITLE, BADGE
+
+Reference:
+Title inside the card (headline-sm, 18px/600). Editorial subtitle
+directly below it: "High Net Worth, Low Liquidity" (body-sm, amber,
+font-medium). Top-right badge: "99.2% in Illiquid Assets" (amber pill).
+
+Current:
+CapitalDistributionSection.tsx: title inside the card (text-lg, 18px/600)
+— exact scale match, correctly moved inside the card in ADDENDUM 7 to
+match the reference's own composition (this section IS one wrapping
+card in both). No editorial subtitle. Top-right badge: "{N}% in illiquid
+assets" (amber pill, bg-attention/15 text-attention) — same position,
+same color intent, phrasing in sentence case rather than reference's
+Title Case.
+
+Status: CLOSE
+
+Visual difference:
+- Missing the editorial subtitle line (see Data support).
+- Badge phrasing capitalization differs slightly ("in illiquid assets"
+  vs "in Illiquid Assets") — a copy-style detail, not a layout one.
+- Title placement/scale, badge position/color: all match.
+
+Data support: subtitle — NOT SUPPORTED. "High Net Worth, Low Liquidity"
+is a qualitative threshold judgment ("high"/"low" relative to what?)
+that Financial Position has never computed and has no configured
+threshold for. The badge percentage itself IS real (a presentational sum
+of already-computed per-category percentages), which is why it's already
+implemented; the subtitle is a categorical judgment layered on top of
+that number, which is a different, unsupported thing.
+
+Can replicate now: subtitle — NO — NEEDS DOMAIN/PRODUCT CAPABILITY (a
+product decision on liquidity-threshold labels, e.g. what percentage
+counts as "high"/"low", would be new financial-judgment logic, not a
+visual change). Badge phrasing — YES (trivial copy change).
+
+Next action: leave the subtitle out; optionally Title-Case the existing
+badge for a closer literal match.
+
+--------------------------------------------------------------------------------
+
+[9] CAPITAL DISTRIBUTION SUMMARY/CONTEXT (locked vs. liquid line)
+
+Reference:
+Below the bar: "₦108.0M Locked in Assets (99.2%)" (left) / "₦840K
+Liquid Cash (0.8%)" (right, accent) — compact/abbreviated notation.
+
+Current:
+LiquiditySummaryLine: "{full amount} locked (99.2%)" (left, muted) /
+"{full amount} liquid (0.8%)" (right, accent) — full-precision notation
+("NGN 108,000,000" style, not "108.0M").
+
+Status: CLOSE
+
+Visual difference: number notation is full-precision, not abbreviated —
+the string is visibly longer than the reference's compact form, though
+the layout (two-sided row, same relative position) matches.
+
+Data support: SUPPORTED NOW — this line is already implemented and
+already real (a presentational sum of already-computed per-category
+amounts/percentages, same pattern as the reserve-count sum).
+
+Can replicate now: YES WITH REAL-DATA ADAPTATION — abbreviating the
+number ("108.0M"/"840K") would require a new compact-number formatter.
+This was deliberately deferred in an earlier round (P0-E3-S2 QA round 3)
+as unnecessary complexity for the trusted currency-formatting layer; the
+underlying value and percentage are already correct and real, this is
+purely a display-notation choice.
+
+Next action: optional — add a presentation-only compact-number formatter
+scoped to this one summary line if closer literal fidelity is wanted; not
+required for correctness.
+
+--------------------------------------------------------------------------------
+
+[10] SEGMENTED ALLOCATION BAR
+
+Reference:
+h-3 (12px), p-0.5 padding, gap-0.5 between segments, rounded outer ends.
+Colors assigned by CATEGORY IDENTITY: vehicles/assets = muted grey,
+real estate = cyan/tertiary, receivables = amber/secondary, cash =
+teal/primary — cash is ALWAYS the accent color regardless of its
+position/size in the list.
+
+Current:
+DistributionBar: h-3 (12px), p-0.5, gap-0.5, rounded ends — structural
+treatment (thickness, gaps, rounding) matches exactly. Colors are
+assigned by ARRAY INDEX after the categories are sorted largest-to-
+smallest (`BAR_COLORS[i % BAR_COLORS.length]`), not by category identity
+— cash happens to often land in a particular color only because it's
+often the smallest category for typical users, not because the code
+looks at `category.key === "cash"` when picking bar-segment color (it
+does look at category.key for the ROW's icon/text color, just not for
+the BAR's segment color).
+
+Status: PARTIAL
+
+Visual difference: thickness/gaps/rounding are an exact structural
+match; the color-assignment MECHANISM differs from the reference in a
+way that would visibly diverge for any user whose cash isn't the
+smallest category (e.g. a user with mostly cash and one small asset
+would NOT see cash rendered as the accent-teal segment, unlike the
+reference's guaranteed behavior).
+
+Data support: SUPPORTED NOW — `category.key` is already available at
+the point the bar is rendered; identity-based coloring requires zero new
+data, only a different color-lookup function (the same kind already used
+for `CategoryIcon` and the row's accent styling for the "cash" key).
+
+Can replicate now: YES — this is a pure code-level fix (map color by
+`category.key`, e.g. cash=accent-primary, receivables=attention,
+asset-type categories=focus/text-muted by some stable rule), not a data
+change.
+
+Next action: replace the sort-position color lookup with an
+identity-based one, consistent with how CategoryRow already colors the
+"cash" row specially.
+
+--------------------------------------------------------------------------------
+
+[11] CAPITAL CATEGORY ROWS
+
+Reference:
+No dividers between rows — rows are separated by vertical spacing only
+(space-y-2, 8px), inside one card. Icon: 32px (w-8 h-8), rounded-lg.
+Title: 16px/600. Subline: 12px, descriptive ("3 registered motor units",
+"Residential allocation", etc.). Amount: 16px/600, right, stacked above
+percentage (11px). Cash row gets accent icon/label/amount treatment.
+
+Current:
+CategoryRow: rows separated by a visible `divide-y divide-border` line
+between each one — a real structural difference from the reference,
+which has NO dividers in this specific list (code.html's Capital
+Distribution rows use plain `flex items-center justify-between py-1`
+inside a `space-y-space-sm` container, never a divide-y class — compare
+Recent Activity's list, which DOES use `divide-y` in the reference, and
+which current production correctly also uses `divide-y` for). Icon: 32px
+(h-8 w-8), rounded-lg — exact size match. Title: 16px/600 (text-base
+font-semibold) — exact scale match. No subline (see Data support).
+Amount: 16px/600, right, stacked above percentage (11px) — exact
+structural and scale match. Cash row gets accent treatment (icon
+background + label + amount all in accent color) — matches.
+
+Status: PARTIAL
+
+Visual difference:
+- Dividers present where the reference has none — this reads as a
+  denser/more "listy" treatment than the reference's airier, spacing-
+  only row separation.
+- No descriptive subline under each category name (see Data support).
+- Icon size, title/amount/percentage scale and position, cash-row accent
+  treatment: all match.
+
+Data support: dividers — this is a pure styling choice, not a data
+question (SUPPORTED NOW either way). Subline — NOT SUPPORTED:
+`CapitalDistributionCategory` (lib/domain/financial-position/
+capital-distribution.ts) carries only `key`, `amount`, and `percentage`
+— no per-category count or description field exists anywhere in the
+domain layer to source a caption like "3 registered motor units" from.
+
+Can replicate now: divider removal — YES (drop `divide-y divide-border`,
+rely on the existing `py-2` row spacing instead, matching the reference's
+own space-y-only treatment). Subline — NO — NEEDS DOMAIN/PRODUCT
+CAPABILITY (would require Assets to expose a per-type item count or
+description, which it doesn't today).
+
+Next action: remove the divider between Capital Distribution rows to
+match the reference's un-divided list treatment; leave the subline out.
+
+--------------------------------------------------------------------------------
+
+[12] YOUR 3 MOVES / MOVES SECTION HEADER
+
+Reference:
+"Your 3 Moves" (headline-sm, count baked into the title) + subtitle
+"Actions to unlock capital & fortify liquidity" (body-sm), left.
+"PRIORITY" label (accent, uppercase, label-sm), right.
+
+Current:
+page.tsx: "Your Moves" (text-lg, 18px/600) only — no count in the title,
+no subtitle, no "Priority" label.
+
+Status: PARTIAL
+
+Visual difference: reference has a two-line header block (title +
+subtitle) plus a right-side label; current has a single-line title only.
+
+Data support: a count IS derivable (`focusGoal ? 1 : 0` plus
+`activeDecisions.length`) — SUPPORTED NOW for a title like "Your Moves
+(3)". The subtitle "Actions to unlock capital & fortify liquidity" is
+editorial framing that implies a recommended course of action — this is
+exactly the kind of advisory language PRODUCT_DEFINITION.md #4 and an
+existing automated test ("Active Decisions carry no rank/score/winner
+field") guard against; Monatriq's Decisions/Goals domains deliberately
+never characterize what a Decision or Goal is "for" in this way — NOT
+SUPPORTED, and not a data gap so much as a product-boundary one. The
+"PRIORITY" label is likewise NOT SUPPORTED — Decisions carry no priority
+field, and the existing test explicitly guards against inventing one.
+
+Can replicate now: count in the title — YES. Subtitle and "Priority"
+label — NO — this is INTENTIONALLY UNSUPPORTED by product design, not a
+missing capability that could be added; reproducing either would
+contradict an existing, deliberate, tested product boundary.
+
+Next action: optionally add the real item count to the section title
+("Your Moves (2)"); leave the subtitle and "Priority" label out
+permanently, not just for now.
+
+--------------------------------------------------------------------------------
+
+[13] INDIVIDUAL MOVE CARDS
+
+Reference:
+p-16px, space-y-8px internal rhythm. Leading numbered badge (w-6 h-6
+rounded-full, "1"/"2"/"3"). Title (16px/600) + status chip. Inner
+highlighted box (p-8px, rounded-lg, bg-surface-container): label + bold
+value, left; w-8 h-8 rounded-full chevron-right button, right. Bottom
+row: small colored icon + context text (left), underlined action link
+(right).
+
+Current:
+YourMovesSection.tsx: p-12px — smaller than reference's 16px. Leading
+badge (h-6 w-6 rounded-full) uses a decision-TYPE icon rather than a
+number (see rationale below) — same size, different content. Title
+(text-base, 16px/600) + status chip — matches scale. Inner highlighted
+box (p-2.5≈10px, rounded-lg, bg-surface-strong): label + bold value,
+left — matches structurally; NO chevron-right button on the right side
+of the box. Bottom row: context text only (linked asset/liability name
+when one exists) — no icon — + underlined Review link, right.
+
+Status: PARTIAL
+
+Visual difference:
+- Padding: 12px vs reference's 16px (part of the same systemic gap as
+  Net Worth/Safe to Deploy — see section 17).
+- Inner box's chevron-button affordance is entirely absent.
+- Bottom-row's small leading icon is entirely absent (text-only).
+- Leading badge content differs (icon vs number) — deliberate, see
+  below.
+- Card shape, title/chip placement, inner-box label/value scale, bottom-
+  row action placement: all match.
+
+Data support: the numbered badge is NOT reproduced on purpose, not
+because numbering itself is unsupported (array position is trivially
+knowable) but because a "1/2/3" badge visually reads as a priority
+ranking, and an existing automated test ("Active Decisions carry no
+rank/score/winner field") explicitly guards against Decisions carrying
+any such concept — using array position AS a displayed rank would
+contradict that guarantee even though the number itself requires no new
+data. The chevron button and bottom-row icon are both purely decorative/
+navigational — SUPPORTED NOW (no data needed at all).
+
+Can replicate now: chevron button — YES (decorative, though its precise
+purpose — is it a second way to reach the same Review link, or a
+separate action? — should be decided rather than added purely for
+visual parity). Bottom-row icon — YES (a generic "linked" icon when a
+name is shown). Padding — YES. Numbered badge — NO, by product-boundary
+choice, not a capability gap.
+
+Next action: raise card padding to p-4 (16px); add a small leading icon
+to the bottom context row when a linked asset/liability name is shown;
+decide whether an inner-box chevron affordance is wanted (if so, it
+should link to the same destination as "Review", not imply a second
+distinct action that doesn't exist).
+
+--------------------------------------------------------------------------------
+
+[14] TARGET HORIZON / GOALS SECTION HEADER
+
+Reference:
+"Target Horizon: June 2027" (headline-sm) + "32 Mo Left" pill (accent),
++ subtitle "Financial Freedom Journey Milestones" (body-sm). Right: "+"
+button (w-8 h-8 rounded-full, bg-surface-container-high).
+
+Current:
+page.tsx: "Goals" (text-lg, 18px/600) only, no subtitle, no cross-goal
+horizon/months-left headline. Right: "+" button (h-8 w-8 rounded-full,
+bg-surface-strong) linking to /goals.
+
+Status: PARTIAL
+
+Visual difference: the "+" button matches the reference's size, shape,
+and position closely (MATCHED-level for that one element specifically).
+The cross-goal "Target Horizon"/"32 Mo Left"/subtitle block is entirely
+absent — a materially different header composition (reference's header
+is two lines of real editorial framing plus a countdown; current's is
+one plain title).
+
+Data support: NOT SUPPORTED. There is no canonical "financial freedom
+date" or single cross-goal target horizon anywhere in Goals' domain
+model — `GoalSummary.targetDate` and `requiredPacePeriodsRemaining` are
+PER-GOAL fields; Goals has never computed (and has no configured input
+for) a single aggregate date across a user's entire goal set. Inventing
+one would require either a new product concept (e.g. a user-configured
+"financial freedom date") or an arbitrary aggregation rule (e.g. "the
+furthest target date among active goals") that no one has decided is
+meaningful.
+
+Can replicate now: NO — NEEDS DOMAIN/PRODUCT CAPABILITY (a real product
+decision about what a cross-goal "horizon" should mean, followed by
+Goals exposing it, would be required before this could be shown
+truthfully).
+
+Next action: leave the cross-goal horizon out; the "+" button is already
+a close match and needs no change.
+
+--------------------------------------------------------------------------------
+
+[15] GOAL CARDS
+
+Reference:
+p-16px, space-y-2 (8px). Row 1: colored icon (20px, varies per goal,
+decorative) + title (16px/600), left; funded-% (accent, 11px) OR a
+special status chip ("Critical Buffer", "Being defined"), right.
+Progress bar: h-2 (8px). Row 2: "Current: **bold**" / "Target: plain"
+(11px).
+
+Current:
+GoalsSection.tsx: p-12px — smaller than reference's 16px. Row 1: icon
+(14px, derived from real `measurementType`, uniformly accent-colored,
+no per-goal color variety) + title (text-base, 16px/600) — scale
+matches, color variety doesn't. Real Protected/Focus chips + a real
+funded-% readout (blank at exactly 0%, per the established honest-zero-
+state rule) — matches the %-readout concept exactly; the reference's
+alternate special-status chips ("Critical Buffer"/"Being defined") are
+not reproduced. Progress bar: h-2 (8px) — exact scale match (raised from
+6px specifically in ADDENDUM 7). Row 2: "Current: **bold**" / "Target:
+plain" (11px) — exact format and scale match; a zero-progress goal shows
+the honest "Not funded yet"/"No repayment yet" label in place of
+"Current:" (an established, previously-negotiated requirement, still
+correctly in place — re-verified in this audit).
+
+Status: CLOSE
+
+Visual difference:
+- Padding: 12px vs reference's 16px (same systemic gap, section 17).
+- Icon color is uniformly accent rather than the reference's varied
+  per-goal coloring (purely decorative in the reference, no real
+  identity backs the color choice there either).
+- Reference's special-state chips ("Critical Buffer"/"Being defined")
+  are not reproduced — Goals has no urgency/definition-stage concept.
+- Progress bar scale, Current/Target line format, honest zero-state
+  text: all match.
+
+Data support: padding/icon-color — pure styling, SUPPORTED either way.
+Special-status chips — NOT SUPPORTED (no such lifecycle concept exists
+on GoalSummary; `isProtected`/`isFocus` are the only real per-goal flags
+beyond measurement-type-specific fields).
+
+Can replicate now: padding — YES. Icon color variety — YES WITH
+ADAPTATION (could vary by `measurementType` deterministically, still
+decorative, still real in the sense of being derived from a real field,
+not randomly assigned). Special-status chips — NO — NEEDS DOMAIN/PRODUCT
+CAPABILITY.
+
+Next action: raise card padding to p-4 (16px); optionally vary icon
+color by measurement type for closer visual parity.
+
+--------------------------------------------------------------------------------
+
+[16-17] THIS MONTH CARD / INFLOW-OUTFLOW SUMMARY
+
+Reference:
+p-16px, space-y-16px. Header: title (18px/600) + subtitle "Cash Inflows
+vs Outflows" (body-sm), left; Net badge (accent pill, trending icon),
+right. Stats: grid-cols-2 (Total In / Total Out ONLY), inside a
+highlighted box (bg-surface-container, p-8px), 18px/600 figures.
+
+Current:
+ThisMonthSection.tsx: p-12px. Header: title (text-lg, 18px/600) + real
+period-date-range subtitle (in place of the reference's generic "Cash
+Inflows vs Outflows" line — a real-data substitution, not a copy),
+left; Net badge (accent-or-danger pill, trending icon), right — matches
+concept and scale closely. Stats: grid-cols-3 (Cash In / Cash Out / Net
+— THREE metrics, not the reference's two), inside a highlighted box
+(bg-surface-strong, p-2.5≈10px), text-lg (18px/600) figures — figure
+scale matches exactly; the THIRD metric (Net) and the box's use of
+3-columns instead of 2 is a deliberate, previously and repeatedly
+negotiated difference (P0-E3-S2 QA rounds 2-4 explicitly required Cash
+In/Cash Out/Net to all be primary-tier, not just In/Out), not an
+oversight. A secondary Earned Income/Expense row and a transfers line
+follow beneath the box — neither exists in the reference at all; they
+are Monatriq-specific additions preserving that same negotiated
+hierarchy, not a copy of anything reference has.
+
+Status: PARTIAL
+
+Visual difference:
+- Padding: 12px vs reference's 16px (section 17).
+- Highlighted-box grid is 3 columns vs reference's 2 — a real, but
+  deliberate and previously negotiated, structural difference (adding a
+  real Net figure the reference chose not to show separately).
+- Subtitle text differs (real period dates vs generic description) —
+  arguably a real-data improvement over the reference's generic label,
+  not a gap.
+- Header/badge composition, figure scale inside the box: all match.
+
+Data support: everything currently shown is SUPPORTED NOW — read
+verbatim from `MoneyPeriodSummary`. Nothing here is blocked by a missing
+capability; the 3-vs-2-column difference is a product decision already
+made, not a data gap.
+
+Can replicate now: YES for padding. The 3-column structure is not a
+"gap" to close without re-opening a previously settled product decision
+(whether Net should be its own primary-tier metric) — flagged for
+awareness, not recommended for change here.
+
+Next action: raise padding to p-4 (16px); leave the 3-metric primary box
+as-is unless the negotiated hierarchy decision is deliberately revisited.
+
+--------------------------------------------------------------------------------
+
+[18] WEEKLY CHART
+
+Reference:
+4-week grouped bar chart (inflow/outflow per week), h-20 container,
+per-week paired bars, W1-W4 labels, a small inflow/outflow color legend
+beneath.
+
+Current:
+Not present. `ThisMonthSection.tsx`'s doc comment explicitly documents
+the reason: "no canonical weekly Money read model exists, and
+fabricating weekly buckets from the monthly total would be invented
+data."
+
+Status: INTENTIONALLY UNSUPPORTED
+
+Visual difference: the entire chart element (and the vertical space it
+occupies) is absent from the current card.
+
+Data support: NOT SUPPORTED. Re-confirmed in this audit: `MoneyPeriodSummary`
+(lib/domain/money/types.ts) and `money_period_summary()` return one
+row per currency for the WHOLE requested period — there is no weekly
+bucketing anywhere in the Money read-model layer, and no existing RPC
+computes per-week inflow/outflow totals. Building this truthfully would
+require either a new SQL aggregation (grouping financial_events by ISO
+week within the period) or a new domain function — a real, non-trivial
+product/architecture addition, not a UI change.
+
+Can replicate now: NO — NEEDS DOMAIN/PRODUCT CAPABILITY.
+
+Next action: none for this pass. If weekly cash-flow visualization is
+wanted in the future, it requires a new canonical Money read model
+(e.g. a `money_weekly_summary()` RPC) designed and reviewed as a
+financial-domain change in its own right — not something to bolt onto a
+UI-only pass.
+
+--------------------------------------------------------------------------------
+
+[19] RECENT ACTIVITY SECTION
+
+Reference:
+Header "Recent Activity" (18px/600) + "View all activity →" (accent,
+11px), OUTSIDE the card. Card: rounded-xl, `divide-y` list, overflow-
+hidden.
+
+Current:
+page.tsx + RecentActivityPreview.tsx: header title (text-lg, 18px/600) +
+"View all activity →" (text-[11px], accent) — placement matches exactly
+(moved into the header row specifically in ADDENDUM 7 to match this).
+Card: rounded-xl, `divide-y divide-border` list — matches the
+reference's own divided-list treatment for THIS specific section
+correctly (unlike Capital Distribution, which incorrectly copied this
+divider treatment where the reference doesn't use one — see [11]).
+
+Status: CLOSE
+
+Visual difference: none structural at the section-header/container
+level; see [20] for row-level differences.
+
+Data support: SUPPORTED NOW.
+
+Can replicate now: YES (already done at this level).
+
+Next action: none at the section-container level.
+
+--------------------------------------------------------------------------------
+
+[20] INDIVIDUAL ACTIVITY ROWS
+
+Reference:
+p-16px (all sides), hover state. Icon: w-10 h-10 (40px) rounded-xl,
+colored per event category. Title: 16px/600 (the transaction's own
+specific description, e.g. "BMW X4 Repair"). Subline: 12px ("Today,
+2:15 PM • Maintenance"). Right: amount (16px/600 — bold accent for
+inflow, plain primary-text for outflow, NEVER red/danger for spending)
++ a small settlement-status caption beneath ("Cleared", "Direct
+Payment", "Cash Reserve").
+
+Current:
+RecentActivityPreview.tsx: px-1.5 py-2.5 (≈6px/10px) — substantially
+tighter than the reference's uniform 16px. Icon: h-9 w-9 (36px)
+rounded-xl, accent-tinted for inflow / neutral for outflow — close to
+reference's 40px, and the same "no red for spending" color rule is
+already correctly matched (`isInflow ? "text-accent-primary" :
+"text-text-primary"`, never a danger/red tone). Title: text-base (16px/
+600), using the event's own real `description` field when present
+(falls back to the event-type label) — matches reference's use of
+specific per-transaction titles closely, using genuinely available data.
+Subline: 12px, real occurred-at date + real category code when present —
+matches format ("date • category") closely. Right: amount (16px/600,
+same accent/plain color rule as reference) — no settlement-status
+caption beneath it.
+
+Status: PARTIAL
+
+Visual difference:
+- Row padding is the most significant deviation identified in this
+  entire audit: roughly 6px horizontal / 10px vertical versus the
+  reference's uniform 16px on every side. The reference's Recent
+  Activity rows are actually quite roomy, not compact — this directly
+  contradicts the density-reduction applied to this same list in
+  P0-E3-S2 QA rounds 5-6, which treated it as needing to be tightened.
+  This is the clearest, most checkable instance in the whole audit of
+  "same sections, different density" called out by this audit's own
+  instructions.
+- Icon container 36px vs reference's 40px — minor.
+- No settlement-status caption (see Data support).
+- Title/subline composition, color rule for in/outflow amounts: match
+  well.
+
+Data support: padding/icon-size — pure styling (SUPPORTED either way).
+Settlement-status caption — NOT SUPPORTED. `MoneyActivityItem` (lib/
+domain/money/types.ts) carries no pending/cleared/settlement lifecycle
+field — Monatriq's financial events are recorded as already-happened,
+immediate facts; there is no concept of a transaction being "cleared"
+versus "pending" anywhere in the Money domain today.
+
+Can replicate now: padding/icon-size — YES (a pure Tailwind class
+change). Settlement caption — NO — NEEDS DOMAIN/PRODUCT CAPABILITY.
+
+Next action: this is the single highest-value, lowest-risk fix
+identified in this audit — raise row padding toward the reference's
+16px (e.g. p-4, or at minimum meaningfully more than the current 6px/
+10px) and the icon container to 40px; no data change required.
+
+--------------------------------------------------------------------------------
+
+[21] FOOTER/UPDATE AREA
+
+Reference:
+Standalone bar: calendar/edit icon + "Last updated by you today, 2:15
+PM" (left), "Log Update" pill button (right).
+
+Current:
+Not present anywhere on the page.
+
+Status: MISSING
+
+Visual difference: the entire element and its vertical space are absent.
+
+Data support: PARTIALLY SUPPORTED. The literal reference copy ("Last
+updated by you today, 2:15 PM") has no single canonical Monatriq field —
+there is no generic "last profile/data update" timestamp. However, a
+truthful, real equivalent DOES exist: the most recent item already
+returned by `getRecentActivity()` (already fetched on Home) carries a
+real `occurredAt` timestamp, which could honestly caption "Last activity:
+{date}" — a real fact, just not identical in meaning to the reference's
+"last updated BY YOU" framing (occurredAt reflects the transaction's own
+date, not necessarily "when the user last touched the app"). The "Log
+Update" button's destination is the less-supported half: there is no
+single generic "log an update" action in Monatriq — the closest real
+equivalents are separate destinations (/money#record-money to add cash,
+/assets to add an asset, etc.), so a single generic button here would
+either need to pick one specific real destination (understating the
+reference's generic framing) or not exist.
+
+Can replicate now: the timestamp line — YES WITH REAL-DATA ADAPTATION
+(using the most recent activity's real occurredAt, with honest copy that
+doesn't claim more than it knows). The button — YES WITH REAL-DATA
+ADAPTATION if pointed at one specific real destination (e.g.
+/money#record-money, matching the empty-state CTA already used
+elsewhere on Home), or NO if a truly generic multi-destination action is
+required and none exists.
+
+Next action: if this element is wanted, build a real-data version (a
+real most-recent-activity timestamp + a link to /money#record-money)
+rather than reproducing the reference's generic copy verbatim.
+
+--------------------------------------------------------------------------------
+
+[22-23] BOTTOM NAVIGATION / CENTRAL QUICK ADD BUTTON
+
+Reference:
+Fixed h-16 (64px), bg-surface-container-lowest/90 + backdrop-blur. 5
+items (Home/Money/Assets/Decisions/Goals) + a 6th central raised (+)
+button. Icons 22px, labels 11px, active state = accent color. Central
+button: w-12 h-12 (48px), raised -top-5 (20px above the bar), 26px icon,
+shadow glow.
+
+Current:
+MobileBottomNav.tsx: fixed h-16 (64px) — exact height match. bg-
+background/90 + backdrop-blur — same darkest-tier intent as reference's
+`surface-container-lowest`, different token name, same visual role.
+Same 5 items + central (+) button, same conceptual set (Home/Money/
+Assets/Decisions/Goals). Icons 21px (close to reference's 22px). Labels
+text-[11px] — exact match. Active state = accent color — matches.
+Central button: h-12 w-12 (48px) — exact size match; raised -top-3 (12px
+above the bar, vs reference's 20px) — noticeably less raised; icon 23px
+(close to reference's 26px).
+
+Status: CLOSE
+
+Visual difference: height, item set, icon/label scale, and active-state
+color all match closely or exactly. The central button's raise offset
+(12px vs 20px) is the one clearly measurable gap — the reference's +
+button floats more prominently above the bar.
+
+Data support: SUPPORTED NOW (purely a CSS positioning value; the touch-
+target-size requirement established in an earlier round, 48px, is
+already met and would remain met at a larger raise offset).
+
+Can replicate now: YES — a pure CSS change (`-top-3` → `-top-5` or
+similar), with no effect on the already-compliant 48px touch target.
+
+Next action: increase the central button's raise offset to more closely
+match the reference's more prominent float.
+
+--------------------------------------------------------------------------------
+6-16. (Consolidated above)
+--------------------------------------------------------------------------------
+Sections 6 through 16 of the requested outline (Header gap through
+Recent Activity gap) are each covered in full above, per the numbered
+reference-map entries [1] through [20]. The remainder of this report
+covers items 17-27 of the requested outline directly.
+
+--------------------------------------------------------------------------------
+17. DENSITY/SPACING GAP (relative proportions, not just presence/absence)
+--------------------------------------------------------------------------------
+This is the single most consistent, page-wide difference identified in
+this audit, and it is worth stating as one pattern rather than N
+separate padding complaints:
+
+THE REFERENCE USES ONE CARD-PADDING VALUE (p-space-md, 16px) FOR
+VIRTUALLY EVERY CARD ON THE PAGE — including "secondary" cards (Net
+Worth, Safe to Deploy, Move cards, Goal cards, This Month's box). Visual
+hierarchy in the reference comes from typography scale, color, and
+badges, NOT from smaller padding on less-important cards.
+
+Current production, across nearly every card except Liquid Position
+itself, uses p-3 (12px) — a deliberate, repeated choice from the density-
+reduction rounds (P0-E3-S2 QA rounds 5-6), which explicitly treated
+"secondary" cards as needing tighter padding than the primary one. This
+was a reasonable, previously-negotiated interpretation at the time, but
+it is a real, systemic, checkable deviation from the reference's actual
+padding scale: the reference's OWN primary/secondary hierarchy comes
+from typography and color, not differential padding.
+
+Affected: Net Worth, Safe to Deploy, Move cards, Goal cards, This Month's
+outer card, This Month's inner stat box, Capital Distribution's row list
+padding, Your Moves' inner highlight box. (Liquid Position and the
+Greeting card already use p-4/16px, correctly matching the reference.)
+
+Separately, Recent Activity's row-level padding (≈6px/10px) is even
+tighter than the general 12px pattern and diverges from the reference's
+16px by the widest margin of any single element in this audit — see [20]
+for detail.
+
+Section-to-section gap (page.tsx's outer `gap-6`, 24px) and section-
+title-to-content gap (`gap-2.5`, 10px) both already fall within the
+20-28px / 10-14px ranges established in ADDENDUM 6's own density
+reasoning and were not re-examined against the reference specifically in
+this audit, since the reference itself doesn't cleanly expose an
+equivalent "outer section gap" measurement in code.html (its sections
+are joined by a single `space-y-space-lg`, 24px, wrapper — which does
+match current production's 24px almost exactly).
+
+Number of visible modules per viewport: not independently measurable
+without a rendered screenshot (no browser tool available). Given the
+padding gap above works in one consistent direction (current is tighter
+than reference on secondary cards), the honest expectation is that
+current production shows MORE content per viewport than the reference
+does at equivalent widths — the opposite problem from the one earlier
+density rounds were solving. This is a reasoned inference from the
+literal padding numbers, not a rendered measurement.
+
+--------------------------------------------------------------------------------
+18. ICONOGRAPHY GAP
+--------------------------------------------------------------------------------
+Icon LIBRARY: reference uses Google's Material Symbols Outlined
+(rounded, consistent stroke weight). Current production uses
+lucide-react (sharper, geometric outline style). This is NOT a gap in
+the sense this audit is measuring — it is a deliberate, standing brand/
+library decision made early in this project specifically to avoid
+"generic 3D/sparkle icons" associated with AI-generated fintech UIs (see
+this project's own established technical context). Matching the
+reference's exact icon family would mean abandoning that standing
+decision; this audit does not recommend it, and flags it only for
+completeness, not as an actionable gap.
+
+Icon SIZES/CONTAINERS (where the actual comparison is meaningful):
+- Capital Distribution row icons: 32px container — MATCHED.
+- Category icon glyphs: 16px — close to reference's 18px.
+- Recent Activity row icons: 36px container — close to reference's 40px
+  (see [20]).
+- Move-card leading badge: 24px (h-6 w-6) — MATCHED to reference's own
+  24px numbered-badge container.
+- Net Worth/Safe to Deploy header icons: 14px glyph — smaller than
+  reference's 18px.
+- Bottom-nav icons: 21px — close to reference's 22px; central button
+  icon 23px vs reference's 26px.
+- Header: no icon-badge exists currently (see [1]).
+
+No decorative icon was recommended anywhere in this audit that lacks a
+real, functional/semantic backing (e.g. the Move-card leading icon is a
+real decision-type identifier, not decoration; the proposed Current-
+Position right-side icon would back a real link to a real destination).
+
+--------------------------------------------------------------------------------
+19. CAN REPLICATE NOW WITHOUT ARCHITECTURE CHANGES
+--------------------------------------------------------------------------------
+Every item below requires only Tailwind class / component-markup edits
+against data Home already fetches — no new query, RPC, migration, or
+domain function.
+
+1. Raise secondary-card padding from p-3 (12px) to p-4 (16px): Net
+   Worth, Safe to Deploy, Move cards, Goal cards, This Month's outer
+   card and inner stat box, Your Moves' inner highlight box — closes
+   the single largest systemic gap in this audit (section 17).
+2. Raise Recent Activity row padding toward the reference's 16px (from
+   the current ≈6px/10px) and icon container from 36px to 40px — the
+   single highest-impact individual fix identified.
+3. Remove the divider (`divide-y divide-border`) between Capital
+   Distribution category rows, matching the reference's un-divided,
+   spacing-only list treatment there.
+4. Color the segmented allocation bar's cash segment by category
+   IDENTITY (`category.key === "cash"`) rather than by array sort
+   position, matching the reference's guaranteed cash=accent-color rule.
+5. Add a real page-level "Home" title element to the header.
+6. Add the ambient decorative glow to the Greeting card and Liquid
+   Position card (pure CSS, no data).
+7. Increase the bottom nav's central (+) button raise offset (from
+   -top-3 to closer to the reference's -top-5) — no effect on the
+   already-compliant 48px touch target.
+8. Add a real item count to the "Your Moves" section title (e.g. "Your
+   Moves (2)"), derived from `focusGoal`/`activeDecisions.length`,
+   already available.
+9. Add a small real icon to Your Moves' bottom-row context text when a
+   linked asset/liability name is shown.
+10. Optionally vary Goal-card icon color by the goal's own real
+    `measurementType` for closer per-card visual variety (reference's
+    own per-goal icon colors are equally decorative/arbitrary).
+11. Optionally add a real "last activity" timestamp line using the most
+    recent item already returned by `getRecentActivity()`, worded
+    honestly (not claiming "last updated by you"), with a real link to
+    /money#record-money — a partial, honestly-scoped version of the
+    reference's footer bar.
+12. Optionally add a header-level avatar reusing the same real-initial
+    logic already in GreetingHeader.
+13. Optionally add a real edit/add-cash link with icon to the Current
+    Position header's right-side slot, in addition to or instead of the
+    reserve-count fact.
+14. Optionally add a compact-number formatter scoped only to the Capital
+    Distribution locked/liquid summary line, if closer literal notation
+    fidelity ("108.0M" vs full precision) is wanted — genuinely
+    optional, not required for correctness or fidelity of the underlying
+    data.
+
+--------------------------------------------------------------------------------
+20. CANNOT TRUTHFULLY REPLICATE YET
+--------------------------------------------------------------------------------
+Each item below was specifically inspected against the current domain
+layer for this audit — none is assumed missing without checking.
+
+1. Notification bell (header). Inspected: no notification/alert table,
+   RPC, or domain module exists anywhere in the codebase. A bell icon
+   with no real notifications behind it would be a non-functional
+   decoration — this audit's own instruction explicitly says not to
+   recommend that.
+2. Liquid Position's "Immediate Cash Available" status chip. Inspected:
+   `NativeFinancialPosition`/`ReportingFinancialPosition` carry no
+   partial-availability flag for liquid cash as a whole; it is a binary
+   in/out-of-liquid-cash classification with no third "availability"
+   state.
+3. Capital Distribution's editorial subtitle ("High Net Worth, Low
+   Liquidity"). Inspected: no threshold/label configuration exists
+   anywhere for what counts as "high" or "low" liquidity — this would be
+   new financial-judgment logic, not a data read.
+4. Capital Distribution's per-row descriptive subline ("3 registered
+   motor units", etc.). Inspected: `CapitalDistributionCategory` (key/
+   amount/percentage only) and `AssetType` (code/display_name) carry no
+   per-category item count or freeform description field.
+5. Your Moves' numbered priority badges and fabricated per-move status
+   lines ("Draft & valuation completed", "Follow up on agreed
+   timeline"). Inspected: `DecisionSummary` carries no priority/rank
+   field, and an existing automated test in supabase/tests/home/run.ts
+   ("Active Decisions carry no rank/score/winner field") specifically
+   guards against this being introduced — this is a tested product
+   boundary, not an oversight.
+6. Goals' cross-goal "Target Horizon: June 2027 · 32 Mo Left" journey
+   headline. Inspected: Goals' `requiredPacePeriodsRemaining` and
+   `requiredPaceStatus` are computed strictly PER GOAL by
+   `goal_required_pace()`; no aggregate/cross-goal date or "months to
+   financial freedom" concept exists anywhere in the Goals domain.
+7. Goals' special per-goal status chips ("Critical Buffer", "Being
+   defined"). Inspected: `GoalSummary`'s only status-like fields are
+   `isProtected`, `isFocus`, `status` (active/paused/completed/
+   archived), and `requiredPaceStatus` — none map to an editorial
+   urgency/definition-stage label like the reference's.
+8. This Month's 4-week inflow/outflow bar chart. Inspected:
+   `money_period_summary()` and `MoneyPeriodSummary` return one row per
+   CURRENCY for the whole period, with no weekly bucketing anywhere in
+   the Money read-model layer or its underlying SQL — re-confirmed in
+   this audit, not assumed from memory.
+9. Recent Activity's settlement-status captions ("Cleared", "Direct
+   Payment", "Cash Reserve"). Inspected: `MoneyActivityItem` has no
+   pending/cleared/settlement lifecycle field — financial events are
+   recorded as already-happened facts, with no settlement-state concept
+   in the Money domain.
+10. The footer bar's specific "Last updated by you today, 2:15 PM /
+    Log Update" composition, AS WRITTEN. Inspected: no generic "last
+    update" timestamp or generic "log an update" action exists — though
+    (per section 19, item 11) a real, honestly-worded partial
+    equivalent could be built from already-available data; the
+    reference's EXACT copy and generic multi-purpose button cannot be,
+    without either picking one specific real destination or leaving the
+    action more narrowly scoped than the reference implies.
+
+--------------------------------------------------------------------------------
+21. P0 — VISUAL MATCH CRITICAL
+--------------------------------------------------------------------------------
+Differences that are systemic (repeated across many sections) or
+significant enough within one section to read as a materially different
+density/proportion from the reference, not merely a detail:
+
+P0-1. Secondary-card padding (12px vs reference's uniform 16px) —
+      affects Net Worth, Safe to Deploy, every Move card, every Goal
+      card, This Month's outer card and inner stat box, Your Moves'
+      inner highlight box. This is the single most repeated deviation
+      in the entire audit and is the main reason current Home would
+      read as "slightly more compact than the reference" across nearly
+      every module simultaneously, rather than in one isolated spot.
+
+P0-2. Recent Activity row padding (≈6px/10px vs reference's 16px) — the
+      single largest individual padding gap found, in a section that is
+      otherwise a very close structural match (real descriptions,
+      correct divider treatment, correct in/outflow color rule).
+
+--------------------------------------------------------------------------------
+22. P1 — REFERENCE DETAIL
+--------------------------------------------------------------------------------
+- Header: no page-title "Home" text, no header-level avatar, height 56px
+  vs reference's 64px on mobile.
+- Greeting card: missing ambient glow decoration.
+- Liquid Position: missing ambient glow decoration.
+- Current Position header: right-side item has no icon and isn't a real
+  link to an editing destination.
+- Capital Distribution: rows incorrectly use dividers where the
+  reference has none; bar segment coloring is position-based, not
+  identity-based.
+- Move cards: missing inner-box chevron-button affordance; missing
+  small icon on the bottom context row.
+- Goals: header lacks a real item-count; goal-card icons lack per-goal
+  color variety.
+- Bottom nav: central (+) button raised 12px vs reference's 20px; icon
+  sizes a few px smaller throughout.
+- Capital Distribution's locked/liquid summary line uses full-precision
+  notation instead of the reference's abbreviated form.
+
+--------------------------------------------------------------------------------
+23. P2 — OPTIONAL / REQUIRES FUTURE PRODUCT CAPABILITY
+--------------------------------------------------------------------------------
+(This priority classification applies to UI implementation work only —
+no financial-decision ranking is implied.)
+
+- Weekly inflow/outflow chart — needs a new canonical weekly Money read
+  model (real architecture work, not a UI change).
+- Notification bell — needs a real notification system.
+- Liquid Position's "Immediate Cash Available" equivalent chip — needs a
+  new liquid-cash-availability concept in Financial Position.
+- Capital Distribution's editorial subtitle and per-row descriptive
+  captions — need new judgment logic / new per-category description
+  data respectively.
+- Your Moves' numbered priority badges and fabricated status lines —
+  permanently out of scope by tested product-boundary design, not a
+  capability gap that will close later.
+- Goals' cross-goal "Target Horizon" headline and per-goal special
+  status chips — need new cross-goal aggregation concepts / new
+  lifecycle-status fields respectively.
+- Recent Activity's settlement-status captions — needs a new settlement-
+  lifecycle concept in the Money domain.
+- Footer "last updated"/"Log Update" bar, reproduced exactly as the
+  reference writes it — a partial, honestly-scoped version is buildable
+  now (see section 19), but the reference's exact generic framing is
+  not.
+- Compact/abbreviated currency notation for the Capital Distribution
+  summary line — genuinely optional, previously and deliberately
+  deferred.
+
+--------------------------------------------------------------------------------
+24. IMPLEMENTATION COVERAGE COUNTS
+--------------------------------------------------------------------------------
+Counted across the 23 reference sections enumerated in section 5 of this
+audit (one status per section, the most significant finding governing
+when a section had more than one):
+
+  Matched:                    0
+  Close:                      13
+  Partial:                    8
+  Missing:                    1
+  Intentionally unsupported:  1
+  ------------------------------
+  Total sections audited:     23
+
+No section was rated MATCHED in the strict sense (a documented,
+checkable difference — even a minor decorative one like a missing glow
+blob or an icon a few pixels off — was found in every section this
+audit examined). This is an honest reflection of comparing literal
+Tailwind values against a reference screenshot without a rendered
+comparison available, not a claim that CLOSE sections are visually
+indistinguishable.
+
+Major remaining work, in order of actual visual impact:
+1. The systemic secondary-card padding gap (P0-1) — one change pattern,
+   applied consistently, would resolve the single most repeated finding
+   in this audit.
+2. Recent Activity row density (P0-2) — one isolated but significant
+   fix.
+3. A cluster of small, independent P1 details (header title/avatar,
+   glow decorations, bar-color identity fix, divider removal on Capital
+   Distribution, nav button raise offset) — each cheap, none blocking.
+4. A short, explicit list of P2 items that genuinely cannot be built
+   truthfully without new product/domain capability, correctly not
+   attempted by any prior round.
+
+--------------------------------------------------------------------------------
+25. RECOMMENDED NEXT IMPLEMENTATION PASS
+--------------------------------------------------------------------------------
+If the goal of the next pass is close visual replication (per this
+audit's own framing), the highest-leverage, lowest-risk scope is:
+
+1. Apply the P0-1 padding fix uniformly (p-3 → p-4) across every
+   secondary card listed in section 21 — one mechanical, low-risk
+   change with the broadest visual impact identified in this audit.
+2. Fix Recent Activity's row padding and icon size (P0-2).
+3. Remove Capital Distribution's row dividers; fix its bar's color-
+   assignment to be identity-based, not position-based.
+4. Add the two ambient glow decorations (Greeting, Liquid Position) —
+   pure CSS, zero data risk.
+5. Add a real "Home" page-title element to the header.
+6. Increase the bottom-nav central button's raise offset.
+
+Each of these six items is independently shippable, touches only
+Tailwind classes or trivial real-data derivations already available on
+Home, and requires no new query, test, migration, or domain change —
+consistent with this audit's own "can replicate now without
+architecture changes" findings. None of the P2 items should block
+approval of Home's current visual direction, since each is either a
+deliberate, tested product-boundary decision (Moves' ranking-free
+design) or requires new domain capability outside a UI pass's scope.
+
+This audit does not recommend implementing anything — per its own
+instructions, it stops here.
+
+--------------------------------------------------------------------------------
+26. FILES INSPECTED
+--------------------------------------------------------------------------------
+docs/reference/01-home/screen.png
+docs/reference/01-home/code.html
+docs/reference/01-home/DESIGN.md
+app/(app)/home/page.tsx
+app/(app)/home/loading.tsx
+components/home/GreetingHeader.tsx
+components/home/PositionSection.tsx
+components/home/CapitalDistributionSection.tsx
+components/home/LiquidityNote.tsx
+components/home/YourMovesSection.tsx
+components/home/GoalsSection.tsx
+components/home/ThisMonthSection.tsx
+components/home/RecentActivityPreview.tsx
+components/home/NewUserSetup.tsx
+components/obligations/UpcomingObligationsList.tsx
+components/layout/AppShell.tsx
+components/layout/PageContainer.tsx
+components/layout/MobileBottomNav.tsx
+components/layout/DesktopNav.tsx
+components/layout/AccountMenu.tsx
+components/theme/ThemeToggle.tsx
+components/brand/BrandLogo.tsx
+lib/styles/tokens.css
+lib/domain/financial-position/capital-distribution.ts
+lib/domain/decisions/types.ts
+lib/domain/goals/types.ts
+lib/domain/money/types.ts
+docs/reports/P0-E3-S2-home-command-center-production-ui.txt (all 7 addenda)
+
+Note: this audit reused full file contents already read earlier in this
+same working session for GreetingHeader.tsx, PositionSection.tsx,
+CapitalDistributionSection.tsx, YourMovesSection.tsx, GoalsSection.tsx,
+ThisMonthSection.tsx, RecentActivityPreview.tsx,
+UpcomingObligationsList.tsx, page.tsx, tokens.css, AppShell.tsx,
+MobileBottomNav.tsx, and BrandLogo.tsx — all of which were the exact
+files just written during the strict-replication pass moments before
+this audit began, and were re-verified against their on-disk content
+before this report was finalized. DesktopNav.tsx, AccountMenu.tsx,
+ThemeToggle.tsx, and loading.tsx were read fresh specifically for this
+audit.
+
+No source file was modified, no migration was created, no test was run,
+and no design token was changed in the course of producing this report.
+
+--------------------------------------------------------------------------------
+27. GIT STATUS
+--------------------------------------------------------------------------------
+Branch: main
+
+Modified (tracked):
+ M .env.example
+ M app/(app)/home/page.tsx
+ M app/(app)/money/page.tsx
+ M app/layout.tsx
+ M components/auth/SignOutButton.tsx
+ M components/brand/BrandLogo.tsx
+ M components/layout/AppShell.tsx
+ M components/obligations/UpcomingObligationsList.tsx
+ M components/onboarding/OnboardingForm.tsx
+ M components/ui/Button.tsx
+ M components/ui/Input.tsx
+ M components/ui/Select.tsx
+ M docs/architecture/FINANCIAL_DOMAIN_MODEL.md
+ M docs/architecture/MULTI_CURRENCY_MODEL.md
+ M docs/architecture/SYSTEM_ARCHITECTURE.md
+ M docs/design/VISUAL_CONSTITUTION.md
+ M docs/project/BUILD_STATE.md
+ M lib/domain/assets/repository.ts
+ M lib/domain/assets/types.ts
+ M lib/domain/currency/format.ts
+ M lib/domain/financial-position/repository.ts
+ M lib/domain/financial-position/types.ts
+ M lib/styles/tokens.css
+ M lib/supabase/database.types.ts
+ M package-lock.json
+ M package.json
+ M supabase/tests/rls/README.md
+ M supabase/tests/shared/env.ts
+
+Untracked:
+ ?? app/(app)/home/loading.tsx
+ ?? components/home/
+ ?? components/layout/AccountMenu.tsx
+ ?? components/layout/DesktopNav.tsx
+ ?? components/layout/MobileBottomNav.tsx
+ ?? components/onboarding/useTimezoneOptions.ts
+ ?? components/theme/
+ ?? docs/reports/P0-E3-S2-home-command-center-production-ui.txt
+ ?? docs/reports/P0-E3-S2-home-reference-gap-audit.txt   (this report)
+ ?? lib/domain/financial-position/capital-distribution.ts
+ ?? lib/utils/time-of-day.ts
+ ?? supabase/migrations/20260927090000_add_asset_value_by_type.sql
+ ?? supabase/tests/home/
+
+Nothing was staged or committed by this audit. This snapshot reflects
+the state of the working tree at the time this report was written, after
+the strict-replication pass (ADDENDUM 7) and before any further changes.
+================================================================================

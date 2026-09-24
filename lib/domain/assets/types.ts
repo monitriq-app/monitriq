@@ -93,3 +93,16 @@ export interface AssetQuickSaleCoverage {
   quickSaleSum: string | null;
   coverageStatus: QuickSaleCoverageStatus;
 }
+
+/**
+ * Current asset value (latest estimated_current_value, excluding
+ * archived) grouped by type and native currency — see
+ * asset_value_by_type() in the migration. Added for Home's "Where Your
+ * Capital Lives" (P0-E3-S2); the same semantics as
+ * asset_native_currency_totals(), never a second valuation formula.
+ */
+export interface AssetValueByType {
+  assetType: AssetTypeCode;
+  currencyCode: string;
+  totalEstimatedValue: string;
+}

@@ -1632,6 +1632,14 @@ export type Database = {
           target_value: string
         }[]
       }
+      asset_value_by_type: {
+        Args: never
+        Returns: {
+          asset_type: string
+          currency_code: string
+          total_estimated_value: string
+        }[]
+      }
       create_asset: {
         Args: {
           p_acquired_at?: string
