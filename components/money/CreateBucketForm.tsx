@@ -41,7 +41,7 @@ export function CreateBucketForm({ currencies }: CreateBucketFormProps) {
       setBucketType("");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not create bucket.");
+      setError(err instanceof Error ? err.message : "Could not add this account.");
     } finally {
       setPending(false);
     }
@@ -94,7 +94,7 @@ export function CreateBucketForm({ currencies }: CreateBucketFormProps) {
         </Select>
       </FormField>
       <Button type="submit" disabled={pending}>
-        {pending ? "Adding…" : "Add bucket"}
+        {pending ? "Adding…" : "Add account"}
       </Button>
       {error ? (
         <p role="alert" className="text-sm text-danger sm:basis-full">

@@ -1518,3 +1518,122 @@ investment, and no separate canonical "additional contribution"
 operation exists yet to expose instead. A future Investment Transactions
 domain may add one; until then, the existing initial cost basis remains
 the only factual figure for that type.
+
+## 45. Asset Sale / Disposal domain (P0-E4-S1)
+
+The missing canonical capability the P0-E3-S4 report's "Asset Sale
+Domain Gap" and Quick Add's own deferred Asset Sale path both flagged.
+Full audit and implementation notes: `docs/reports/
+P0-E4-S1-asset-sale-disposal-domain-foundation.txt`. Core principle,
+restated because it drove every design choice below: **asset sale is
+not generic money received.** Gross proceeds, selling costs, capital
+returned, and realised gain/loss are five distinct facts about one
+event, and they must all survive together, immutably, even after the
+asset's own current basis later changes.
+
+**Schema.** One new table, `asset_dispositions` — an immutable snapshot
+of one completed sale (gross proceeds, selling costs, the cost basis AT
+THE MOMENT of sale, and three GENERATED columns computing net proceeds,
+realised gain/loss, and capital returned from those base facts, so the
+formulas are enforced by the database itself and cannot be violated by
+any insert path). `financial_events.event_type` gained one new value,
+`asset_sale`, classified `cash_flow_class = 'other_inflow'` — the same
+reasoning §14/§23 already established for `receivable_recovery`/
+`loan_proceeds`: a real cash inflow that is deliberately NOT income,
+because it converts an already-owned asset into cash rather than earning
+new money. No `financial_operations` grouping was needed (unlike debt
+payment, §23) — a sale produces exactly one `cash_movements` row (the
+NET proceeds, the actual cash that arrived), never several.
+
+**Canonical formulas** (enforced as `numeric(20,6) generated always as
+(...) stored` columns on `asset_dispositions`, never recomputed in
+application code):
+- `net_proceeds = gross_proceeds - selling_costs`
+- `realised_gain_loss = net_proceeds - basis_at_sale`
+- `capital_returned = LEAST(net_proceeds, basis_at_sale)` — the full
+  basis when proceeds exceed it (a gain), or all of net proceeds when
+  they fall short (a loss — none of a shortfall is "capital return").
+  Written as an explicit `CASE WHEN basis_at_sale IS NULL THEN NULL`
+  guard rather than a bare `LEAST()` call: Postgres's `LEAST`/`GREATEST`
+  silently ignore `NULL` arguments instead of propagating them, which
+  would have fabricated a non-null `capital_returned` even when basis is
+  unknown — caught before it ever reached a test.
+- `basis_at_sale` is `NULL`, never zero, when the asset has no recorded
+  basis history at all (`asset_current_basis()` returns no row for it,
+  not a zero row) — `realised_gain_loss`/`capital_returned` are then
+  both `NULL` too ("Not calculated"), never a fabricated profit or loss.
+
+**Generic disposition, not a vehicle status.** `assets.status_code`
+(§44) remains vehicle-only and gained no "sold" value. Whether an asset
+is disposed is derived purely from whether an ACTIVE (non-voided)
+`asset_dispositions` row exists for it — never a second `is_sold` flag
+on `assets` itself, for exactly the reason §15/SECURITY_AND_RLS_
+PRINCIPLES.md #15 already established for receivables/liabilities: a
+second, independently-toggled flag is a second source of truth that can
+drift from the first. Voiding an `asset_sale` event through the
+existing, completely unmodified `voidFinancialEvent()` therefore both
+reverses the cash effect AND restores the asset's active state in one
+action — no dedicated "un-sell" function exists or was needed.
+
+**SECURITY DEFINER — the one deliberate break from this codebase's
+SECURITY INVOKER convention.** Every prior `record_*()` function is
+SECURITY INVOKER, relying on the calling user's own table grants
+(enforced by RLS) — an accepted risk level under which a sophisticated
+client could, in principle, forge a lower-stakes domain ledger row (see
+SECURITY_AND_RLS_PRINCIPLES.md #15's own note about
+`receivable_ledger_events`). This phase's own brief was explicitly
+stricter for asset sale specifically: the client must never be able to
+bypass the RPC and forge `gross_proceeds`/`realised_gain_loss`/money-
+event linkage. `asset_dispositions` therefore has NO client INSERT/
+UPDATE grant at all — `record_asset_sale()` is SECURITY DEFINER so it
+can still write the row a plain invoker function no longer could, with
+every DEFINER hardening rule followed: `search_path` pinned, `auth.
+uid()` explicitly validated non-null, every relation fully schema-
+qualified, EXECUTE revoked from `public`/`anon` and granted only to
+`authenticated`, and no ownership value is ever trusted from a
+parameter — every check re-derives from `auth.uid()` against the actual
+table rows, exactly like every invoker `record_*()` function already
+does.
+
+**Double-sale prevention via row locking, not a UNIQUE constraint.** A
+hard uniqueness constraint isn't expressible here — "at most one ACTIVE
+disposition per asset" is conditioned on the LINKED `financial_events`
+row's `voided_at` (a different table), which a partial index predicate
+cannot reference. `record_asset_sale()` instead takes `select ... for
+update` on the target `assets` row before checking for an existing
+active disposition — the same row-locking pattern §16 established for
+Goals' allocation-capacity races, applied to a second class of
+concurrency problem.
+
+**Currency.** V1 requires asset currency = destination bucket currency
+exactly, no live/external FX rate, no silent 1:1 conversion — a
+mismatch is a rejected, clearly-explained domain error. Cross-currency
+asset sale is an explicit future capability (see MULTI_CURRENCY_MODEL.md),
+not attempted here.
+
+**Lifecycle rules, decided and documented, not guessed:** an archived
+asset must be unarchived before it can be sold (prevents the ambiguous
+"sell something I've already hidden as no-longer-relevant" combination);
+archiving an asset that has ALREADY been sold remains allowed and
+harmless (`is_archived` and disposition are independent, orthogonal
+facts — a sold asset is excluded from every active-value read
+regardless of its `is_archived` value either way). `inventory` is the
+one asset type where `assetCapabilities().supportsSale` is `false`: the
+generic Inventory type represents an AGGREGATE holding, and a
+whole-asset "sale" would falsely imply the entire aggregate was
+liquidated in one transaction, when real inventory is typically sold
+piecemeal over time.
+
+**Read-model integration.** `asset_summary()` gained two lean fields
+(`is_disposed`, `disposed_at`, derived via the same LEFT JOIN LATERAL
+pattern its existing valuation columns already use) rather than the
+9-column full sale economics, which live in a separate
+`asset_disposition_summary()` function instead — keeping the common
+per-asset read lean. `asset_native_currency_totals()`/
+`asset_value_by_type()`/`asset_quicksale_coverage()`/
+`financial_position_by_currency()`'s inline quick-sale CTE all gained
+the same "exclude disposed" condition already applied for `is_archived`
+— a sold asset's value now lives in Money (the cash it became), not in
+Assets' own active totals, and Net Worth reflects that transition
+automatically through the SAME functions Home/Assets already compose,
+with zero new arithmetic in either screen's own code.

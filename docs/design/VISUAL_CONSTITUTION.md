@@ -120,12 +120,51 @@ financial engine," "Revolutionize your finances," "Your journey starts
 here."
 
 Preferred vocabulary: Money In, Money Out, Net Cash Change, Current Value,
-Cost Basis, Amount Remaining, Target Date, Review Decision, Money You're
-Owed, No activity yet, Not configured — matching the missing-information
-states defined in
+Amount Remaining, Target Date, Review Decision, Money You're Owed, No
+activity yet, Not configured — matching the missing-information states
+defined in
 [FINANCIAL_DOMAIN_MODEL.md](../architecture/FINANCIAL_DOMAIN_MODEL.md).
 
-## 9. Design reference handoff
+"Cost Basis" remains correct terminology in the schema, domain layer, and
+advanced/detail UI — see §9 below for where default consumer-facing copy
+now prefers "Amount Invested" / "What You Paid" instead.
+
+## 9. Progressive disclosure / financial language
+
+Established P0-E4-S2. Extends §8's copy voice with how the same financial
+fact is worded differently depending on how deep into a screen the user is.
+
+- **Default (primary) copy** uses plain consumer language: "What You Paid" /
+  "Amount Invested" rather than "Cost Basis"; "Current Value" rather than
+  "Current Value Estimate"; "Quick-Sale Estimate" rather than "Conservative
+  Quick-Sale Value"; "Target" rather than "Target Value"; "Sale Price"
+  rather than "Gross Proceeds"; "Money Received After Costs" rather than
+  "Net Proceeds"; "Profit / Loss on Sale" rather than "Realised Gain/Loss";
+  "Sale History" rather than "Asset Disposition".
+- **Advanced/detail copy** — reached through the single standardized
+  disclosure control, labeled "More details" (component:
+  `components/ui/MoreDetails.tsx`) — may use the precise domain term (Gross
+  Proceeds, Cost Basis, Capital Returned) when the primary-layer plain term
+  would otherwise need a footnote to stay accurate.
+- One disclosure phrase is used everywhere a screen needs to hide
+  optional/secondary financial detail. Screens must not invent their own
+  "Advanced" / "Details" / "Show extras" variants.
+- Renaming a label never changes which value it displays, how that value is
+  calculated, or which currency it is denominated in. A renamed field reads
+  from exactly the same domain data as before the rename.
+- Per-asset-type card and form labels are centralized, not hardcoded per
+  component — see `assetCapabilities()` / `assetCreationConfig()` /
+  `assetDisplayConfig()` in
+  [FINANCIAL_DOMAIN_MODEL.md](../architecture/FINANCIAL_DOMAIN_MODEL.md).
+- Simplification never fabricates a fact: a gain/loss, quick-sale sum, or
+  recovered amount is shown in plain language only when the underlying
+  values genuinely exist; otherwise the UI says "Not calculated" / "Not
+  set", never a guessed figure.
+
+See [PRODUCT_DEFINITION.md §9](../product/PRODUCT_DEFINITION.md) for the
+product-level statement of this principle.
+
+## 10. Design reference handoff
 
 A curated, final design-reference set (Stitch or otherwise) will be
 supplied later during UI implementation phases. Historical/obsolete
@@ -133,7 +172,7 @@ prototype exports are not required for this planning phase and must not be
 combined with whatever curated set is eventually approved. When references
 are supplied, only explicitly approved ones are used.
 
-## 10. Relationship to implementation
+## 11. Relationship to implementation
 
 This document governs layout and styling decisions in future phases. It
 does not itself specify component code, a design-token file, or a Tailwind

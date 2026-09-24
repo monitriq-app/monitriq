@@ -12,6 +12,7 @@ import type { Currency } from "@/lib/domain/currency/types";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { AssetTypeSelector } from "@/components/assets/AssetTypeSelector";
+import { MoreDetails } from "@/components/ui/MoreDetails";
 
 interface AddAssetSheetProps {
   assetTypes: AssetType[];
@@ -177,35 +178,40 @@ export function AddAssetSheet({ assetTypes, currencies, defaultCurrencyCode, onC
         ) : (
           <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-text-secondary">{creationConfig?.basisLabel ?? "Cost Basis"} (optional)</label>
+              <label className="text-xs font-medium text-text-secondary">{creationConfig?.basisLabel ?? "What did you pay?"} (optional)</label>
               <Input inputMode="decimal" pattern="^\d+(\.\d+)?$" value={costBasis} onChange={(e) => setCostBasis(e.target.value)} placeholder="0.00" />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-text-secondary">{creationConfig?.currentValueLabel ?? "Current Estimated Value"} (optional)</label>
+              <label className="text-xs font-medium text-text-secondary">{creationConfig?.currentValueLabel ?? "Current value"} (optional)</label>
               <Input inputMode="decimal" pattern="^\d+(\.\d+)?$" value={currentValue} onChange={(e) => setCurrentValue(e.target.value)} placeholder="0.00" />
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-text-secondary">{creationConfig?.quickSaleLabel ?? "Conservative Quick-Sale Value"} (optional)</label>
-              <Input inputMode="decimal" pattern="^\d+(\.\d+)?$" value={quickSaleEstimate} onChange={(e) => setQuickSaleEstimate(e.target.value)} placeholder="0.00" />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-medium text-text-secondary">{creationConfig?.targetValueLabel ?? "Target Value"} (optional)</label>
-              <Input inputMode="decimal" pattern="^\d+(\.\d+)?$" value={targetValue} onChange={(e) => setTargetValue(e.target.value)} placeholder="0.00" />
-            </div>
 
-            {capabilities?.supportsVehicleStatus ? (
-              <div className="flex flex-col gap-1">
-                <label className="text-xs font-medium text-text-secondary">Vehicle Status (optional)</label>
-                <Select value={vehicleStatus} onChange={(e) => setVehicleStatus(e.target.value as AssetStatusCode | "")}>
-                  <option value="">Status not set</option>
-                  {ASSET_STATUS_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </Select>
+            <MoreDetails>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-text-secondary">{creationConfig?.quickSaleLabel ?? "Quick-sale estimate"} (optional)</label>
+                  <Input inputMode="decimal" pattern="^\d+(\.\d+)?$" value={quickSaleEstimate} onChange={(e) => setQuickSaleEstimate(e.target.value)} placeholder="0.00" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-xs font-medium text-text-secondary">{creationConfig?.targetValueLabel ?? "Target"} (optional)</label>
+                  <Input inputMode="decimal" pattern="^\d+(\.\d+)?$" value={targetValue} onChange={(e) => setTargetValue(e.target.value)} placeholder="0.00" />
+                </div>
+
+                {capabilities?.supportsVehicleStatus ? (
+                  <div className="flex flex-col gap-1">
+                    <label className="text-xs font-medium text-text-secondary">Vehicle status (optional)</label>
+                    <Select value={vehicleStatus} onChange={(e) => setVehicleStatus(e.target.value as AssetStatusCode | "")}>
+                      <option value="">Status not set</option>
+                      {ASSET_STATUS_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                ) : null}
               </div>
-            ) : null}
+            </MoreDetails>
 
             {error ? (
               <p role="alert" className="text-sm text-danger">

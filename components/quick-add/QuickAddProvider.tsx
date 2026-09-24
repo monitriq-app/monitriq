@@ -17,11 +17,17 @@ interface QuickAddProviderProps {
   spendingCategories: MoneySpendingCategory[];
 }
 
+// Descriptions use plain, human language (P0-E4-S2) — "Asset / Investment"'s
+// previous copy ("Convert cash into an asset or investment") was also a real
+// accuracy issue, not just jargon: recording an asset never moves cash (see
+// create_asset()'s own comment), so the old wording implied a cash-linked
+// purchase that doesn't exist canonically. The new copy is both simpler and
+// more truthful.
 const HUB_OPTIONS: { view: QuickAddView; title: string; description: string; icon: ReactNode; tint: string }[] = [
-  { view: "received", title: "Money Received", description: "Salary, sales, money you're owed, refunds.", icon: <ArrowDownLeft size={22} aria-hidden="true" />, tint: "bg-accent-primary/10 text-accent-primary" },
-  { view: "spent", title: "Money Spent", description: "Repairs, fuel, rent, business, personal expenses.", icon: <ArrowUpRight size={22} aria-hidden="true" />, tint: "bg-surface-strong text-text-primary" },
-  { view: "move", title: "Move Money", description: "Move money between your own cash buckets.", icon: <ArrowLeftRight size={22} aria-hidden="true" />, tint: "bg-focus/10 text-focus" },
-  { view: "asset", title: "Asset / Investment", description: "Convert cash into an asset or investment.", icon: <Gem size={22} aria-hidden="true" />, tint: "bg-attention/10 text-attention" },
+  { view: "received", title: "Money Received", description: "Salary, business income, refunds, money owed to you.", icon: <ArrowDownLeft size={22} aria-hidden="true" />, tint: "bg-accent-primary/10 text-accent-primary" },
+  { view: "spent", title: "Money Spent", description: "Everyday spending, bills, business costs and other expenses.", icon: <ArrowUpRight size={22} aria-hidden="true" />, tint: "bg-surface-strong text-text-primary" },
+  { view: "move", title: "Move Money", description: "Move money between your own cash and savings accounts.", icon: <ArrowLeftRight size={22} aria-hidden="true" />, tint: "bg-focus/10 text-focus" },
+  { view: "asset", title: "Asset / Investment", description: "Track something you own or money you've invested.", icon: <Gem size={22} aria-hidden="true" />, tint: "bg-attention/10 text-attention" },
 ];
 
 /**

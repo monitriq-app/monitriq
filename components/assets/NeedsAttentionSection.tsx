@@ -61,7 +61,7 @@ export function NeedsAttentionSection({ activeAssets, receivables }: NeedsAttent
               <Clock size={16} className="shrink-0 text-attention" aria-hidden="true" />
             </div>
             <p className="truncate text-sm font-semibold text-text-primary">{receivable.name}</p>
-            <p className="text-xs text-text-muted">Follow-up date not set. Set a follow-up to track this claim.</p>
+            <p className="text-xs text-text-muted">No follow-up logged yet. Set one to keep track of this payment.</p>
           </div>
         ))}
       </div>

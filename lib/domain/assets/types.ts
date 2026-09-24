@@ -14,10 +14,11 @@ export type ValuationType = AssetValuation["valuation_type"];
  * Optional, user-driven operational status (P0-E3-S4) — never inferred
  * from valuation/repair data (see docs/reports/P0-E3-S4-assets-
  * production-ui.txt, "Insight != status"). Deliberately has no "sold"
- * value: that lifecycle transition belongs to the real Asset Sale/
- * Disposal workflow (not implemented this phase — see that report's
- * "ASSET SALE DOMAIN GAP" section), not a status flag with no real
- * cash/lifecycle effect.
+ * value: the vehicle operational lifecycle and the generic disposition
+ * lifecycle (P0-E4-S1, see AssetSummary.isDisposed below) are two
+ * separate concepts — a "sold" vehicle's last operational status might
+ * still read "Listed" historically, but `isDisposed` is what the UI must
+ * treat as authoritative for current ownership state.
  */
 export type AssetStatusCode = "awaiting_repair" | "repairing" | "ready_to_list" | "listed" | "offer_received" | "under_negotiation";
 
@@ -49,11 +50,77 @@ export interface AssetSummary {
   currencyCode: string;
   isArchived: boolean;
   statusCode: AssetStatusCode | null;
+  /** True iff an active (non-voided) asset_dispositions row exists for this asset — derived, never a second stored flag (P0-E4-S1). Authoritative for current ownership state; takes precedence over statusCode in presentation. */
+  isDisposed: boolean;
+  disposedAt: string | null;
   costBasis: string | null;
   estimatedCurrentValue: string | null;
   quickSaleEstimate: string | null;
   targetValue: string | null;
   latestValuedAt: string | null;
+}
+
+/**
+ * Full sale economics for one recorded disposition — see
+ * record_asset_sale()/asset_disposition_summary() in the migration.
+ * `basisAtSale`/`capitalReturned`/`realisedGainLoss` are all `null`
+ * together when the asset had no recorded cost basis at the moment of
+ * sale — "Not calculated," never a fabricated profit or loss.
+ * Immutable: never recomputed from the asset's later/current basis.
+ */
+export interface AssetDispositionSummary {
+  dispositionId: string;
+  assetId: string;
+  assetName: string;
+  assetType: AssetTypeCode;
+  occurredAt: string;
+  currencyCode: string;
+  grossProceeds: string;
+  sellingCosts: string;
+  netProceeds: string;
+  basisAtSale: string | null;
+  capitalReturned: string | null;
+  realisedGainLoss: string | null;
+  destinationBucketId: string;
+  financialEventId: string;
+  notes: string | null;
+  isVoided: boolean;
+}
+
+/** Everything the Sell Asset flow can submit — matches record_asset_sale()'s parameters. Currency is always the asset's own native currency; the destination bucket must match it exactly (v1 has no cross-currency asset sale). */
+export interface RecordAssetSaleInput {
+  assetId: string;
+  destinationBucketId: string;
+  grossProceeds: string;
+  sellingCosts?: string;
+  occurredAt?: string;
+  notes?: string;
+  idempotencyKey?: string;
+}
+
+/**
+ * The direct return of record_asset_sale() — narrower than
+ * AssetDispositionSummary (no assetName/assetType/isVoided; those only
+ * come from the joined asset_disposition_summary() read). Same
+ * nullability-correction discipline as getAssetSummaries(): the RPC is
+ * `returns table(...)`, so Supabase's generator can't infer that
+ * basis_at_sale/realised_gain_loss/capital_returned/notes are genuinely
+ * nullable — the repository mapping corrects that.
+ */
+export interface AssetDisposition {
+  dispositionId: string;
+  assetId: string;
+  occurredAt: string;
+  currencyCode: string;
+  grossProceeds: string;
+  sellingCosts: string;
+  netProceeds: string;
+  basisAtSale: string | null;
+  realisedGainLoss: string | null;
+  capitalReturned: string | null;
+  destinationBucketId: string;
+  financialEventId: string;
+  notes: string | null;
 }
 
 /** Everything the "Add Asset" foundation form can submit — matches create_asset()'s parameters. */

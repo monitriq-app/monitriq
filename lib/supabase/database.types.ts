@@ -85,6 +85,92 @@ export type Database = {
           },
         ]
       }
+      asset_dispositions: {
+        Row: {
+          asset_id: string
+          basis_at_sale: number | null
+          capital_returned: number | null
+          created_at: string
+          currency_code: string
+          destination_bucket_id: string
+          disposition_type: string
+          financial_event_id: string
+          gross_proceeds: number
+          id: string
+          net_proceeds: number | null
+          notes: string | null
+          occurred_at: string
+          realised_gain_loss: number | null
+          selling_costs: number
+          user_id: string
+        }
+        Insert: {
+          asset_id: string
+          basis_at_sale?: number | null
+          capital_returned?: number | null
+          created_at?: string
+          currency_code: string
+          destination_bucket_id: string
+          disposition_type?: string
+          financial_event_id: string
+          gross_proceeds: number
+          id?: string
+          net_proceeds?: number | null
+          notes?: string | null
+          occurred_at: string
+          realised_gain_loss?: number | null
+          selling_costs?: number
+          user_id: string
+        }
+        Update: {
+          asset_id?: string
+          basis_at_sale?: number | null
+          capital_returned?: number | null
+          created_at?: string
+          currency_code?: string
+          destination_bucket_id?: string
+          disposition_type?: string
+          financial_event_id?: string
+          gross_proceeds?: number
+          id?: string
+          net_proceeds?: number | null
+          notes?: string | null
+          occurred_at?: string
+          realised_gain_loss?: number | null
+          selling_costs?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "asset_dispositions_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_dispositions_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "asset_dispositions_destination_bucket_id_fkey"
+            columns: ["destination_bucket_id"]
+            isOneToOne: false
+            referencedRelation: "cash_buckets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "asset_dispositions_financial_event_id_fkey"
+            columns: ["financial_event_id"]
+            isOneToOne: false
+            referencedRelation: "financial_events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       asset_types: {
         Row: {
           code: string
@@ -1589,6 +1675,27 @@ export type Database = {
           currency_code: string
         }[]
       }
+      asset_disposition_summary: {
+        Args: never
+        Returns: {
+          asset_id: string
+          asset_name: string
+          asset_type: string
+          basis_at_sale: string
+          capital_returned: string
+          currency_code: string
+          destination_bucket_id: string
+          disposition_id: string
+          financial_event_id: string
+          gross_proceeds: string
+          is_voided: boolean
+          net_proceeds: string
+          notes: string
+          occurred_at: string
+          realised_gain_loss: string
+          selling_costs: string
+        }[]
+      }
       asset_latest_valuations: {
         Args: never
         Returns: {
@@ -1623,8 +1730,10 @@ export type Database = {
           asset_type: string
           cost_basis: string
           currency_code: string
+          disposed_at: string
           estimated_current_value: string
           is_archived: boolean
+          is_disposed: boolean
           latest_valued_at: string
           name: string
           quick_sale_estimate: string
@@ -2389,6 +2498,32 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      record_asset_sale: {
+        Args: {
+          p_asset_id: string
+          p_destination_bucket_id: string
+          p_gross_proceeds: number
+          p_idempotency_key?: string
+          p_notes?: string
+          p_occurred_at?: string
+          p_selling_costs?: number
+        }
+        Returns: {
+          asset_id: string
+          basis_at_sale: string
+          capital_returned: string
+          currency_code: string
+          destination_bucket_id: string
+          financial_event_id: string
+          gross_proceeds: string
+          id: string
+          net_proceeds: string
+          notes: string
+          occurred_at: string
+          realised_gain_loss: string
+          selling_costs: string
+        }[]
       }
       record_asset_valuation: {
         Args: {

@@ -1,0 +1,547 @@
+P0-E4-S2 — UX LANGUAGE + PROGRESSIVE DISCLOSURE SIMPLIFICATION
+================================================================
+
+1. PHASE
+P0-E4-S2 — UX Language + Progressive Disclosure Simplification.
+
+2. STATUS
+COMPLETE.
+
+3. OBJECTIVE
+Make Monatriq understandable to a normal person answering "How much
+money do I have? Where is my money? What am I invested in? What do I
+own? What am I owed? What am I working toward? What changed recently?"
+without requiring accounting/investment terminology knowledge — without
+removing financial truth, weakening accounting semantics, flattening
+distinct concepts, or touching schema/migrations/RLS/financial
+calculations. Simple language first; advanced financial detail on
+demand, via progressive disclosure, never deleted.
+
+4. GIT PREFLIGHT
+`git status` at the start of this phase showed the full P0-E4-S1 Asset
+Sale/Disposal working tree still uncommitted, exactly as the prior
+phase left it (migration, repository/types changes, SellAssetSheet,
+SoldAssetsSection, architecture/security doc updates) — none of it was
+deleted or rewritten this phase. One unexpected, unrelated diff was
+found: `package.json`/`package-lock.json` already modified with a newly
+added `"supabase": "^2.117.0"` devDependency (~222 additive
+package-lock.json lines), predating this phase's own work. Per this
+phase's explicit "if unexpected unrelated changes exist: STOP and
+report" instruction, the user was asked via AskUserQuestion how to
+proceed and explicitly chose "Leave it as-is, proceed with P0-E4-S2."
+That diff was left untouched for the remainder of this phase and is not
+attributed to P0-E4-S2's own changes (see §33, Git status).
+
+5. LANGUAGE AUDIT
+Searched runtime UI copy (components/, app/) for "cost basis", "capital
+allocation", "tracked non-cash", "realised gain", "net proceeds",
+"gross proceeds", "disposition", "liquidity buffer", "financial
+investment", and related domain terms. Each occurrence was classified:
+domain/internal-only (left as-is: `capabilities.ts` internals, database
+column names, architecture docs, test names), advanced-detail
+(acceptable behind "More details": Gross Proceeds, Cost Basis label
+variants, Capital Returned), or default-consumer-UI (simplified: card
+labels, form labels, section headings, empty-state copy, help text).
+No mechanical find-and-replace was used — every occurrence was read in
+its component/context before deciding which of the three buckets it
+belonged to, per the brief's explicit instruction.
+
+6. MENTAL-MODEL CHANGES
+No architecture or schema change. The five-category user mental model
+(Money, Investments, Things I Own, Money Owed to You, Goals) is
+expressed purely through copy and section framing on top of the
+existing Assets/Money/Receivables/Goals domains, which keep their
+existing table/domain names. Money and Investments remain genuinely
+separate domains (cash buckets vs. the `assets` table) — this phase did
+not and could not merge them; it only made the existing separation read
+correctly to a user (Savings/checking/wallet copy lives in Money, never
+suggested as something to add via Assets).
+
+7. HOME WORDING CHANGES
+`components/home/PositionSection.tsx`: "Liquid Position" → "Cash
+Position" (chosen over "Available Cash" — see §21, Multi-currency/
+truthfulness note below on why "Available" was rejected). "Safe to
+Deploy" label kept (distinctive Monatriq concept, not jargon) but its
+supporting copy changed from "Capital available after protected buffer"
+to "Money you can use after protected savings and commitments" — plain
+language, same underlying value. "Net Worth" kept unchanged (already
+standard consumer-finance language). `components/home/LiquidityNote.tsx`:
+"Estimated quick-sale potential:" → "Quick-sale estimate:"; "Estimated
+recoverable receivables:" → "Estimated money you could recover:"; "X of
+Y receivables" → "X of Y owed to you". No Home layout/composition
+change — approved visual reference untouched.
+
+8. MONEY WORDING CHANGES
+Money In, Money Out, Net Change, Available Cash, Activity headings were
+already plain and kept unchanged. Supporting copy simplified:
+`AvailableCashSection.tsx` "No cash buckets yet"/"View N cash
+bucket(s)" → "No accounts yet"/"View N account(s)". `ManageCashSection.
+tsx` "Add cash or a new bucket" → "Add cash or a new account"; "Create
+Cash Bucket" heading → "Add an Account" with a new helper line "For
+checking, savings, wallets, or any place you keep cash." `CreateBucket
+Form.tsx` submit button "Add bucket"/"Adding…" → "Add account"/
+"Adding…"; error fallback → "Could not add this account."
+`AddCashBalanceForm.tsx` option/label "Bucket" → "Account"; "+ Create a
+new cash bucket" → "+ Add a new account". `CashInBySourceSection.tsx`:
+"Internal bucket movements are strictly excluded from income
+calculations." → "Money moved between your own accounts is never
+counted as income." "Cash In" was deliberately NOT renamed to "Income"
+(Cash In includes non-income inflows such as asset sale proceeds and
+receivable recovery — renaming would be a financial falsehood per the
+brief's explicit example).
+
+9. SAVINGS TREATMENT
+No schema or feature change (none required — a savings account is just
+a cash bucket with `bucket_type` reflecting its purpose). Copy-only
+change: `ManageCashSection.tsx`'s new "Add an Account" helper text
+("For checking, savings, wallets, or any place you keep cash.") makes
+explicit that Savings/emergency cash/USD savings belongs in Money, not
+Assets — directly addressing the brief's "do not encourage users to
+create Savings as an Asset" requirement.
+
+10. ASSETS OVERVIEW WORDING
+`app/(app)/assets/page.tsx` subtitle changed from "Where your capital
+is tied up." to "Where your money is outside cash and savings." — both
+plain language and a more accurate boundary statement (Assets never
+includes cash/savings; the old copy didn't make that boundary explicit).
+No composition/layout change — category sections, filters, and card
+grid are visually untouched.
+
+11. INVESTMENT CARD SIMPLIFICATION
+`assetDisplayConfig("financial_investment")`: basisLabel "Invested",
+currentValueLabel "Current Value", quickSaleLabel "Liquidation
+Estimate", targetLabel "Target", `showGainLoss: true`. AssetCard's
+primary grid for this type shows Invested / Current Value / Gain-Loss
+(when both values are known) / Target — matching the brief's example
+composition ("Stocks / Invested USD 500 / Current value USD 1,000 /
+Gain +USD 500 / Target USD 2,000") without inventing a template that
+doesn't reflect real recorded data. Liquidation Estimate moved to
+"More details" (not emphasized — a financial investment's quick-sale
+value is a secondary fact, unlike a resale-oriented vehicle's).
+
+12. PROPERTY SIMPLIFICATION
+`assetDisplayConfig("property")`: basisLabel "What You Paid",
+currentValueLabel "Estimated Value", `showGainLoss: false`,
+`emphasizeQuickSale: false`. Primary card shows What You Paid /
+Estimated Value only; Quick-Sale Estimate and Target sit behind "More
+details" — matching the brief's Land/Property example exactly ("What
+you paid / Estimated value" primary, "Quick-sale estimate / Target"
+optional). No investment-account terminology (no "basis", no
+"liquidation") appears in Property's default card.
+
+13. VEHICLE SIMPLIFICATION
+`assetDisplayConfig("vehicle")`: basisLabel "What You Paid",
+currentValueLabel "Current / As-Is Value", quickSaleLabel "Quick-Sale
+Estimate", `showGainLoss: false`, `emphasizeQuickSale: true` — Vehicle
+is the one type whose quick-sale figure stays in the primary grid
+rather than behind "More details", since a vehicle is commonly
+resale-relevant. Audited whether the current model can factually
+distinguish personal-use / business-use / resale-intent vehicles: it
+cannot — `assets`/`asset_capabilities()` expose no such classification,
+only `status_code` (an operational lifecycle: e.g. Active, Listed,
+Sold-adjacent via disposition) and `supportsVehicleStatus`. No
+classification was invented this phase (per the brief's explicit "if no
+canonical classification exists, do NOT invent one" instruction); §32
+documents this as a future schema candidate. Vehicle Status remains
+available exactly as before (P0-E3-S4/P0-E3-S4R capability, untouched).
+
+14. BUSINESS INTEREST SIMPLIFICATION
+`assetDisplayConfig("business_interest")`: basisLabel "Amount Invested",
+currentValueLabel "Estimated Business Value", quickSaleLabel "Estimated
+Exit Value", `showGainLoss: true`. Primary card: Amount Invested /
+Estimated Business Value / Gain-Loss (when known) / Target — simple
+investment/valuation language, no vehicle/property-specific terms.
+Estimated Exit Value sits behind "More details".
+
+15. RECEIVABLES SIMPLIFICATION
+`components/assets/ReceivablesSection.tsx`: chip "Outstanding Claim" →
+"Money Owed to You"; supporting line "Outstanding claim — not
+guaranteed liquid cash." → "Money owed to you — not the same as cash in
+hand." `components/assets/NeedsAttentionSection.tsx`: "Follow-up date
+not set. Set a follow-up to track this claim." → "No follow-up logged
+yet. Set one to keep track of this payment." Field labels (Outstanding,
+Recovered, Expected Payment) were already plain and kept. "Est.
+Recoverable" was left as the compact field label — the brief allows
+"Recoverable estimate" as secondary/help terminology, and this is
+already a secondary field on the card, not the leading fact.
+
+16. ADD ASSET PROGRESSIVE DISCLOSURE
+`AddAssetSheet.tsx`: Basis and Current Value inputs remain always
+visible in Step 2 with plain fallback labels ("What did you pay?" /
+"Current value"). Quick-Sale Estimate, Target, and Vehicle Status
+(where applicable) moved inside a `<MoreDetails>` wrapper labeled
+"+ Add more details" is not shown by default — collapsed until opened.
+`assetCreationConfig()`'s per-type labels were rewritten from
+accounting phrasing to question-style plain phrasing exactly per the
+brief's per-type table (Financial Investment: "How much have you
+invested?" / "Current value", advanced "Liquidation estimate" /
+"Target"; Property: "What did you pay?" / "Estimated value", advanced
+"Quick-sale estimate" / "Target"; Vehicle: "What did you pay?" /
+"Current / As-Is value", advanced "Quick-sale estimate" / "Target sale
+price" / "Vehicle status"; Business Interest: "Amount invested" /
+"Estimated business value", advanced "Estimated exit value" /
+"Target"). What gets written to canonical fields (`basis_amount`,
+`current_value`, `quick_sale_value`, `target_value`) is completely
+unchanged — only the form's own labels moved.
+
+17. ASSET SALE SIMPLIFICATION
+`SellAssetSheet.tsx`: form label "Gross Proceeds" → "Sale Price";
+"Destination Cash Bucket" → "Add Money To". Preview block: "Gross
+Proceeds" → "Sale Price", "Net Cash Proceeds" → "Money Received After
+Costs", "Cost Basis" → the asset type's own `display.basisLabel`,
+"Realised Gain/Loss" → "Profit / Loss on Sale". "Selling Costs" kept
+as-is (already plain, matches the brief). Advanced-only "Capital
+Returned" moved into a "More details" block, shown only when basis is
+known. Unknown-basis message: "Add what you originally paid or invested
+to calculate this — it won't be invented as zero." (never "basis_at_
+sale unavailable", never a fabricated zero). Underlying formulas
+(net_proceeds, realised_gain_loss, capital_returned) are untouched
+database `GENERATED` columns from P0-E4-S1 — this phase only renamed
+what UI label points at each one.
+
+18. SOLD ASSETS TERMINOLOGY
+`SoldAssetsSection.tsx` heading "Sold Assets" already matched the
+brief and was kept. Field labels: "Gross Proceeds" → "Sale Price",
+"Net Proceeds" → "Received After Costs", "Cost Basis" → per-type
+`display.basisLabel`, "Realised Gain/Loss" → "Profit / Loss". No
+"Disposition"/"Disposed Assets" language was ever user-facing in this
+component (it was already using "Sold Assets"); domain code
+(`asset_dispositions`, `getAssetDispositionSummaries`) retains its
+internal naming untouched.
+
+19. GOALS WORDING REVIEW
+Goals screen itself was not touched (brief scope: audit, not redesign,
+and no Goals-specific issue was found). "Goal", "Target", "Saved /
+Allocated", "Target date", "Protected" were confirmed already plain and
+left as-is. No "funding ratio" or "capital allocation" language exists
+in Goals' current UI to remove. Goals shares the renamed
+`CapitalAllocationCard`/"Where Your Money Is" only insofar as that card
+lives on the Assets screen, not Goals — no cross-contamination.
+
+20. ADVANCED-DETAILS PATTERN
+One new, reused component: `components/ui/MoreDetails.tsx` — a button
+(default label "More details", `aria-expanded`, ChevronDown rotation)
+that conditionally renders its children, matching the disclosure
+pattern already established in `ManageCashSection`/`AvailableCash
+Section` rather than introducing a second mechanism (e.g. native
+`<details>`). Used in `AddAssetSheet.tsx` (optional creation fields),
+`AssetCard.tsx` (secondary display metrics), and `SellAssetSheet.tsx`
+(Capital Returned). No screen invented its own "Advanced"/"Show
+extras"/"Details" variant — this is the single standardized phrase and
+component across the phase's changes.
+
+21. CENTRALIZED PRESENTATION CONFIGURATION
+`lib/domain/assets/capabilities.ts` now exposes three functions with a
+clear boundary: `assetCapabilities(assetType)` — what a type CAN do
+(supportsVehicleStatus, supportsCapitalImprovement, supportsSale);
+`assetCreationConfig(assetType)` — form-question labels for Add Asset;
+`assetDisplayConfig(assetType)` — compact card/field labels for display,
+plus `showGainLoss`/`emphasizeQuickSale` presentation-priority flags.
+This is the single source every display component reads from
+(AssetCard, AssetActionSheet, SellAssetSheet, SoldAssetsSection) — no
+per-component duplicate label map exists. `showGainLoss`/
+`emphasizeQuickSale` are presentation-priority flags only; they gate
+which metrics render where, they never gate what data exists or is
+computed.
+
+22. MULTI-CURRENCY REVIEW
+No change to currency handling. Every renamed label still renders
+per-currency, per-asset — no new cross-currency aggregation or fake
+single total was introduced anywhere in this phase's changes.
+"Liquid Position" → "Cash Position" (not "Available Cash") was a
+deliberate truthfulness decision: `liquidCash` includes protected/
+goal-allocated amounts, so calling it "Available" would misrepresent
+already-earmarked money as spendable — this is documented directly in
+`PositionSection.tsx`'s doc comment.
+
+23. ACCESSIBILITY
+`MoreDetails` uses a real `<button type="button">` (native keyboard
+focus/activation, no custom key handling needed), sets `aria-expanded`
+reflecting open state, and its label text itself changes ("More
+details" ↔ "Hide details") so the control's purpose is announced
+without relying on the aria-expanded attribute alone. Touch target is
+`h-9` (36px) — consistent with the existing disclosure buttons it was
+modeled on. Focus is not force-moved into/out of the revealed content,
+matching the existing `ManageCashSection` precedent.
+
+24. MOBILE
+No new layout/grid was introduced — `MoreDetails` and the primary/
+secondary metric split were built inside the existing AssetCard/
+AddAssetSheet grid structure (`grid grid-cols-2 gap-2`-style layouts
+already used pre-phase), so moving fields into progressive disclosure
+reduces the number of tiles shown by default rather than changing tile
+sizing. Visual verification at 320/360/393/430px and tablet/desktop
+was NOT performed with real browser tooling this phase — see §31 for
+the explicit gap and §34/§35 for the required manual review step.
+
+25. LIGHT/DARK/SYSTEM
+No color, token, or theme logic was touched — every change in this
+phase is text content or which existing Tailwind classes/components
+wrap that text (MoreDetails reuses `text-text-secondary`/`text-text-
+primary` tokens already used elsewhere). No new hardcoded color was
+introduced. Real-browser confirmation across Light/Dark/System was NOT
+performed this phase — same gap as §24, same required next step.
+
+26. TESTS
+Added ~13 new assertions to `supabase/tests/assets/run.ts`: `assetDisplay
+Config()` coverage for financial_investment, property, vehicle,
+business_interest, and a loop over equipment/inventory/collectible/
+other; `assetCreationConfig()` plain-wording spot checks; a `category
+Meta()` check that financial_investment's heading is "Investments" not
+"Financial Investments". Updated 7 pre-existing P0-E3-S4R2 assertions
+that asserted the OLD `assetCreationConfig()` accounting wording, to
+assert the new plain wording instead (a deliberate, correct update per
+the brief's own "test intentionally updated for new semantics" clause,
+not a regression). Final Assets suite: 114/114 passed (was 107 pre-
+phase). Full suite: 551/551 passed across all 12 domains, zero
+failures (was 544/544 pre-phase).
+
+27. LINT/TYPECHECK/BUILD
+`npm run lint` — clean, zero warnings/errors. `npm run typecheck`
+(`tsc --noEmit` for the app plus the tests tsconfig) — clean. `npm run
+build` (`next build`, Turbopack) — compiled successfully, all 19 routes
+generated with no errors.
+
+28. FINANCIAL-SEMANTICS AUDIT
+No calculation, formula, or domain function was changed. Gain/Loss
+(AssetCard) and Profit/Loss-on-Sale (SellAssetSheet preview) are
+rendered, not computed anew — AssetCard's Decimal.js subtraction
+(currentValue.minus(basis)) exactly mirrors, and SellAssetSheet's
+preview exactly mirrors, the same values the database's own GENERATED
+columns (`net_proceeds`, `realised_gain_loss`, `capital_returned`,
+established P0-E4-S1) will produce once the sale is actually recorded —
+no second, independently-defined formula exists anywhere in this
+phase's changes. No `Number()`/`parseFloat()`/`toFixed()` was
+introduced for financial arithmetic. Every renamed label points at
+exactly the same underlying field/query it pointed at before the
+rename.
+
+29. SCHEMA-CHANGE CONFIRMATION
+No migration was created or modified this phase. `git status` confirms
+`supabase/migrations/` contains only the two pre-existing, already-
+local-only migrations carried over from P0-E3-S4R and P0-E4-S1
+(unchanged, untouched this phase) — no new migration file exists.
+`lib/supabase/database.types.ts`'s diff predates this phase (from
+P0-E4-S1's schema work) and was not modified further here.
+
+30. FILES CHANGED
+This phase's own changes (all uncommitted, per the standing "do not
+commit" instruction):
+Modified: lib/domain/assets/capabilities.ts, lib/domain/assets/
+category-meta.ts, components/assets/AssetCard.tsx, components/assets/
+AssetActionSheet.tsx, components/assets/AddAssetSheet.tsx, components/
+assets/SellAssetSheet.tsx, components/assets/SoldAssetsSection.tsx,
+components/assets/TrackedAssetsSummaryCard.tsx, components/assets/
+CapitalAllocationCard.tsx, components/assets/ReceivablesSection.tsx,
+components/assets/NeedsAttentionSection.tsx, app/(app)/assets/page.tsx,
+components/home/PositionSection.tsx, components/home/LiquidityNote.tsx,
+components/money/AvailableCashSection.tsx, components/money/
+ManageCashSection.tsx, components/money/CreateBucketForm.tsx,
+components/money/AddCashBalanceForm.tsx, components/money/
+CashInBySourceSection.tsx, components/quick-add/QuickAddProvider.tsx,
+components/quick-add/MoneyReceivedForm.tsx, components/quick-add/
+MoneySpentForm.tsx, components/quick-add/MoveMoneyForm.tsx,
+supabase/tests/assets/run.ts, docs/product/PRODUCT_DEFINITION.md,
+docs/design/VISUAL_CONSTITUTION.md, docs/project/BUILD_STATE.md.
+New: components/ui/MoreDetails.tsx, docs/reports/
+P0-E4-S2-ux-language-progressive-disclosure.txt (this file).
+Carried over from P0-E4-S1, untouched this phase: components/assets/
+SellAssetSheet.tsx and components/assets/SoldAssetsSection.tsx existed
+as new files before this phase and were modified (listed above, not
+duplicated here as "new"); components/assets/AssetsBoard.tsx's P0-E4-S1
+wiring change (passing buckets/currencies through to AssetActionSheet
+for the Sell Asset flow) — structural, not a wording change, and not
+touched further this phase; supabase/migrations/
+20261001090000_create_asset_disposition_domain.sql; lib/domain/assets/
+repository.ts, lib/domain/assets/types.ts, lib/supabase/database.types.
+ts; docs/architecture/FINANCIAL_DOMAIN_MODEL.md, docs/architecture/
+MULTI_CURRENCY_MODEL.md, docs/security/SECURITY_AND_RLS_PRINCIPLES.md;
+docs/reports/P0-E4-S1-asset-sale-disposal-domain-foundation.txt.
+Pre-existing, unrelated, user-approved out-of-scope: package.json,
+package-lock.json (see §4, §33).
+
+31. ASSUMPTIONS
+"Cash Position" (not "Available Cash") for Home's former "Liquid
+Position" label, since `liquidCash` includes protected/goal-allocated
+amounts and "Available" would overstate what's freely spendable.
+"Estimated Business Value" for business_interest was assumed to permit
+lowercase "business" mid-label (matching the exact string ultimately
+implemented, "Estimated business value") rather than the brief's
+title-case example — a minor stylistic choice, not a semantic one.
+Vehicle quick-sale info stays primary/emphasized by default (not moved
+into "More details") because no canonical way exists to detect
+resale-vs-personal intent — assumed safer to keep it visible than to
+guess it's irrelevant.
+
+32. OPEN QUESTIONS
+Should Monatriq add a real vehicle-purpose/classification field
+(personal-use / business-use / resale-intent) so Vehicle display can
+stop assuming quick-sale relevance by default? This phase deliberately
+did not add one (explicit schema-change prohibition) but flags it as a
+plausible future schema candidate. Should "Est. Recoverable" on
+ReceivablesSection's compact card grid be further simplified, or is
+its secondary/detail-context position sufficient per the brief's
+"may remain secondary/help terminology" allowance? Left as syntax that
+satisfies the brief without further change; a future phase could
+revisit if user feedback suggests otherwise.
+
+33. RISKS
+Git preflight found and the user explicitly approved leaving in place
+an unrelated `package.json`/`package-lock.json` diff (`supabase`
+devDependency addition) that predates this phase — it remains
+uncommitted and out of scope; anyone reviewing `git diff` should not
+attribute it to P0-E4-S2. No real-browser/device visual verification
+(Light/Dark/System, 320-430px+, actual touch-target rendering) has
+happened yet for this phase's changes — code-level/Tailwind-class
+review only; this is the same category of risk BUILD_STATE.md already
+flags for Home (P0-E3-S2) and should be resolved by manual review
+before treating this phase as visually verified, not just functionally
+complete. Two migrations (P0-E3-S4R, P0-E4-S1) remain local-only and
+undeployed to Monatriq Dev — unchanged by this phase, still blocked on
+Supabase CLI project access.
+
+34. GIT STATUS
+At the end of this phase: all P0-E4-S1 files remain modified/untracked
+exactly as before (repository.ts, types.ts, database.types.ts, the
+three architecture/security docs, the migration, SellAssetSheet.tsx,
+SoldAssetsSection.tsx — none deleted or reverted). This phase's own
+changes are the additional modified files listed in §30, plus the new
+components/ui/MoreDetails.tsx and this report. package.json/package-
+lock.json remain modified exactly as found at preflight, per the user's
+explicit "leave it as-is" decision (§4). Nothing has been committed or
+pushed — per the standing instruction, this remains the user's decision
+to make.
+
+35. RECOMMENDED NEXT PHASE
+Manual browser review of this phase's wording and progressive-
+disclosure changes (Light/Dark/System, 320/360/393/430px+ and tablet/
+desktop, keyboard navigation through the new MoreDetails controls) is
+the immediate recommended next step before anything else builds on top
+of it. After that, per BUILD_STATE.md's own "Next approved step":
+either (a) an Offers domain phase, or (b) begin Decisions production
+UI — Decisions UI was explicitly NOT started in this phase, consistent
+with every prior phase's boundary. (Note: the migration-deployment
+option originally listed here is resolved — see FINAL UX SIMPLIFICATION
+CORRECTIONS §4 below; this line is left as the phase's own original
+record rather than rewritten.)
+
+================================================================
+FINAL UX SIMPLIFICATION CORRECTIONS (P0-E4-S2A)
+================================================================
+
+Manual report review after P0-E4-S2 found four items that had been
+requested during that phase but were not actually applied to the code
+or accurately reflected in documentation. This is a targeted correction
+pass on top of the phase above, not a redo of it — nothing else in
+P0-E4-S2's scope was touched. All four corrections are presentation-
+only or documentation-only; no schema, migration, RLS, or financial-
+calculation change.
+
+1. MORE DETAILS TOUCH TARGET
+Problem: §20/§23 above describe `components/ui/MoreDetails.tsx`'s
+disclosure trigger as `h-9` (36px), below the 48px minimum touch target
+for reliable mobile tap accuracy, while §23's accessibility review did
+not flag this gap.
+Fix: the button's visible box stays exactly as compact as before (still
+`h-9`, still reads as a small text-style control) but now carries a
+`relative` position and a `::before` pseudo-element with
+`before:-inset-y-1.5 before:inset-x-0 before:content-['']`, extending
+the button's actual hit-testable area 6px above and 6px below its
+visible edges — 36px + 6px + 6px = 48px effective height. The
+pseudo-element carries no visible styling (no background, no border),
+so nothing about the control's appearance changed. `aria-expanded` and
+native `<button>` keyboard activation (Tab to focus, Enter/Space to
+toggle) were already correct in P0-E4-S2 and are unaffected by this
+change. This is the one shared MoreDetails component every "More
+details" control in the app uses (AddAssetSheet, AssetCard,
+SellAssetSheet), so the fix applies everywhere at once — no
+per-instance patching was needed or done.
+
+2. INVESTMENT GAIN / LOSS LABEL
+Problem: `components/assets/AssetCard.tsx` labeled the computed
+current-value-minus-basis figure on Financial Investment and Business
+Interest cards as "Gain / Loss" — a label that reads as interchangeable
+with Asset Sale's "Profit / Loss on Sale," even though the two are
+financially distinct (one is an unrealized, still-fluctuating estimate;
+the other is a realised, cash-settled outcome from an actual sale).
+Fix: relabeled to "Unrealized Gain / Loss" in `AssetCard.tsx` (both the
+rendered label and the surrounding doc comment). The calculation itself
+— `display.showGainLoss && basis && currentValue ? currentValue.
+minus(basis) : null`, using Decimal.js, shown only when both source
+values genuinely exist — is byte-for-byte unchanged. Asset Sale's
+`SellAssetSheet.tsx`/`SoldAssetsSection.tsx` already used "Profit /
+Loss on Sale" / "Profit / Loss" from the original P0-E4-S2 pass and
+required no change; the two labels are now unambiguous, and neither
+value is ever conflated with the other in code (they come from
+different tables — `asset_summary()`'s valuation columns vs.
+`asset_dispositions`' `GENERATED` columns).
+
+3. VEHICLE DEFAULT DISCLOSURE
+Problem: `lib/domain/assets/capabilities.ts`'s `assetDisplayConfig
+("vehicle")` had `emphasizeQuickSale: true`, keeping Quick-Sale
+Estimate in AssetCard's primary grid by default. This assumed every
+Vehicle is resale-oriented — exactly the kind of unstated assumption
+the rest of P0-E4-S2 was written to eliminate, and one the phase's own
+Vehicle-simplification section (see original §13 above) explicitly
+warned against without first confirming the model could support it. It
+cannot: `assetCapabilities()` has no personal-use/business-use/
+resale-intent classification field for Vehicle, only
+`supportsVehicleStatus` (an operational lifecycle) and `supportsSale`
+(a generic capability every non-inventory type has).
+Fix: `DISPLAY_CONFIG.vehicle` in `capabilities.ts` now has
+`emphasizeQuickSale: false`, matching Property/Equipment/Collectible/
+Other — Vehicle's default `AssetCard` shows only What You Paid and
+Current / As-Is Value in its primary grid, same as every other
+non-investment type. `targetLabel` was also corrected from generic
+"Target" to "Target Sale Price" (matching the vehicle-specific wording
+`assetCreationConfig()` already used at creation time, and matching
+this correction's own instruction). On `AssetCard.tsx`, the vehicle
+status badge that previously rendered unconditionally at the top of
+the card (for any asset with `supportsVehicleStatus`) was removed from
+that default position and is now rendered as a "Vehicle Status" entry
+inside the card's "More details" section alongside Quick-Sale Estimate
+and Target Sale Price. Nothing was removed: Vehicle Status remains
+fully visible (in "More details") and fully editable in "Manage"
+(`AssetActionSheet.tsx`'s Status `<Select>`, gated on
+`capabilities.supportsVehicleStatus`, which this correction did not
+touch). No vehicle-purpose/classification schema field was added — the
+fix is a presentation-default change, not a new canonical fact.
+`supabase/tests/assets/run.ts`'s vehicle `assetDisplayConfig` test was
+updated to assert `emphasizeQuickSale === false` and the corrected
+`targetLabel`, replacing the prior assertion that had encoded the
+now-corrected assumption.
+
+4. REMOTE MIGRATION STATUS
+Problem: `docs/project/BUILD_STATE.md` (both the P0-E4-S1 "Current
+status"/"Remote deployment" section as it stood before this correction,
+and the P0-E3-S4R "Prior phase" historical entry) described
+`20260930090000_restrict_asset_status_to_vehicle.sql` (P0-E3-S4R) and
+`20261001090000_create_asset_disposition_domain.sql` (P0-E4-S1) as
+local-only and pending deployment, blocked on Supabase CLI project
+access from inside the agent's own environment. This was accurate when
+written but became stale.
+Fix: manual terminal verification, performed outside this agent
+session, confirmed Local and Remote (Monatriq Dev) migration histories
+now match through both migrations. `BUILD_STATE.md`'s "Remote
+deployment" section now states Monatriq Dev is synchronized through
+both migrations, its P0-E3-S4R historical entry carries an explicit
+"Update, P0-E4-S2A" note pointing to the resolution rather than being
+silently rewritten, and its "Next approved step" section no longer
+lists migration deployment as outstanding. No migration was run,
+reapplied, or otherwise touched by this agent in this correction pass
+or in P0-E4-S2 — this is a documentation correction reflecting
+externally-confirmed state, not an action taken here.
+
+VALIDATION (P0-E4-S2A)
+`npm run lint` — clean. `npm run typecheck` — clean. `npm run build` —
+compiled successfully, all 19 routes generated. `npm run test:assets` —
+114/114 passed (one test's assertions updated for correction #3, net
+assertion count unchanged from the P0-E4-S2 baseline). `npm run test`
+(full regression, all 12 suites) — 551/551 passed, zero failures, zero
+regressions — identical total to the P0-E4-S2 baseline, confirming
+these four corrections changed presentation and documentation only.
+
+Not committed. Stopping here for manual browser review, per instruction
+— none of these four corrections have been visually verified in a real
+browser (the MoreDetails tap-target fix and Vehicle's now-neutral
+default card are the two most relevant to confirm visually).

@@ -244,7 +244,7 @@ export function MoneySpentForm({ buckets, categories, onBack, onClose }: MoneySp
               ))}
             </Select>
             {mode === "debt_payment" && selectedLiability && eligibleBucketsForLiability.length === 0 ? (
-              <p className="text-xs text-danger">No {selectedLiability.currencyCode} bucket exists yet to pay from.</p>
+              <p className="text-xs text-danger">No {selectedLiability.currencyCode} account exists yet to pay from.</p>
             ) : null}
           </div>
 

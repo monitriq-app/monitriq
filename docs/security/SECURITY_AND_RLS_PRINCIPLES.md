@@ -545,3 +545,94 @@ INVOKER` functions via CTEs/joins, add no new table, and never reach for
 If a composition ever needs privileges beyond the calling user's own, that
 is a sign the composition is wrong, not a justification for `SECURITY
 DEFINER`.
+
+## 21. Established pattern: Asset Sale / Disposal — the first RPC-callable SECURITY DEFINER function (P0-E4-S1)
+
+`record_asset_sale()` (Assets, FINANCIAL_DOMAIN_MODEL.md §45) is the
+first `SECURITY DEFINER` function in this codebase that a client calls
+directly via RPC — every prior `SECURITY DEFINER` use is the §10 signup
+trigger, which fires automatically on `auth.users` and is never invoked
+by name from the client at all. §11's own rule already anticipates
+exactly this case ("EXECUTE revoked from public/anon/authenticated
+*unless a specific reason requires a role to call it directly*") — this
+is that reason, made concrete:
+
+- **Why DEFINER was necessary here specifically, not just convenient.**
+  This phase's own brief required that `asset_dispositions` (gross
+  proceeds, selling costs, cost basis at sale, realised gain/loss) be
+  impossible for the client to forge by bypassing the RPC with a direct
+  table write — stricter than the accepted risk level §15 documents for
+  `receivable_ledger_events` (which DOES carry a client-facing INSERT
+  grant, an accepted lower-stakes scope boundary for that domain). The
+  only way to make a table genuinely RPC-only while every other
+  `record_*()` function in the codebase remains `SECURITY INVOKER` (which
+  requires the CALLING user to already hold the table grant a direct
+  write would need) is to grant NO insert/update on `asset_dispositions`
+  to `authenticated` at all, and have the one function that must write it
+  run with elevated privilege instead.
+- **Every §11 rule followed, verified against the actual migration, not
+  just asserted:** `set search_path = pg_catalog, public` (pinned); no
+  dynamic SQL anywhere in the function body; every relation fully
+  schema-qualified (`public.assets`, `public.cash_buckets`, ...); `revoke
+  all ... from public, anon` then `grant execute ... to authenticated`
+  (the narrowest role that has a legitimate reason to call it); the
+  migration's own header comment explains the DEFINER rationale and
+  blast radius at length, not just a one-line comment.
+- **Never trusts a client-supplied owner — re-derives ownership from
+  `auth.uid()` against the real rows, the same discipline every
+  `SECURITY INVOKER` function already follows.** `v_uid := auth.uid()`
+  is checked non-null first; the target asset is fetched with `where
+  ast.id = p_asset_id and ast.user_id = v_uid for update` (never trusting
+  a client claim that an id belongs to them); the destination bucket
+  ownership check is identical in shape. This is what makes the function
+  safe DESPITE running with elevated privilege — the privilege lets it
+  WRITE a table the caller's own role cannot, but every READ that decides
+  WHAT to write is still scoped to the real authenticated user exactly as
+  strictly as an invoker function's RLS policy would have been.
+- **The one real subtlety §20 already warned about, handled correctly:**
+  `record_asset_sale()` calls `asset_current_basis()`, an existing
+  `SECURITY INVOKER` function, from inside its own `SECURITY DEFINER`
+  body. Per §20's own warning, a nested invoker call inside a definer
+  context does NOT re-acquire the original caller's privileges — RLS may
+  effectively be bypassed for that nested call too, since the table
+  owner (the definer function's owner) is typically RLS-exempt. This is
+  safe here specifically because `asset_current_basis()`'s own filter
+  (`where b.user_id = auth.uid()`) is an EXPLICIT WHERE clause, not a
+  bare reliance on RLS — and `auth.uid()` resolves from request context
+  (the JWT), not from the current Postgres role, so it still correctly
+  resolves to the real authenticated user regardless of the DEFINER
+  nesting. The general rule from §20 still holds for composition chains
+  that rely on RLS alone; this function does not rely on RLS alone
+  anywhere, which is exactly why it remains safe as the one documented
+  exception.
+- **A `RETURNS TABLE(...)` plpgsql function's own output-column names
+  collided with real table columns of the same name inside the function
+  body — the exact class of bug §17 already documents for
+  `evaluate_proposed_cash_use()`'s `currency_code`, hit again here with
+  `id`/`asset_id`.** `record_asset_sale()` declares `id`/`asset_id`
+  among its own output columns; `select * from public.assets where id =
+  p_asset_id` inside the body raised "column reference \"id\" is
+  ambiguous" — caught by running the real test suite, fixed the same way
+  §17 prescribes: every such query is now explicitly table-aliased
+  (`public.assets ast where ast.id = ...`).
+- **Numeric return columns are `::text`-cast in the function's own
+  `RETURNS TABLE(...)` declaration, not returned as the raw composite
+  type.** The first draft of this function returned `public.
+  asset_dispositions` directly — its `numeric` columns would have
+  serialized as raw JSON numbers over PostgREST, the exact float64
+  precision risk every other financial read function in this codebase
+  avoids by casting to `text` at the query boundary (MULTI_CURRENCY_
+  MODEL.md §6). Caught by the generated TypeScript types themselves
+  (`gross_proceeds: number` instead of the expected `string`) before it
+  ever reached a runtime value, fixed by rewriting the function's return
+  shape as an explicit `returns table(..., gross_proceeds text, ...)`
+  with each numeric column cast at the `return query select` boundary.
+
+**Rule going forward:** `SECURITY DEFINER` remains the exception, not a
+convenience — reach for it only when a normal RLS-scoped operation
+genuinely cannot enforce the required invariant (here: zero direct
+client write access to un-forgeable financial truth). When it is used,
+every one of the checks above must be verifiable by reading the
+migration alone, not asserted after the fact — the DEFINER function
+itself becomes the ENTIRE security boundary for its table, since RLS can
+no longer be assumed to apply.

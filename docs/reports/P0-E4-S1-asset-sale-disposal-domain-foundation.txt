@@ -1,0 +1,498 @@
+P0-E4-S1 — ASSET SALE / DISPOSAL DOMAIN FOUNDATION
+================================================================
+
+1. PHASE
+P0-E4-S1 — Asset Sale / Disposal Domain Foundation.
+
+2. STATUS
+COMPLETE.
+
+3. OBJECTIVE
+Implement the missing canonical Asset Sale/Disposal capability the
+P0-E3-S4 report's own "Asset Sale Domain Gap" identified: a user must be
+able to truthfully record "I sold this asset," atomically — ownership
+validated, sale economics recorded explicitly (gross proceeds, selling
+costs, cost basis at sale, realised gain/loss, capital returned), real
+cash moved through the existing Money engine, the sold asset removed
+from active value/Net Worth contribution, full history preserved,
+double-sale impossible, and complete tenant isolation. Primarily a
+domain + security phase — no broad Assets UI redesign.
+
+4. GIT PREFLIGHT
+`git status` at the start of this phase was clean — a checkpoint commit
+(`2032f27 feat: complete dynamic Money and Assets foundations`) had
+captured all P0-E3-S4/S4R/S4R2 work. No unrelated uncommitted files
+existed; nothing to stop and report.
+
+5. EXISTING ARCHITECTURE AUDIT
+Read directly rather than assumed: the Money domain migration in full
+(`financial_events`, `cash_movements`, the void-only correction trigger,
+`money_bucket_balances()`'s `voided_at`-exclusion); the Receivables/
+Liabilities migration in full (`financial_operations` compound-event
+grouping — explicitly anticipated "asset sale" in its own header
+comment; `record_receivable_recovery()` as the direct structural
+template: idempotency-key lookup, ownership checks, archived-entity
+rejection, currency-match validation, one `financial_events` row + one
+`cash_movements` row + one domain-ledger row linked via
+`financial_event_id`); the Financial Position engine (confirmed
+`asset_native_currency_totals()`/`asset_summary()`'s quick-sale CTE are
+the ONLY two places needing a "disposed" exclusion — Money's own cash
+composition needs zero changes, since sale proceeds flow through
+`money_currency_totals()` automatically); `asset_summary()`/
+`asset_native_currency_totals()`/`asset_value_by_type()`/
+`asset_quicksale_coverage()` (confirmed the existing `is_archived`
+exclusion pattern to extend); `AssetActionSheet`/`capabilities.ts` (the
+established three-layer capability-boundary pattern from P0-E3-S4R to
+extend with a REAL `supportsSale`); Quick Add's `MoneyReceivedForm.tsx`
+(the existing Asset Sale deferral banner to update); `voidFinancialEvent`
+(confirmed fully generic, works for any event_type unmodified — no new
+void function needed). SECURITY_AND_RLS_PRINCIPLES.md §11 (SECURITY
+DEFINER rules) and §15/§20 (established patterns/warnings) were read in
+full before any migration was written.
+
+6. SALE CAPABILITY DECISIONS BY ASSET TYPE
+`assetCapabilities().supportsSale`:
+- TRUE: vehicle, property, financial_investment, business_interest,
+  equipment, collectible, other — a whole-asset sale is a truthful
+  representation of what actually happened for all seven.
+- FALSE: inventory — the generic Inventory asset type represents an
+  AGGREGATE holding (a business's inventory as a whole), not a single
+  item; a generic whole-asset "sale" would falsely imply the entire
+  aggregate was liquidated in one transaction, when real inventory is
+  typically sold piecemeal over time. Documented explicitly in
+  `capabilities.ts`'s own doc comment.
+- Receivable/"Money You're Owed": structurally cannot reach this
+  capability at all — it is a separate table (`receivables`, not
+  `assets`), has no `assetType` to gate, and `record_asset_sale()`
+  proves this at the database layer too (a receivable id passed as
+  `p_asset_id` fails the same "asset not found" check any bogus id
+  would, since `receivables` rows never appear in `public.assets`) —
+  verified by a dedicated adversarial test, not just asserted from the
+  UI never showing the button.
+
+7. GENERIC DISPOSITION LIFECYCLE
+Disposition is derived, never a second stored flag: an asset is
+"disposed" iff an active (non-voided) `asset_dispositions` row exists
+for it, joined through `financial_events.voided_at` — the exact same
+discipline §15/§44 already established for Receivables/Liabilities and
+the generic-vs-subtype capability boundary, applied a third time.
+`assets.status_code` (the vehicle-only operational lifecycle) gained NO
+"sold" value and is completely untouched by a sale — a vehicle's last
+operational status (e.g. "Listed") remains real historical data;
+`isDisposed` is what the application treats as authoritative for current
+ownership state. `is_archived` and disposition are independent,
+orthogonal facts: an archived asset must be unarchived before it can be
+sold (documented lifecycle rule, prevents the ambiguous "sell something
+I've already hidden" combination), while archiving an already-sold asset
+remains allowed and harmless (both states already correctly exclude the
+asset from active totals regardless of the other).
+
+8. SCHEMA CHANGES
+One new migration,
+`supabase/migrations/20261001090000_create_asset_disposition_domain.sql`:
+one new table (`asset_dispositions`); one new `financial_events.
+event_type` value (`asset_sale`, extending the existing CHECK constraint
+the same way P0-E2-S4 already did); one new atomic RPC
+(`record_asset_sale()`, SECURITY DEFINER); `asset_summary()` dropped and
+recreated (return-shape change) to add `is_disposed`/`disposed_at`;
+`asset_native_currency_totals()`/`asset_value_by_type()`/
+`asset_quicksale_coverage()`/`financial_position_by_currency()` all
+updated (CREATE OR REPLACE, shapes unchanged) to exclude disposed
+assets; one new read function, `asset_disposition_summary()`.
+
+9. SALE/DISPOSITION RECORD
+`asset_dispositions`: `id`, `user_id`, `asset_id`, `disposition_type`
+(closed vocabulary, currently only `'sale'` — a generic name, not
+`asset_sales`, leaving room for a future non-sale disposition like
+written-off/lost/donated without another schema change, matching the
+`event_type`/`operation_type` "narrow vocabulary, extend later"
+convention already established elsewhere), `occurred_at`,
+`currency_code`, `gross_proceeds`, `selling_costs`, `net_proceeds`
+(GENERATED), `basis_at_sale` (nullable), `realised_gain_loss`
+(GENERATED), `capital_returned` (GENERATED), `destination_bucket_id`,
+`financial_event_id` (unique), `notes`, `created_at`. No client
+INSERT/UPDATE grant exists at all — `record_asset_sale()` is the only
+write path (see §36/§37).
+
+10. IMMUTABLE SNAPSHOTS
+`basis_at_sale` is captured once, at sale time, from `asset_current_
+basis()`, and never recomputed. A later basis event on the (now-sold)
+asset cannot retroactively change what a past sale's economics were —
+proven by the "history remains readable" test asserting the original
+sale's `grossProceeds`/`realisedGainLoss` are unchanged after the fact.
+
+11. COST BASIS AT SALE
+Read from the SAME canonical `asset_current_basis()` (sum of
+`asset_basis_events.amount`) every other basis display already uses —
+never `estimated_current_value`, `target_value`, or `quick_sale_
+estimate`. When the asset has no basis history at all,
+`asset_current_basis()` returns no row for it (not a zero row), and
+`basis_at_sale` is stored as `NULL` — verified by a dedicated test
+("Unknown basis does not fabricate a profit or loss").
+
+12. GROSS PROCEEDS
+The full sale price before any deduction — `p_gross_proceeds`, required,
+must be positive. Stored verbatim, never blended with selling costs.
+
+13. SELLING COSTS
+One generic amount (`p_selling_costs`, optional, defaults to 0, must be
+non-negative and strictly less than gross proceeds) — no subtype-
+specific selling-cost categories were added, per the brief's own
+instruction that one generic amount is sufficient this phase.
+
+14. NET PROCEEDS
+`net_proceeds = gross_proceeds - selling_costs`, a `GENERATED ALWAYS AS
+(...) STORED` column — the formula is enforced by Postgres itself, not
+recomputed in application code, and this is the exact amount that
+becomes the real `cash_movements` row (see §18).
+
+15. CAPITAL RETURNED
+`capital_returned = LEAST(net_proceeds, basis_at_sale)` when basis is
+known: the full basis when proceeds exceed it (a gain — the whole
+original investment was recovered), or all of net proceeds when they
+fall short (a loss — none of a shortfall is "capital return"). Written
+as an explicit `CASE WHEN basis_at_sale IS NULL THEN NULL` guard, NOT a
+bare `LEAST()` call — Postgres's `LEAST`/`GREATEST` silently ignore NULL
+arguments rather than propagating them, which would have fabricated a
+non-null `capital_returned` even when basis is genuinely unknown. Caught
+and fixed before it ever reached a test.
+
+16. REALISED GAIN/LOSS
+`realised_gain_loss = net_proceeds - basis_at_sale` (NULL when basis is
+unknown, via ordinary NULL-arithmetic propagation — no special-case
+needed for this one). Verified with dedicated gain, loss, and exact-zero
+scenarios (150000 gross/5000 costs/100000 basis → +45000 gain; 70000
+gross/100000 basis → -30000 loss; 100000 gross/100000 basis → exactly
+0.000000).
+
+17. UNKNOWN-BASIS BEHAVIOR
+An asset sold with no recorded basis history stores `basis_at_sale`,
+`realised_gain_loss`, and `capital_returned` all as `NULL` — the UI
+(`SellAssetSheet`) reads this as "Not calculated," never as zero.
+Verified by a dedicated domain test and reflected identically in the
+pre-submission client preview (Decimal.js, same formula, never a
+separate/drifting calculation).
+
+18. MONEY EVENT REPRESENTATION
+Exactly one `financial_events` row (`event_type='asset_sale'`) and
+exactly one `cash_movements` row, for the NET proceeds — the actual cash
+that arrived, never the gross amount. No `financial_operations`
+compound-event grouping was needed (unlike debt payment): a sale
+produces exactly one cash movement, not several differently-classified
+ones. Selling costs are preserved as an explicit fact on
+`asset_dispositions` (§13) rather than a second `financial_events` row,
+since they are typically deducted before the money ever reaches the
+user (a broker's cut), not a separate act of spending already-held cash.
+
+19. CASH-FLOW CLASSIFICATION
+`cash_flow_class = 'other_inflow'` — the same classification
+`receivable_recovery`/`loan_proceeds` already use, and the same
+reasoning: a real cash inflow, deliberately NOT `'income'`, because it
+converts an already-owned asset into cash rather than earning new money.
+
+20. EARNED-INCOME TREATMENT
+Verified directly: `getMoneyPeriodSummary()`'s `cashIn` includes sale
+proceeds; `earnedIncome` does not — these are two structurally different
+fields fed by two different `cash_flow_class` values (`other_inflow` vs
+`income`), proven by a dedicated test, not just asserted. Money's
+activity feed identifies the event as `asset_sale`
+(`getRecentActivity()`), never mislabeled `salary`/`business_income`/
+`other_income`.
+
+21. CURRENCY RULES
+V1 requires `destination_bucket_id`'s `currency_code` to equal the
+asset's `currency_code` exactly — checked explicitly in the RPC body
+(not a trigger, since the two values come from two different tables
+being joined for the first time). No live or manual FX rate is
+consulted; a mismatch is a rejected, clearly-explained domain error,
+never a silent 1:1 conversion. `SellAssetSheet`'s bucket picker is
+pre-filtered to only currency-compatible, non-archived buckets, so an
+incompatible destination is never offered as if valid. Documented in
+`docs/architecture/MULTI_CURRENCY_MODEL.md` §26, extending §12's own
+"no cross-currency appraisal" precedent to this second operation.
+
+22. ATOMIC RPC
+`record_asset_sale()`: one PL/pgSQL function, one transaction — ownership
+validation, archive/already-sold checks, currency match, basis lookup,
+the `financial_events` insert, the `cash_movements` insert, and the
+`asset_dispositions` insert either all succeed or the whole call raises
+an exception and nothing is written. Verified structurally (a single
+function invocation is one Postgres transaction) and behaviorally (every
+rejection-path test above proves zero partial writes — e.g. the
+already-sold check runs AFTER the row lock but BEFORE any insert).
+
+23. IDEMPOTENCY
+`p_idempotency_key` (client-generated UUID, `crypto.randomUUID()`) — the
+same pattern every other `record_*()` function uses: pre-check by
+`(user_id, idempotency_key)`, return the existing disposition if found;
+a `unique_violation` exception handler as a race-condition backstop
+(relying on `financial_events`' own existing unique index on that pair).
+Verified: a repeated key returns the SAME `dispositionId`, not a second
+row.
+
+24. DOUBLE-SALE PROTECTION
+No hard UNIQUE constraint is expressible ("at most one active disposition
+per asset" is conditioned on the LINKED `financial_events` row's
+`voided_at`, a different table, which a partial index predicate cannot
+reference). Instead: `select ... for update` locks the target `assets`
+row before checking for an existing active disposition — the same
+row-locking pattern already established for Goals' allocation-capacity
+races (SECURITY_AND_RLS_PRINCIPLES.md §16). Verified both sequentially
+(a second sale attempt on an already-sold asset is rejected) and
+concurrently (`Promise.allSettled` firing two simultaneous sale attempts
+on the same fresh asset — exactly 1 of 2 succeeds).
+
+25. ARCHIVE INTERACTION
+Decided and documented, not guessed: an archived asset cannot be sold
+(must be unarchived first — prevents the ambiguous "sell something
+already hidden as no-longer-relevant" combination). Archiving an
+ALREADY-sold asset remains allowed and harmless — `is_archived` and
+disposition are independent, orthogonal facts, and a sold asset is
+excluded from active totals regardless of its archive state either way.
+
+26. VEHICLE STATUS INTERACTION
+Selling a vehicle does NOT touch, clear, or reinterpret its
+`status_code` — verified directly: a vehicle set to `'listed'`, then
+sold, still reads `statusCode: 'listed'` in `asset_summary()` afterward
+(historical data, untouched) while `isDisposed: true` is what the
+application must treat as authoritative for current ownership state.
+
+27. REVERSAL/VOID
+No dedicated "un-sell" function exists or was needed. Voiding the sale's
+`financial_events` row through the existing, completely unmodified
+`voidFinancialEvent()` (a plain RLS-protected `UPDATE ... SET voided_at`)
+both reverses the cash effect (Money's own `voided_at`-exclusion in
+`money_bucket_balances()`, unmodified) AND restores the asset's active
+state (since disposition is purely derived from that same
+`voided_at`) — one action, two consistent effects, by construction. The
+original `asset_dispositions` row is never deleted; `asset_disposition_
+summary()` continues to return it with `isVoided: true`, and its
+original `grossProceeds`/`realisedGainLoss` remain exactly as recorded.
+A second void of an already-voided event is rejected by the existing,
+unmodified `enforce_financial_event_void_only()` trigger — the same
+once-only correction model every other domain already relies on; no
+reversal-safety special case (e.g. blocking a reversal that would drive
+a balance negative) was invented, since Money's own existing
+`voidFinancialEvent()` has never had one for any other event type — remaining
+consistent with established behavior was the explicit instruction, and
+was followed rather than inventing a new rule.
+
+28. ASSETS READ MODEL
+`asset_summary()` gained two lean fields, `isDisposed`/`disposedAt`
+(derived via a LEFT JOIN LATERAL to the latest active disposition, the
+same pattern its existing valuation columns already use) — full 9-column
+sale economics live in the separate `asset_disposition_summary()`
+instead, keeping the common per-asset read lean. `page.tsx`'s
+`activeAssets` filter was extended from `!isArchived` to `!isArchived &&
+!isDisposed`, so `AssetsBoard`/`AssetCard`/`AssetActionSheet` never
+receive a disposed asset at all — zero new disposed-state handling was
+needed in any of those three components, exactly mirroring how archived
+assets already work.
+
+29. FINANCIAL POSITION INTEGRATION
+`asset_native_currency_totals()`, `asset_value_by_type()`, and
+`financial_position_by_currency()`'s inline `quick_sale` CTE all gained
+the same "exclude disposed" condition already applied for `is_archived`.
+Net Worth reflects a sale's true economics automatically — the old asset
+value stops contributing the moment it's excluded, and the new cash
+contributes through `money_currency_totals()`, which needed ZERO changes
+since it already sums every non-voided `cash_movements` row regardless
+of the originating `event_type`. No double-counting of "old asset value
+and new cash" was possible by construction, not by a special-cased
+subtraction.
+
+30. HOME INTEGRATION
+Zero changes to any Home component or query. Home already composes
+`getFinancialPositionSummary()` end-to-end; since that function's own
+inputs (`asset_native_currency_totals()`, `money_currency_totals()`) were
+updated at the source, Home's Net Worth/capital distribution reflect a
+sale correctly with no new arithmetic anywhere in `components/home/`.
+
+31. MONEY INTEGRATION
+`getRecentActivity()`/`getMoneyPeriodSummary()` needed zero changes —
+both already read from `financial_events`/`cash_movements` generically
+by `event_type`/`cash_flow_class`, and `set_financial_event_
+classification()`'s new `asset_sale` branch (§19) is the only piece that
+needed to exist for Money to represent this correctly.
+
+32. QUICK ADD INTEGRATION
+`MoneyReceivedForm.tsx`'s existing "Asset Sale" mode banner was updated
+from "Asset sales aren't recorded here yet... Assets doesn't yet have a
+dedicated sale workflow" to an accurate message routing the user to the
+real per-asset Sell Asset action on `/assets` — Money still does NOT
+perform asset-sale accounting itself; Assets owns the workflow, exactly
+as instructed. No generic Money Received path was touched.
+
+33. ASSETS UI INTEGRATION
+`AssetActionSheet` gained a "Sell Asset" button, gated by
+`capabilities.supportsSale && !asset.isArchived` (an archived asset is
+never offered the action, consistent with §25's lifecycle rule) — opens
+a new `SellAssetSheet`. No changes to `AssetCard`'s rendering for active
+assets beyond what already existed; disposed assets never reach it
+(§28). A new `SoldAssetsSection` (rendered below Receivables on the
+Assets page) lists every recorded sale, including voided ones with a
+"Voided" badge, with a "Reverse Sale" action calling the existing
+`voidFinancialEvent()` directly.
+
+34. RLS
+`asset_dispositions`: RLS enabled, deny-by-default, `SELECT` granted to
+`authenticated` with an `auth.uid() = user_id` policy — the only access
+path besides the DEFINER RPC. No `anon` grant exists at all.
+
+35. CROSS-TENANT PROTECTION
+Every ownership check inside `record_asset_sale()` re-derives from
+`auth.uid()` against the actual `assets`/`cash_buckets` rows — never
+trusts a client-supplied id's implied ownership. Verified: User A cannot
+sell User B's asset; User A cannot use User B's cash bucket as a
+destination; anonymous `rpc()` calls are rejected outright.
+
+36. SECURITY-DEFINER REVIEW
+`record_asset_sale()` is the first RPC-callable `SECURITY DEFINER`
+function in this codebase (every prior DEFINER use is the signup
+trigger, never invoked by name from the client). Full justification,
+every §11 hardening rule verified against the actual migration text, and
+the one real subtlety (a nested `SECURITY INVOKER` call to
+`asset_current_basis()` remaining safe despite RLS's owner-bypass
+behavior in a DEFINER context, because that function's own filter is an
+explicit `WHERE ... = auth.uid()`, not a bare reliance on RLS): `docs/
+security/SECURITY_AND_RLS_PRINCIPLES.md` §21. `search_path` pinned;
+`auth.uid()` validated non-null; every relation fully schema-qualified;
+`EXECUTE` revoked from `public`/`anon`, granted only to `authenticated`;
+no dynamic SQL anywhere in the body.
+
+37. DIRECT-WRITE/GRANT REVIEW
+`asset_dispositions` has no client INSERT/UPDATE grant at all — verified
+by a dedicated adversarial test: a direct `.from("asset_dispositions").
+insert(...)` call (even with a syntactically valid, real
+`financial_event_id`) is rejected outright, proving `record_asset_sale()`
+is genuinely the only write path, not merely the UI's only path.
+
+38. TESTS ADDED
+38 new tests in `supabase/tests/assets/run.ts` (Assets suite total:
+107, up from 69), covering the full 40-item matrix the brief specified —
+capability decisions per type (7 sale-eligible types + inventory
+exclusion + structural receivable exclusion), all sale-economics
+formulas across gain/loss/zero/unknown-basis scenarios, cash-effect
+exactness, earned-income non-classification, Money activity
+identification, active-value exclusion (both `asset_native_currency_
+totals()` and `asset_summary().isDisposed`), history readability,
+double-sale rejection, concurrent-request race safety, idempotency,
+cross-user asset/bucket rejection, anonymous denial, direct-table-bypass
+rejection, cross-currency rejection, archived-bucket rejection, archived-
+asset-cannot-be-sold, vehicle-status non-interference, reversal
+(restores active state, reverses cash, retains history, rejects a
+second void), and receivable-recovery non-interference.
+
+39. ADVERSARIAL TESTS
+Cross-user asset sale, cross-user destination bucket, anonymous RPC
+call, direct `asset_dispositions` table-insert bypass, forged receivable-
+as-asset-id — all explicitly covered (§35/§37/§6's receivable test)
+alongside the standard financial-correctness matrix.
+
+40. FULL REGRESSION
+Fresh `supabase db reset` performed (required — schema changed via the
+new migration); all 15 migrations applied cleanly. Full suite: 20
+(RLS/Profile) + 48 (Money) + 11 (Currency) + 107 (Assets) + 27
+(Receivables) + 25 (Liabilities) + 56 (Goals) + 86 (Rules/Obligations) +
+70 (Decisions) + 33 (Financial Position) + 30 (Home Readiness) + 31
+(Home) = **544/544 assertions passed**, all 12 suites, zero failures —
+every prior assertion remains passing; none needed to be superseded.
+
+41. LINT/TYPECHECK/BUILD
+`npm run lint`: 0 errors, 0 warnings. `npm run typecheck` (app +
+`supabase/tests/tsconfig.json`): clean — caught two real bugs before
+runtime: (1) `record_asset_sale()`'s first draft returned raw `numeric`
+columns (the generated TS types showed `gross_proceeds: number`,
+inconsistent with this codebase's `::text`-cast discipline for every
+other financial value — fixed by rewriting the RPC's return shape); (2)
+a `RETURNS TABLE` set-returning function returns an ARRAY to the JS
+client, not a single object — the repository wrapper was fixed to unwrap
+`data[0]` and map field names with corrected nullability, matching the
+`getAssetSummaries()` precedent. `npm run build`: clean, route list
+unchanged (no new/missing routes — Sell Asset is a sheet, not a route).
+
+42. REMOTE DEPLOYMENT STATUS
+NOT deployed. Monatriq Dev CLI access remains blocked — the same issue
+P0-E3-S4R's own report addendum documented (the authenticated CLI
+session in this environment currently sees only the unrelated "Nemryn"
+project, not the actual linked Monatriq Dev project). Per this phase's
+explicit instruction, no workaround was attempted: no project-ref
+switch, no ad-hoc SQL, no service-role credential request. This phase's
+migration was applied to LOCAL Docker only.
+
+43. PENDING MIGRATION ORDER
+Two migrations are now local-only, to be deployed in this exact order
+once Monatriq Dev CLI access is restored:
+1. `20260930090000_restrict_asset_status_to_vehicle.sql` (P0-E3-S4R)
+2. `20261001090000_create_asset_disposition_domain.sql` (P0-E4-S1)
+
+44. FILES CREATED
+`supabase/migrations/20261001090000_create_asset_disposition_domain.sql`;
+`components/assets/SellAssetSheet.tsx`; `components/assets/
+SoldAssetsSection.tsx`; this report.
+
+45. FILES MODIFIED
+`lib/domain/assets/types.ts` (`AssetDisposition`, `AssetDispositionSummary`,
+`RecordAssetSaleInput` types; `AssetSummary` gained `isDisposed`/
+`disposedAt`); `lib/domain/assets/repository.ts` (`recordAssetSale()`,
+`getAssetDispositionSummaries()`; `getAssetSummaries()` mapping
+extended); `lib/domain/assets/capabilities.ts` (real `supportsSale`
+field); `components/assets/AssetActionSheet.tsx` (Sell Asset trigger +
+`buckets`/`currencies` props); `components/assets/AssetsBoard.tsx`
+(`buckets` prop threaded through); `components/quick-add/
+MoneyReceivedForm.tsx` (Asset Sale banner copy updated); `app/(app)/
+assets/page.tsx` (fetches buckets + dispositions, extends the active-
+asset filter, renders `SoldAssetsSection`); `lib/supabase/
+database.types.ts` (regenerated from local schema, twice — once after
+the initial migration, once after the RETURNS TABLE fix);
+`supabase/tests/assets/run.ts` (38 new tests + imports);
+`docs/architecture/FINANCIAL_DOMAIN_MODEL.md` (new §45);
+`docs/architecture/MULTI_CURRENCY_MODEL.md` (new §26);
+`docs/security/SECURITY_AND_RLS_PRINCIPLES.md` (new §21);
+`docs/project/BUILD_STATE.md` (phase entry, migration entry, two new
+architecture-change bullets, updated Known Limitations and Next Approved
+Step).
+
+46. ASSUMPTIONS
+(a) "Asset sale requires the same currency as the destination bucket" is
+the correct v1 scope boundary, matching §12's own pre-existing "no
+cross-currency appraisal" precedent for Assets generally. (b) One
+generic `selling_costs` amount (rather than itemized broker
+fee/commission/closing cost categories) is sufficient for v1, per the
+brief's own explicit instruction. (c) `inventory`'s `supportsSale: false`
+correctly represents that type's aggregate-holding semantics rather than
+being an overly conservative exclusion — documented as a considered
+decision, open to revisiting if Inventory's own model changes.
+
+47. OPEN QUESTIONS
+(a) Should Inventory eventually get a different, itemized disposal
+concept (distinct from generic whole-asset Sale) once/if a real
+line-item inventory model exists? (b) Should selling costs eventually
+support itemized categories (broker fee vs. closing cost vs. other) for
+users who want that level of detail, or does one generic amount remain
+sufficient long-term? (c) Should a future Investment Transactions domain
+(referenced in §44 of FINANCIAL_DOMAIN_MODEL.md) unify "additional
+contribution" and "partial sale" for Financial Investment, or should
+partial disposals remain out of scope indefinitely (today's
+`record_asset_sale()` is whole-asset only)?
+
+48. REMAINING GAPS
+Offers remains unimplemented (no canonical model; deliberately deferred,
+unchanged from P0-E3-S4). Partial asset sale (selling only a portion of
+a holding) is not modeled — every sale is whole-asset. Cross-currency
+asset sale is not modeled (§21). Two migrations remain undeployed to
+Monatriq Dev pending restored CLI access (§43).
+
+49. GIT STATUS
+Working tree matches the expected file list exactly (3 new files created
+via `??`, 13 files modified via ` M` — matching §44/§45 above). Nothing
+has been committed or pushed, per this phase's explicit instruction.
+
+50. RECOMMENDED NEXT PHASE
+Either (a) restore Supabase CLI access to Monatriq Dev and deploy both
+pending migrations in order, (b) real browser/device QA across Home,
+Money, and Assets — including the new Sell Asset flow and Sold Assets
+history section — before further UI work, (c) an Offers domain phase
+(the smallest remaining Assets capability gap), or (d) continuing the
+production-UI rollout to Decisions — or the user's own priority. This
+report does NOT begin Offers and does NOT begin Decisions production UI.

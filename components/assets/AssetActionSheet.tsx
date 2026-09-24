@@ -2,25 +2,24 @@
 
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { X } from "lucide-react";
+import { X, Tag } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { recordValuation, recordBasisEvent, updateAsset } from "@/lib/domain/assets/repository";
 import { ASSET_STATUS_OPTIONS } from "@/lib/domain/assets/asset-status";
-import { assetCapabilities } from "@/lib/domain/assets/capabilities";
+import { assetCapabilities, assetDisplayConfig } from "@/lib/domain/assets/capabilities";
 import type { AssetSummary, AssetStatusCode, ValuationType } from "@/lib/domain/assets/types";
+import type { CashBucket } from "@/lib/domain/money/types";
+import type { Currency } from "@/lib/domain/currency/types";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import { SellAssetSheet } from "@/components/assets/SellAssetSheet";
 
 interface AssetActionSheetProps {
   asset: AssetSummary;
+  buckets: CashBucket[];
+  currencies: Map<string, Currency>;
   onClose: () => void;
 }
-
-const VALUATION_LABELS: Record<ValuationType, string> = {
-  estimated_current_value: "Current Value Estimate",
-  quick_sale_estimate: "Conservative Quick-Sale Value",
-  target_value: "Target Value",
-};
 
 /**
  * One shared sheet for every real per-asset mutation Monatriq's Assets
@@ -52,9 +51,15 @@ const VALUATION_LABELS: Record<ValuationType, string> = {
  * - Archive: plain updateAsset() column update. Generic — every asset
  *   type gets this.
  */
-export function AssetActionSheet({ asset, onClose }: AssetActionSheetProps) {
+export function AssetActionSheet({ asset, buckets, currencies, onClose }: AssetActionSheetProps) {
   const router = useRouter();
   const capabilities = assetCapabilities(asset.assetType);
+  const display = assetDisplayConfig(asset.assetType);
+  const valuationLabels: Record<ValuationType, string> = {
+    estimated_current_value: display.currentValueLabel,
+    quick_sale_estimate: display.quickSaleLabel,
+    target_value: display.targetLabel,
+  };
   const [valuationType, setValuationType] = useState<ValuationType>("estimated_current_value");
   const [valuationAmount, setValuationAmount] = useState("");
   const [repairAmount, setRepairAmount] = useState("");
@@ -62,6 +67,7 @@ export function AssetActionSheet({ asset, onClose }: AssetActionSheetProps) {
   const [status, setStatus] = useState<AssetStatusCode | "">(asset.statusCode ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [showSellSheet, setShowSellSheet] = useState(false);
 
   async function handleValuationSubmit(event: FormEvent) {
     event.preventDefault();
@@ -169,9 +175,9 @@ export function AssetActionSheet({ asset, onClose }: AssetActionSheetProps) {
             <p className="text-sm font-semibold text-text-primary">Update a valuation</p>
             <p className="text-xs text-text-muted">Adds a new dated valuation — your prior estimates stay in this asset&apos;s history, never overwritten. This is an unrealized estimate, not a transaction.</p>
             <Select value={valuationType} onChange={(e) => setValuationType(e.target.value as ValuationType)}>
-              {(Object.keys(VALUATION_LABELS) as ValuationType[]).map((t) => (
+              {(Object.keys(valuationLabels) as ValuationType[]).map((t) => (
                 <option key={t} value={t}>
-                  {VALUATION_LABELS[t]}
+                  {valuationLabels[t]}
                 </option>
               ))}
             </Select>
@@ -199,11 +205,34 @@ export function AssetActionSheet({ asset, onClose }: AssetActionSheetProps) {
             </p>
           ) : null}
 
+          {capabilities.supportsSale && !asset.isArchived ? (
+            <button
+              type="button"
+              onClick={() => setShowSellSheet(true)}
+              className="flex h-11 items-center justify-center gap-1.5 rounded-lg border border-accent-primary/30 bg-accent-primary/10 text-sm font-semibold text-accent-primary"
+            >
+              <Tag size={15} aria-hidden="true" />
+              Sell Asset
+            </button>
+          ) : null}
+
           <button type="button" onClick={handleArchiveToggle} disabled={pending === "archive"} className="h-11 rounded-lg bg-surface-strong text-sm font-semibold text-text-secondary disabled:opacity-50">
             {pending === "archive" ? "Saving…" : asset.isArchived ? "Unarchive Asset" : "Archive Asset"}
           </button>
         </div>
       </div>
+
+      {showSellSheet ? (
+        <SellAssetSheet
+          asset={asset}
+          buckets={buckets}
+          currencies={currencies}
+          onClose={() => {
+            setShowSellSheet(false);
+            onClose();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

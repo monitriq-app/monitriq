@@ -3,14 +3,16 @@ import { getCurrentUser } from "@/lib/supabase/get-current-user";
 import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
 import { createClient } from "@/lib/supabase/server";
 import { listCurrencies } from "@/lib/domain/currency/repository";
-import { listAssetTypes, getAssetSummaries, getAssetValueByType } from "@/lib/domain/assets/repository";
+import { listAssetTypes, getAssetSummaries, getAssetValueByType, getAssetDispositionSummaries } from "@/lib/domain/assets/repository";
 import { getReceivableSummaries } from "@/lib/domain/receivables/repository";
+import { listBuckets } from "@/lib/domain/money/repository";
 import { TrackedAssetsSummaryCard } from "@/components/assets/TrackedAssetsSummaryCard";
 import { CapitalAllocationCard } from "@/components/assets/CapitalAllocationCard";
 import { NeedsAttentionSection } from "@/components/assets/NeedsAttentionSection";
 import { PotentialLiquiditySection } from "@/components/assets/PotentialLiquiditySection";
 import { AssetsBoard } from "@/components/assets/AssetsBoard";
 import { ReceivablesSection } from "@/components/assets/ReceivablesSection";
+import { SoldAssetsSection } from "@/components/assets/SoldAssetsSection";
 import { AddAssetButton } from "@/components/assets/AddAssetButton";
 
 /**
@@ -31,18 +33,25 @@ export default async function AssetsPage() {
   const supabase = await createClient();
   const profile = await getCurrentProfile();
 
-  const [assetTypes, currencies, assetSummaries, valueByType, receivables] = await Promise.all([
+  const [assetTypes, currencies, assetSummaries, valueByType, receivables, buckets, dispositions] = await Promise.all([
     listAssetTypes(supabase),
     listCurrencies(supabase),
     getAssetSummaries(supabase),
     getAssetValueByType(supabase),
     getReceivableSummaries(supabase),
+    listBuckets(supabase),
+    getAssetDispositionSummaries(supabase),
   ]);
 
   const currenciesByCode = new Map(currencies.map((c) => [c.code, c]));
-  const activeAssets = assetSummaries.filter((a) => !a.isArchived);
+  // A disposed asset never reaches the active board — see asset_
+  // native_currency_totals()/asset_value_by_type()'s own matching
+  // exclusion in the migration; this filter keeps AssetsBoard/AssetCard/
+  // AssetActionSheet completely unaware disposition exists at all,
+  // exactly like the established is_archived filtering already works.
+  const activeAssets = assetSummaries.filter((a) => !a.isArchived && !a.isDisposed);
   const activeReceivables = receivables.filter((r) => !r.isArchived);
-  const isNewUser = activeAssets.length === 0 && activeReceivables.length === 0;
+  const isNewUser = activeAssets.length === 0 && activeReceivables.length === 0 && dispositions.length === 0;
 
   return (
     <div className="flex flex-col gap-3.5">
@@ -52,7 +61,7 @@ export default async function AssetsPage() {
             <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-primary" aria-hidden="true" />
             Your Assets
           </p>
-          <p className="text-sm text-text-secondary">Where your capital is tied up.</p>
+          <p className="text-sm text-text-secondary">Where your money is outside cash and savings.</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {!isNewUser ? (
@@ -86,9 +95,11 @@ export default async function AssetsPage() {
 
           <PotentialLiquiditySection activeAssets={activeAssets} currencies={currenciesByCode} />
 
-          <AssetsBoard activeAssets={activeAssets} valueByType={valueByType} currencies={currenciesByCode} />
+          <AssetsBoard activeAssets={activeAssets} valueByType={valueByType} buckets={buckets} currencies={currenciesByCode} />
 
           <ReceivablesSection receivables={activeReceivables} currencies={currenciesByCode} />
+
+          <SoldAssetsSection dispositions={dispositions} currencies={currenciesByCode} />
         </>
       )}
     </div>

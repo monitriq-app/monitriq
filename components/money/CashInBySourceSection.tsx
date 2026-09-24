@@ -86,7 +86,7 @@ export function CashInBySourceSection({ breakdown, currencies }: CashInBySourceS
         })}
       </div>
       <div className="mt-3 flex items-center gap-2 rounded-lg bg-surface-strong p-2.5 text-xs text-text-secondary">
-        <span>Internal bucket movements are strictly excluded from income calculations.</span>
+        <span>Money moved between your own accounts is never counted as income.</span>
       </div>
     </section>
   );

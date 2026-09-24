@@ -25,9 +25,186 @@ of prior phases.
 
 ## Current phase
 
-P0-E3-S4R2 — Add Asset: Type-Aware Creation Flow.
+P0-E4-S2A — UX Simplification: Final Corrections.
 
 ## Current status
+
+**COMPLETE.** A small, targeted correction pass on top of P0-E4-S2 (see
+"Prior phase" below) — manual report review found four P0-E4-S2 items
+that were requested but not actually applied/documented. No broader
+redo of the UX simplification phase. All four corrections are
+presentation-only or documentation-only; no schema, migration, RLS, or
+financial-calculation change.
+
+1. **MoreDetails touch target** — `components/ui/MoreDetails.tsx`'s
+   trigger button stayed visually compact (h-9, 36px) but its effective
+   interactive hit area was smaller than the 48px minimum. Fixed with a
+   `::before` pseudo-element extending 6px above and below the button
+   (`before:-inset-y-1.5`), giving a 48px tap target with no visible
+   size change. `aria-expanded` and keyboard activation (Enter/Space on
+   a real `<button>`) were already correct and remain unchanged.
+2. **Investment Gain/Loss label** — Financial Investment and Business
+   Interest cards (`AssetCard.tsx`) labeled their computed figure
+   "Gain / Loss," which reads as interchangeable with Asset Sale's
+   realised "Profit / Loss on Sale." Relabeled to "Unrealized Gain /
+   Loss" — the calculation (`currentValue.minus(basis)` via Decimal.js,
+   shown only when both values exist) is completely unchanged.
+3. **Vehicle default disclosure** — Vehicle's default card had
+   `emphasizeQuickSale: true`, keeping Quick-Sale Estimate in the
+   primary grid on the (unstated, incorrect) assumption that vehicles
+   are usually resale-intent. Since Monatriq has no canonical field to
+   distinguish personal-use/business-use/resale-intent vehicles, this
+   silently assumed the model auto-filled — the same class of problem
+   P0-E4-S2 was written to eliminate elsewhere. Corrected: Vehicle's
+   `assetDisplayConfig()` now has `emphasizeQuickSale: false`, matching
+   Property/Equipment/Collectible/Other. Quick-Sale Estimate, Target
+   Sale Price, and Vehicle Status (formerly a top-of-card badge) all
+   moved into "More details" on `AssetCard.tsx`; nothing was removed —
+   Vehicle Status remains fully editable in "Manage"
+   (`AssetActionSheet.tsx`, unaffected). No vehicle-purpose/
+   classification schema field was added.
+4. **Remote migration status** — `docs/project/BUILD_STATE.md`'s
+   "Remote deployment" section still described both
+   `20260930090000_restrict_asset_status_to_vehicle.sql` (P0-E3-S4R) and
+   `20261001090000_create_asset_disposition_domain.sql` (P0-E4-S1) as
+   local-only/pending, blocked on Supabase CLI project access. Manual
+   terminal verification (outside this agent session) confirmed Local
+   and Remote (Monatriq Dev) migration histories now match through both
+   migrations. Documentation updated to state Monatriq Dev is
+   synchronized; no migration was run or reapplied by this agent.
+
+Verified against the existing local Supabase stack (schema unchanged,
+no reset needed): Assets suite 114/114 (one test's expectation updated
+for the vehicle `emphasizeQuickSale`/target-label correction); full
+regression 551/551, all 12 suites, zero failures. `npm run lint`,
+`npm run typecheck`, and `npm run build` all pass clean.
+
+Full documentation of all four corrections: `docs/reports/
+P0-E4-S2-ux-language-progressive-disclosure.txt`, new section "FINAL UX
+SIMPLIFICATION CORRECTIONS."
+
+## Prior phase: P0-E4-S2 — UX Language + Progressive Disclosure Simplification
+
+**COMPLETE**, with four corrections applied in P0-E4-S2A above — the
+narrative below is this phase's own original record and is stale in
+the three places P0-E4-S2A corrected (Vehicle's quick-sale emphasis,
+the Gain/Loss label, and remote migration status); read those items in
+light of P0-E4-S2A, not as still-current.
+
+Presentation-only phase — no schema, migration, RLS, or
+financial-calculation change. Audited and simplified user-facing copy
+across Home, Money, Quick Add, and Assets (including Asset Sale) so a
+user can understand their own money without knowing Monatriq's database
+language (cost basis, disposition, realised gain/loss, capital
+returned, cash flow class, valuation event, etc.), while that precise
+language remains correct and available in the schema, domain layer, and
+architecture docs, and one interaction away in the UI behind a single
+standardized "More details" disclosure control
+(`components/ui/MoreDetails.tsx`).
+
+Centralized the per-asset-type label source: `lib/domain/assets/
+capabilities.ts` now has three functions —
+`assetCapabilities()` (what a type can do), `assetCreationConfig()`
+(form-question wording for Add Asset), and the new `assetDisplayConfig()`
+(compact card/field labels plus `showGainLoss`/`emphasizeQuickSale`
+presentation-priority flags) — so `AssetCard`, `AssetActionSheet`,
+`SellAssetSheet`, and `SoldAssetsSection` all read from one source
+instead of each hardcoding labels. Gain/Loss on an Asset Card and
+Profit/Loss on a sale preview are shown only when both source values are
+genuinely known, computed with Decimal.js as an exact mirror of the
+database's own `GENERATED` column formulas (P0-E4-S1) — never a second,
+independently-derived calculation, never a fabricated figure when basis
+is unknown.
+
+Full audit, every wording decision and its rationale, and the
+consumer-language test matrix: `docs/reports/
+P0-E4-S2-ux-language-progressive-disclosure.txt`; product principle:
+`docs/product/PRODUCT_DEFINITION.md` §9; design pattern:
+`docs/design/VISUAL_CONSTITUTION.md` §9.
+
+No migration this phase (none needed). Verified against the existing
+local Supabase stack, no reset required (schema unchanged): 20
+(RLS/Profile) + 48 (Money) + 11 (Currency) + 114 (Assets, was 107
+pre-phase — 13 new presentation-config assertions, net of 6 prior
+P0-E3-S4R2 assertions updated in place for the new wording) + 27
+(Receivables) + 25 (Liabilities) + 56 (Goals) + 86 (Rules/Obligations) +
+70 (Decisions) + 33 (Financial Position) + 30 (Home Readiness) + 31
+(Home) = **551/551 assertions passed**, all 12 suites, zero failures.
+`npm run lint`, `npm run typecheck`, and `npm run build` all pass clean.
+
+Git preflight found `package.json`/`package-lock.json` already modified
+(an added `supabase` devDependency, ~222 lock-file lines) before this
+phase began — pre-existing, unrelated to P0-E4-S1 or P0-E4-S2, and not
+this phase's own change. Per this phase's own instruction to stop and
+report rather than guess, the user was asked and explicitly chose to
+leave it as-is and proceed; that diff remains untouched and is not
+attributed to this phase.
+
+## Prior phase: P0-E4-S1 — Asset Sale / Disposal Domain Foundation
+
+**COMPLETE.** The missing canonical capability the P0-E3-S4 report's own
+"Asset Sale Domain Gap" identified. A user can now truthfully record "I
+sold this asset": one atomic, SECURITY DEFINER RPC
+(`record_asset_sale()`) validates ownership of both the asset and the
+destination cash bucket from `auth.uid()`, records the sale's full
+economics (gross proceeds, selling costs, net proceeds, cost basis AT
+THE MOMENT of sale, realised gain/loss, capital returned — the last
+three via database-enforced `GENERATED` columns, never recomputed in
+application code), moves the actual net cash through the exact same
+Money engine every other cash event already uses (one `financial_events`
+row, `event_type='asset_sale'`, `cash_flow_class='other_inflow'` —
+deliberately NOT income), and stops the sold asset contributing to
+active Assets/Net Worth totals — all in one transaction, or none of it.
+Full design rationale, every canonical formula, and the full 107-item
+Assets test matrix: `docs/reports/
+P0-E4-S1-asset-sale-disposal-domain-foundation.txt`; architecture:
+`docs/architecture/FINANCIAL_DOMAIN_MODEL.md` §45; the new SECURITY
+DEFINER convention (the first RPC-callable one in this codebase):
+`docs/security/SECURITY_AND_RLS_PRINCIPLES.md` §21.
+
+Generic, not vehicle-specific: `assetCapabilities().supportsSale` is
+true for vehicle/property/financial_investment/business_interest/
+equipment/collectible/other, and deliberately false for `inventory`
+(the generic Inventory type represents an aggregate holding — a
+whole-asset "sale" would misrepresent piecemeal real-world inventory
+disposal) — Receivables/"Money You're Owed" structurally cannot reach
+this capability at all (a separate table, no `assetType` to gate).
+Disposition is derived purely from whether an active (non-voided)
+`asset_dispositions` row exists — never a second stored flag on
+`assets`, so voiding an `asset_sale` event through the existing,
+completely unmodified `voidFinancialEvent()` both reverses the cash
+effect and restores the asset's active state in one action. Vehicle
+`status_code` gained no "sold" value and is untouched by a sale — a
+vehicle's last operational status (e.g. "Listed") remains historical
+data; `isDisposed` is what the UI treats as authoritative.
+
+Migration `supabase/migrations/20261001090000_create_asset_disposition_
+domain.sql` — now confirmed synchronized to Monatriq Dev, see "Remote
+deployment" below. Verified against a real local Supabase stack, fresh
+`supabase db reset`
+(required — schema changed): 20 (RLS/Profile) + 48 (Money) + 11
+(Currency) + 107 (Assets, was 69 pre-phase) + 27 (Receivables) + 25
+(Liabilities) + 56 (Goals) + 86 (Rules/Obligations) + 70 (Decisions) +
+33 (Financial Position) + 30 (Home Readiness) + 31 (Home) = **544/544
+assertions passed**, all 12 suites, zero failures.
+
+## Remote deployment (P0-E4-S1 and P0-E3-S4R migrations)
+
+**RESOLVED, P0-E4-S2A.** Manual terminal verification (outside this
+agent session — the in-session Supabase CLI access blocker described in
+every phase since P0-E3-S4R was never itself resolved by this agent)
+confirmed Local and Remote (Monatriq Dev) migration histories now match
+through both of the previously-pending migrations:
+1. `20260930090000_restrict_asset_status_to_vehicle.sql` (P0-E3-S4R)
+2. `20261001090000_create_asset_disposition_domain.sql` (P0-E4-S1)
+
+Monatriq Dev is synchronized with the local migration history as of
+this correction. No migration was run or reapplied by this agent this
+phase or the prior P0-E4-S2 phase — this section records confirmed
+state, not an action taken here. Any future migration work should
+assume both of the above are already live on Monatriq Dev.
+
+## Prior phase: P0-E3-S4R2 — Add Asset: Type-Aware Creation Flow
 
 **COMPLETE.** P0-E3-S4R fixed subtype leakage in the post-creation
 Manage flow; manual QA then found the same class of problem one step
@@ -59,15 +236,18 @@ suites, zero failures.
 
 ## Prior phase: P0-E3-S4R — Generic Asset Domain: Subtype Behavior Remediation
 
-**COMPLETE** (implementation), migration **NOT YET DEPLOYED** to
-Monatriq Dev — a deployment attempt was made and BLOCKED by an
-environment/CLI-account access issue unrelated to the migration's
-correctness (the authenticated Supabase CLI session in that attempt
-could only see the "Nemryn" project, not the actual linked Monatriq Dev
-project; see this phase's own report addendum, "MONATRIQ DEV DEPLOYMENT
-ATTEMPT: BLOCKED, NO CHANGE MADE," for full detail). The migration
-(`20260930090000_restrict_asset_status_to_vehicle.sql`) remains local-
-only and ready to deploy once CLI access is restored.
+**COMPLETE** (implementation). Migration deployment status AT THE TIME
+OF THIS PHASE: **NOT YET DEPLOYED** to Monatriq Dev — a deployment
+attempt was made and BLOCKED by an environment/CLI-account access issue
+unrelated to the migration's correctness (the authenticated Supabase
+CLI session in that attempt could only see the "Nemryn" project, not
+the actual linked Monatriq Dev project; see this phase's own report
+addendum, "MONATRIQ DEV DEPLOYMENT ATTEMPT: BLOCKED, NO CHANGE MADE,"
+for full detail). **Update, P0-E4-S2A:** manual terminal verification
+outside this agent session later confirmed Monatriq Dev is now
+synchronized through this migration — see "Remote deployment" above.
+The migration (`20260930090000_restrict_asset_status_to_vehicle.sql`)
+is no longer pending.
 
 Manual browser QA on P0-E3-S4's Assets Overview found a Financial
 Investment exposing the vehicle operational lifecycle (Awaiting Repair/
@@ -685,6 +865,38 @@ REST bypass, a post-attempt integrity check that no non-vehicle asset
 ended up with a status anyway, plus 5 pure-function assertions against
 `assetCapabilities()` itself) — 60/60 Assets-suite assertions passing.
 
+**P0-E4-S1**:
+`supabase/migrations/20261001090000_create_asset_disposition_domain.sql`.
+One new table, `asset_dispositions` (immutable sale-economics snapshot;
+`net_proceeds`/`realised_gain_loss`/`capital_returned` are `GENERATED
+ALWAYS AS (...) STORED` columns — the canonical formulas are enforced by
+Postgres itself, not application code, and cannot be violated by any
+insert path). One new `financial_events.event_type` value, `asset_sale`
+(`cash_flow_class = 'other_inflow'`, extending the existing CHECK
+constraint the same way P0-E2-S4 already did for `receivable_recovery`/
+`debt_principal_payment`). One new atomic RPC, `record_asset_sale()` —
+the first `SECURITY DEFINER` function in this codebase a client calls
+directly (every prior use is the signup trigger); see
+SECURITY_AND_RLS_PRINCIPLES.md §21 for the full justification and every
+hardening rule followed. `asset_summary()` was dropped and recreated
+(return-shape change, same DROP+CREATE requirement every prior
+column-adding change to this function has hit) to add `is_disposed`/
+`disposed_at`. `asset_native_currency_totals()`/`asset_value_by_type()`/
+`asset_quicksale_coverage()`/`financial_position_by_currency()` were all
+updated (CREATE OR REPLACE, return shapes unchanged) to exclude disposed
+assets the same way they already exclude archived ones. One new read
+function, `asset_disposition_summary()`, for the Sold Assets history
+view. 38 new tests added to `supabase/tests/assets/run.ts` (capability
+decisions per type, all 5 sale-economics formulas in gain/loss/zero/
+unknown-basis scenarios, cash-effect and earned-income classification,
+active-value exclusion, double-sale/concurrency/idempotency, cross-user
+asset and bucket rejection, anonymous denial, direct-table-bypass
+rejection, cross-currency rejection, archived-bucket rejection,
+reversal/void semantics, archive-interaction and vehicle-status-
+interaction lifecycle rules, receivable-recovery non-interference) —
+107/107 Assets-suite assertions passing. Local Docker only — see "Remote
+deployment" above.
+
 ## Architecture changes
 
 - **Theme is a pure presentation-layer concern, enforced by construction.**
@@ -748,14 +960,15 @@ ended up with a status anyway, plus 5 pure-function assertions against
   infers or defaults a status from valuation/repair data. "Status not
   set" is the only fallback, by construction, matching the brief's
   explicit "insight != status" rule.
-- **Deliberately deferred: Offers, Asset Sale/Disposal (P0-E3-S4).**
-  Neither capability exists in the domain; both were evaluated and
-  explicitly NOT added this phase rather than invented unsafely — see
-  the phase report's Asset Sale/Disposal audit section for the full
-  reasoning (atomicity, idempotency, ownership verification, and
-  realised-gain/loss calculation constitute a separate scope of work).
-  Quick Add's Asset Sale option keeps deferring to `/assets` with an
-  honest message.
+- **Deliberately deferred: Offers (P0-E3-S4, still unimplemented).**
+  No canonical model exists; evaluated and explicitly NOT added rather
+  than invented unsafely, per the original phase report's own Asset Sale/
+  Disposal audit reasoning. Asset Sale/Disposal ITSELF — the other half
+  of that original deferral — is now implemented (P0-E4-S1): a real,
+  atomic `record_asset_sale()` with full gain/loss economics, ownership
+  verification, and idempotency. Quick Add's Asset Sale option now routes
+  to the real per-asset Sell Asset action on `/assets` instead of
+  deferring with an apology.
 - **Generic-vs-subtype capability is now a real, three-layer boundary,
   not a UI convention (P0-E3-S4R).** `lib/domain/assets/capabilities.ts`
   (`assetCapabilities(assetType)`) is the one centralized, typed source
@@ -768,6 +981,24 @@ ended up with a status anyway, plus 5 pure-function assertions against
   P0-E3-S4R-asset-subtype-behavior-remediation.txt. Any FUTURE
   subtype-only capability must follow this same three-layer pattern, not
   a UI-only `if (asset.type === ...)` branch.
+- **`SECURITY DEFINER` is now used for exactly one thing: making a
+  financial-truth table genuinely un-forgeable by the client, not a
+  general-purpose escape hatch (P0-E4-S1).** `asset_dispositions` has no
+  client INSERT/UPDATE grant at all; `record_asset_sale()` is the sole
+  write path, with every §11 DEFINER hardening rule followed and
+  ownership re-derived from `auth.uid()` regardless of RLS's own
+  bypassed-for-the-owner-role behavior in a DEFINER context — see
+  SECURITY_AND_RLS_PRINCIPLES.md §21 for the full reasoning, including
+  why this doesn't contradict §20's warning against DEFINER in
+  composition chains. Every other domain remains SECURITY INVOKER; this
+  is a deliberate, documented, single exception, not a new default.
+- **Disposition is derived, never a second stored flag — the same
+  discipline §15/§44 already established, applied a third time.** An
+  asset is "disposed" iff an active (non-voided) `asset_dispositions` row
+  exists for it; voiding the linked `financial_events` row through the
+  existing, unmodified `voidFinancialEvent()` both reverses the cash
+  effect and restores active state in one action, with no dedicated
+  "un-sell" function.
 
 ## Known limitations
 
@@ -894,18 +1125,22 @@ push, never `supabase db reset` against it.
 ## Next approved step
 
 Do not begin automatically. Decisions production UI is explicitly NOT
-started (P0-E3-S4R2's own phase boundary forbids it, restated from
-P0-E3-S4/P0-E3-S4R). P0-E3-S4R's migration
-(`20260930090000_restrict_asset_status_to_vehicle.sql`) is still NOT
-deployed to Monatriq Dev — a deployment attempt was made and BLOCKED by
-a CLI/account access issue (see that phase's report addendum); this
-remains an outstanding, user-actionable item, not something to retry
-automatically. Recommended next phase (pending user review): either (a)
-restore Supabase CLI access to Monatriq Dev and deploy the pending
-migration, (b) real browser/device QA across Home, Money, and Assets
-before building further UI on an unverified visual foundation, (c) a
-dedicated Asset Sale/Disposal domain phase (atomic, idempotent,
-ownership-checked, realised-gain/loss-aware — see the P0-E3-S4 report's
-Asset Sale audit) — now unblocked by P0-E3-S4R/P0-E3-S4R2's own
-completion, or (d) continuing the production-UI rollout to Decisions —
-or the user's own priority.
+started (restated across every prior Assets phase, including
+P0-E4-S2/P0-E4-S2A). Offers remains unimplemented (no canonical model,
+deliberately deferred). Both previously-pending migrations
+(`20260930090000_restrict_asset_status_to_vehicle.sql` (P0-E3-S4R) and
+`20261001090000_create_asset_disposition_domain.sql` (P0-E4-S1)) are
+now confirmed synchronized to Monatriq Dev (P0-E4-S2A, manual terminal
+verification) — this is no longer an outstanding blocker. P0-E4-S2/
+P0-E4-S2A stop for manual browser review per their own phase
+instruction — the wording/progressive-disclosure changes are
+presentation-only and have not yet been visually verified in a real
+browser. Recommended next step (pending user review): (a) manual
+browser review of P0-E4-S2/P0-E4-S2A's changes across Light/Dark/System
+and 320-430px+ viewports, including the MoreDetails touch-target fix
+and Vehicle's now-neutral default card, (b) real browser/device QA
+across Home, Money, and Assets (including the Sell Asset flow) before
+building further UI on an unverified visual foundation, (c) an Offers
+domain phase — the smallest remaining Assets capability gap — or (d)
+continuing the production-UI rollout to Decisions — or the user's own
+priority.

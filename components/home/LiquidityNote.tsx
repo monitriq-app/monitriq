@@ -31,7 +31,7 @@ export function LiquidityNote({ assetCoverage, receivableCoverage, currencies }:
         const sum = currency ? formatCurrencyAmount(c.quickSaleSum!, currency) : `${c.currencyCode} ${c.quickSaleSum}`;
         return (
           <p key={`asset-${c.currencyCode}`}>
-            Estimated quick-sale potential: {sum} ({STATUS_LABEL[c.coverageStatus]}, {c.quickSaleEstimateCount} of {c.activeAssetCount} assets)
+            Quick-sale estimate: {sum} ({STATUS_LABEL[c.coverageStatus]}, {c.quickSaleEstimateCount} of {c.activeAssetCount} assets)
           </p>
         );
       })}
@@ -40,7 +40,7 @@ export function LiquidityNote({ assetCoverage, receivableCoverage, currencies }:
         const sum = currency ? formatCurrencyAmount(c.recoverableSum!, currency) : `${c.currencyCode} ${c.recoverableSum}`;
         return (
           <p key={`receivable-${c.currencyCode}`}>
-            Estimated recoverable receivables: {sum} ({STATUS_LABEL[c.coverageStatus]}, {c.recoverabilityEstimateCount} of {c.activeReceivableCount} receivables)
+            Estimated money you could recover: {sum} ({STATUS_LABEL[c.coverageStatus]}, {c.recoverabilityEstimateCount} of {c.activeReceivableCount} owed to you)
           </p>
         );
       })}

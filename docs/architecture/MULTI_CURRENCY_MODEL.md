@@ -495,3 +495,24 @@ prior behavior byte-for-byte; Home's summary-level figures (Liquid
 Position, Net Worth, Safe to Deploy, capital distribution, This Month,
 Goals) opt in, since a whole-currency-unit headline number reads more
 calmly without a redundant ".00" than a specific line-item amount does.
+
+## 26. Asset Sale: no cross-currency disposal this phase (P0-E4-S1)
+
+Extends §12's own precedent to a second Assets operation:
+`record_asset_sale()` requires the destination cash bucket's
+`currency_code` to equal the asset's `currency_code` exactly — checked
+explicitly in the function body (`if v_bucket.currency_code <>
+v_asset.currency_code then raise exception`), not left to a trigger,
+since the two values come from two different tables being brought
+together for the first time in one write, unlike a valuation/basis event
+which is already scoped to its own asset. No live or manual FX rate is
+consulted; a mismatch is rejected outright, never guessed or silently
+converted at an assumed 1:1 rate. The Sell Asset UI pre-filters the
+destination-bucket picker to only the user's buckets already matching
+the asset's currency, so an incompatible bucket is never offered as if
+it were a valid choice — the same "don't show what would just get
+rejected" discipline the reference-fidelity passes already established
+for other pickers. Cross-currency asset sale (e.g. a USD-native vehicle
+sold with proceeds deposited into an NGN bucket at some rate) is
+explicit future work with its own rate-capture design, exactly the same
+deferral §12 already made for cross-currency appraisal.

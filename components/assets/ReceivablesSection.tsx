@@ -51,13 +51,13 @@ export function ReceivablesSection({ receivables, currencies }: ReceivablesSecti
         {active.map((r) => (
           <div key={r.receivableId} className="rounded-xl bg-surface-raised p-3.5">
             <div className="mb-1.5 flex items-center gap-1.5">
-              <span className="rounded-full bg-surface-strong px-1.5 py-0.5 text-[10px] font-semibold text-text-secondary">Outstanding Claim</span>
+              <span className="rounded-full bg-surface-strong px-1.5 py-0.5 text-[10px] font-semibold text-text-secondary">Money Owed to You</span>
               <span className="rounded-full bg-surface-strong px-1.5 py-0.5 text-[10px] font-semibold text-text-secondary">
                 {r.lastFollowUpAt ? `Followed up ${new Date(r.lastFollowUpAt).toLocaleDateString()}` : "Last follow-up: Not set"}
               </span>
             </div>
             <p className="text-base font-semibold text-text-primary">{r.name}</p>
-            <p className="mt-0.5 text-xs text-text-muted">Outstanding claim — not guaranteed liquid cash.</p>
+            <p className="mt-0.5 text-xs text-text-muted">Money owed to you — not the same as cash in hand.</p>
 
             <div className="mt-2 grid grid-cols-2 gap-2">
               <div>

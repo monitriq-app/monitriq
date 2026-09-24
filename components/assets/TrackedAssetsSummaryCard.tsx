@@ -57,7 +57,7 @@ export function TrackedAssetsSummaryCard({ activeAssets, valueByType, currencies
       <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent-primary/30 to-transparent" />
 
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Tracked Non-Cash Assets</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Investments &amp; Things You Own</p>
         <span className="shrink-0 rounded-full bg-surface-strong px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">Manually Valued</span>
       </div>
 

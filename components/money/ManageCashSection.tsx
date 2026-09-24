@@ -36,7 +36,7 @@ export function ManageCashSection({ buckets, currencies, defaultCurrencyCode }: 
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-surface-strong text-accent-primary">
             <Plus size={16} aria-hidden="true" />
           </span>
-          <span className="text-base font-semibold text-text-primary">Add cash or a new bucket</span>
+          <span className="text-base font-semibold text-text-primary">Add cash or a new account</span>
         </span>
         <ChevronDown size={18} className={`shrink-0 text-text-secondary transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
       </button>
@@ -48,7 +48,8 @@ export function ManageCashSection({ buckets, currencies, defaultCurrencyCode }: 
             <AddCashBalanceForm buckets={buckets} currencies={currencies} defaultCurrencyCode={defaultCurrencyCode} />
           </div>
           <div className="flex flex-col gap-3">
-            <h3 className="text-sm font-semibold text-text-secondary">Create Cash Bucket</h3>
+            <h3 className="text-sm font-semibold text-text-secondary">Add an Account</h3>
+            <p className="text-xs text-text-muted">For checking, savings, wallets, or any place you keep cash.</p>
             <CreateBucketForm currencies={currencies} />
           </div>
         </div>

@@ -24,7 +24,7 @@ function fmt(amount: string, currencyCode: string, currencies: Map<string, Curre
  * the reference's section-label row. The reference's right-side element
  * there is an editable link ("Tracked Cash"); the reserve-count fact
  * that previously sat here is not a real action, and it's already shown
- * again inside the Liquid Position card's own bottom row (see
+ * again inside the Cash Position card's own bottom row (see
  * ReserveContext below) — so this slot now carries a genuinely
  * clickable "Add cash" link into Money's real canonical entry point
  * instead, per the gap audit's "Current Position action" item. Nothing
@@ -43,14 +43,25 @@ function CurrentPositionHeader() {
 }
 
 /**
- * Liquid Position is the dominant primary card (reference's "Dominant
- * Focus Card"): large headline figure, short explanation, and a real
- * reserve-count pill — matching the reference's composition closely.
- * The reference's top-right status chip ("Immediate Cash Available") has
- * no real Monatriq domain state behind it (liquid cash overall doesn't
- * carry an "immediate availability" flag), so it is OMITTED rather than
- * copied verbatim — the row is kept, just without a fabricated badge.
- * Net Worth and Safe to Deploy are two distinct compact secondary cards,
+ * "Cash Position" (renamed from "Liquid Position", P0-E4-S2 — plain
+ * language for the same figure) is the dominant primary card
+ * (reference's "Dominant Focus Card"): large headline figure, short
+ * explanation, and a real reserve-count pill — matching the reference's
+ * composition closely. Deliberately NOT renamed to "Available Cash":
+ * this figure is `liquidCash`, the RAW total across every cash bucket,
+ * including any amount already allocated/protected for a goal — calling
+ * it "available" would misrepresent money the user has already earmarked
+ * as freely spendable, which is exactly the kind of financial falsehood
+ * simplification must not introduce (see PRODUCT_DEFINITION.md's "UX
+ * Language Principle"). "Safe to Deploy," the OTHER card on this
+ * screen, is the one that actually subtracts protected/committed
+ * amounts — "Cash Position" stays a neutral, accurate label for the
+ * unadjusted total. The reference's top-right status chip ("Immediate
+ * Cash Available") has no real Monatriq domain state behind it (liquid
+ * cash overall doesn't carry an "immediate availability" flag), so it is
+ * OMITTED rather than copied verbatim — the row is kept, just without a
+ * fabricated badge. Net Worth and Safe to Deploy are two distinct
+ * compact secondary cards,
  * side-by-side on ordinary mobile widths (`grid-cols-2` from the base
  * breakpoint, not gated behind `sm:`) — the reference's specific visual
  * signature. Safe to Deploy's figure uses the existing amber `attention`
@@ -74,7 +85,7 @@ export function PositionSection({ nativePositions, reportingCurrency, reportingP
             aria-hidden="true"
           />
           <div className="relative">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Liquid Position</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Cash Position</p>
             {calculated ? (
               <p className="tabular-figures mt-1.5 text-[32px] font-bold leading-tight tracking-tight text-text-primary">
                 {fmt(calculated.liquidCash, calculated.reportingCurrency, currencies)}
@@ -122,7 +133,7 @@ export function PositionSection({ nativePositions, reportingCurrency, reportingP
               <span className="h-2 w-2 rounded-full bg-attention" aria-hidden="true" />
             </div>
             <SafeToDeployList positions={nativePositions} currencies={currencies} />
-            <p className="mt-1 text-xs leading-snug text-text-muted">Capital available after protected buffer</p>
+            <p className="mt-1 text-xs leading-snug text-text-muted">Money you can use after protected savings and commitments</p>
           </div>
         </div>
 

@@ -81,7 +81,7 @@ export function MoveMoneyForm({ buckets, balances, onBack, onClose }: MoveMoneyF
         </button>
         <div>
           <h3 className="text-lg font-semibold text-text-primary">Move Money</h3>
-          <p className="text-xs text-focus">Between your own cash buckets</p>
+          <p className="text-xs text-focus">Between your own cash and savings accounts</p>
         </div>
       </div>
       <button type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full bg-surface-strong text-text-secondary" aria-label="Close">

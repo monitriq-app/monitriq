@@ -4,6 +4,8 @@ import type {
   Asset,
   AssetBasisEvent,
   AssetBasisTotal,
+  AssetDisposition,
+  AssetDispositionSummary,
   AssetQuickSaleCoverage,
   AssetStatusCode,
   AssetSummary,
@@ -14,6 +16,7 @@ import type {
   AssetValueByType,
   CreateAssetInput,
   QuickSaleCoverageStatus,
+  RecordAssetSaleInput,
   RecordBasisEventInput,
   RecordValuationInput,
 } from "./types.ts";
@@ -106,11 +109,37 @@ export async function getAssetSummaries(client: Client): Promise<AssetSummary[]>
     currencyCode: row.currency_code,
     isArchived: row.is_archived,
     statusCode: row.status_code as AssetStatusCode | null,
+    isDisposed: row.is_disposed,
+    disposedAt: row.disposed_at as string | null,
     costBasis: row.cost_basis as string | null,
     estimatedCurrentValue: row.estimated_current_value as string | null,
     quickSaleEstimate: row.quick_sale_estimate as string | null,
     targetValue: row.target_value as string | null,
     latestValuedAt: row.latest_valued_at as string | null,
+  }));
+}
+
+/** Every recorded sale, including voided ones (isVoided reflects the linked financial_events.voided_at) — see asset_disposition_summary() in the migration. */
+export async function getAssetDispositionSummaries(client: Client): Promise<AssetDispositionSummary[]> {
+  const { data, error } = await client.rpc("asset_disposition_summary");
+  if (error) throw error;
+  return (data ?? []).map((row) => ({
+    dispositionId: row.disposition_id,
+    assetId: row.asset_id,
+    assetName: row.asset_name,
+    assetType: row.asset_type as AssetTypeCode,
+    occurredAt: row.occurred_at,
+    currencyCode: row.currency_code,
+    grossProceeds: row.gross_proceeds,
+    sellingCosts: row.selling_costs,
+    netProceeds: row.net_proceeds,
+    basisAtSale: row.basis_at_sale as string | null,
+    capitalReturned: row.capital_returned as string | null,
+    realisedGainLoss: row.realised_gain_loss as string | null,
+    destinationBucketId: row.destination_bucket_id,
+    financialEventId: row.financial_event_id,
+    notes: row.notes as string | null,
+    isVoided: row.is_voided,
   }));
 }
 
@@ -219,4 +248,48 @@ export async function recordBasisEvent(client: Client, input: RecordBasisEventIn
   });
   if (error) throw error;
   return data;
+}
+
+/**
+ * The ONLY way to sell an asset — record_asset_sale() (P0-E4-S1),
+ * SECURITY DEFINER, atomic (see the migration's own header comment for
+ * why this one function breaks from the codebase's usual SECURITY
+ * INVOKER convention). Requires asset currency = destination bucket
+ * currency exactly; rejects an already-sold or archived asset. Reversal
+ * is NOT a separate function — voiding the returned disposition's
+ * financial event via the existing, unmodified `voidFinancialEvent()`
+ * (lib/domain/money/repository.ts) both undoes the cash effect and
+ * restores the asset's active state, since "is this asset disposed" is
+ * derived purely from whether an active (non-voided) disposition exists.
+ */
+export async function recordAssetSale(client: Client, input: RecordAssetSaleInput): Promise<AssetDisposition> {
+  const { data, error } = await client.rpc("record_asset_sale", {
+    p_asset_id: input.assetId,
+    p_destination_bucket_id: input.destinationBucketId,
+    p_gross_proceeds: asNumericParam(input.grossProceeds),
+    p_selling_costs: asOptionalNumericParam(input.sellingCosts),
+    p_occurred_at: input.occurredAt,
+    p_notes: input.notes,
+    p_idempotency_key: input.idempotencyKey,
+  });
+  if (error) throw error;
+  // record_asset_sale() is `returns table(...)` (set-returning), so the
+  // client always gets an array back even though the function only ever
+  // produces exactly one row or raises an exception.
+  const row = data[0];
+  return {
+    dispositionId: row.id,
+    assetId: row.asset_id,
+    occurredAt: row.occurred_at,
+    currencyCode: row.currency_code,
+    grossProceeds: row.gross_proceeds,
+    sellingCosts: row.selling_costs,
+    netProceeds: row.net_proceeds,
+    basisAtSale: row.basis_at_sale as string | null,
+    realisedGainLoss: row.realised_gain_loss as string | null,
+    capitalReturned: row.capital_returned as string | null,
+    destinationBucketId: row.destination_bucket_id,
+    financialEventId: row.financial_event_id,
+    notes: row.notes as string | null,
+  };
 }

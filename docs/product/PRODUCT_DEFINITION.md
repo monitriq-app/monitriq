@@ -121,3 +121,33 @@ Production placement of these assets (app icon, favicon, auth screens, PWA
 manifest) is planned in
 [SYSTEM_ARCHITECTURE.md §7](../architecture/SYSTEM_ARCHITECTURE.md#7-brand-asset-placement)
 and is not implemented in this phase.
+
+## 9. UX language principle
+
+Established P0-E4-S2.
+
+**Simple language first. Advanced financial detail only when needed.**
+
+A user should never have to speak Monatriq's database language to understand
+their own money. Terms like cost basis, quick-sale value, disposition,
+capital returned, realised gain/loss, cash flow class, and valuation event are
+correct and necessary in the schema, the domain layer, and this documentation
+— they describe real, distinct financial concepts precisely. They are not
+required to describe those same concepts to a user in the default UI.
+
+- The default view of any screen shows the common, plain-language version of
+  a fact (e.g. "What You Paid", "Current Value", "Sale Price").
+- The precise/advanced version remains one interaction away, behind a single
+  consistent disclosure pattern ("More details"), never hidden entirely.
+- Progressive disclosure changes what is emphasized and how it is worded — it
+  never changes what is true. A gain/loss figure, a quick-sale estimate, or a
+  recovered amount shown in simple language is the exact same underlying
+  value as its advanced-detail counterpart, never a second calculation.
+- Renaming for clarity is a UI/copy decision only. It never renames the
+  underlying schema, and it never merges two financially distinct concepts
+  (e.g. "money owed to you" and "cash in hand") under one label.
+
+See [VISUAL_CONSTITUTION.md §9](../design/VISUAL_CONSTITUTION.md#9-progressive-disclosure--financial-language) for the
+matching progressive-disclosure/copy pattern, and
+[docs/reports/P0-E4-S2-ux-language-progressive-disclosure.txt](../reports/P0-E4-S2-ux-language-progressive-disclosure.txt)
+for the full audit of what changed.

@@ -28,7 +28,7 @@ const META: Record<string, CategoryMeta> = {
   vehicle: { sectionTitle: "Vehicles", unitWord: "vehicle", Icon: Car, textClass: "text-attention", bgClass: "bg-attention" },
   property: { sectionTitle: "Real Estate & Land", unitWord: "property", Icon: Building2, textClass: "text-accent-primary", bgClass: "bg-accent-primary" },
   business_interest: { sectionTitle: "Business Interests", unitWord: "interest", Icon: Briefcase, textClass: "text-focus", bgClass: "bg-focus" },
-  financial_investment: { sectionTitle: "Financial Investments", unitWord: "investment", Icon: TrendingUp, textClass: "text-accent-primary", bgClass: "bg-accent-primary/55" },
+  financial_investment: { sectionTitle: "Investments", unitWord: "investment", Icon: TrendingUp, textClass: "text-accent-primary", bgClass: "bg-accent-primary/55" },
   equipment: { sectionTitle: "Equipment", unitWord: "item", Icon: Wrench, textClass: "text-attention", bgClass: "bg-attention/55" },
   inventory: { sectionTitle: "Inventory", unitWord: "item", Icon: Package, textClass: "text-focus", bgClass: "bg-focus/55" },
   collectible: { sectionTitle: "Collectibles", unitWord: "item", Icon: Gem, textClass: "text-text-secondary", bgClass: "bg-text-secondary" },

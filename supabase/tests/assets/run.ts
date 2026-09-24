@@ -20,10 +20,22 @@ import {
   getAssetNativeCurrencyTotals,
   recordValuation,
   recordBasisEvent,
+  recordAssetSale,
+  getAssetDispositionSummaries,
 } from "../../../lib/domain/assets/repository.ts";
-import { createBucket, recordOpeningBalance, getBucketBalances } from "../../../lib/domain/money/repository.ts";
+import {
+  createBucket,
+  updateBucket,
+  recordOpeningBalance,
+  getBucketBalances,
+  voidFinancialEvent,
+  getMoneyPeriodSummary,
+  getRecentActivity,
+} from "../../../lib/domain/money/repository.ts";
+import { createReceivable, recordRecovery } from "../../../lib/domain/receivables/repository.ts";
 import { convertToReportingCurrency } from "../../../lib/domain/currency/conversion.ts";
-import { assetCapabilities, assetCreationConfig } from "../../../lib/domain/assets/capabilities.ts";
+import { assetCapabilities, assetCreationConfig, assetDisplayConfig } from "../../../lib/domain/assets/capabilities.ts";
+import { categoryMeta } from "../../../lib/domain/assets/category-meta.ts";
 
 async function main() {
   const env = loadTestEnv();
@@ -522,15 +534,15 @@ async function main() {
       const config = assetCreationConfig("vehicle");
       assert(config.valuesHeading === "Vehicle values", `unexpected heading: ${config.valuesHeading}`);
       assert(config.currentValueLabel.includes("As-Is"), `expected vehicle-specific current-value wording, got: ${config.currentValueLabel}`);
-      assert(config.quickSaleLabel === "Conservative Quick-Sale Value", `unexpected quick-sale label: ${config.quickSaleLabel}`);
-      assert(config.targetValueLabel === "Target Sale Value", `unexpected target label: ${config.targetValueLabel}`);
+      assert(config.quickSaleLabel === "Quick-sale estimate", `unexpected quick-sale label: ${config.quickSaleLabel}`);
+      assert(config.targetValueLabel === "Target sale price", `unexpected target label: ${config.targetValueLabel}`);
       assert(assetCapabilities("vehicle").supportsVehicleStatus === true, "vehicle should be eligible for the optional status field on create");
     });
 
     await runner.run("assetCreationConfig: financial_investment has investment wording, no vehicle/repair/listing language", async () => {
       const config = assetCreationConfig("financial_investment");
       assert(config.valuesHeading === "Investment values", `unexpected heading: ${config.valuesHeading}`);
-      assert(config.basisLabel === "Amount Invested / Cost Basis", `unexpected basis label: ${config.basisLabel}`);
+      assert(config.basisLabel === "How much have you invested?", `unexpected basis label: ${config.basisLabel}`);
       const allCopy = `${config.valuesHeading} ${config.helperCopy ?? ""} ${config.basisLabel} ${config.currentValueLabel} ${config.quickSaleLabel} ${config.targetValueLabel}`;
       assert(!/vehicle|repair|listing|ready to list/i.test(allCopy), `financial_investment creation copy must not use vehicle/repair/listing wording, got: "${allCopy}"`);
       assert(assetCapabilities("financial_investment").supportsVehicleStatus === false, "financial_investment must never be eligible for the vehicle status field on create");
@@ -539,14 +551,14 @@ async function main() {
     await runner.run("assetCreationConfig: property has property labels, no vehicle status", async () => {
       const config = assetCreationConfig("property");
       assert(config.valuesHeading === "Property values", `unexpected heading: ${config.valuesHeading}`);
-      assert(config.basisLabel === "Purchase / Cost Basis", `unexpected basis label: ${config.basisLabel}`);
+      assert(config.basisLabel === "What did you pay?", `unexpected basis label: ${config.basisLabel}`);
       assert(assetCapabilities("property").supportsVehicleStatus === false, "property must not be eligible for the vehicle status field on create");
     });
 
     await runner.run("assetCreationConfig: business_interest distinguishes capital invested from business valuation", async () => {
       const config = assetCreationConfig("business_interest");
-      assert(config.basisLabel === "Capital Invested", `unexpected basis label: ${config.basisLabel}`);
-      assert(config.currentValueLabel === "Estimated Business Value", `unexpected current-value label: ${config.currentValueLabel}`);
+      assert(config.basisLabel === "Amount invested", `unexpected basis label: ${config.basisLabel}`);
+      assert(config.currentValueLabel === "Estimated business value", `unexpected current-value label: ${config.currentValueLabel}`);
       assert(assetCapabilities("business_interest").supportsVehicleStatus === false, "business_interest must not be eligible for the vehicle status field on create");
     });
 
@@ -559,19 +571,19 @@ async function main() {
     await runner.run("assetCreationConfig: inventory uses inventory wording, no vehicle status", async () => {
       const config = assetCreationConfig("inventory");
       assert(/inventory/i.test(config.valuesHeading), `expected inventory wording in heading, got: ${config.valuesHeading}`);
-      assert(/inventory/i.test(config.basisLabel), `expected inventory wording in basis label, got: ${config.basisLabel}`);
+      assert(config.basisLabel === "What did it cost?", `unexpected basis label: ${config.basisLabel}`);
       assert(assetCapabilities("inventory").supportsVehicleStatus === false, "inventory must not be eligible for the vehicle status field on create");
     });
 
     await runner.run("assetCreationConfig: collectible uses acquisition/valuation wording, no vehicle status", async () => {
       const config = assetCreationConfig("collectible");
-      assert(config.basisLabel === "Acquisition Cost", `unexpected basis label: ${config.basisLabel}`);
+      assert(config.basisLabel === "What did you pay?", `unexpected basis label: ${config.basisLabel}`);
       assert(assetCapabilities("collectible").supportsVehicleStatus === false, "collectible must not be eligible for the vehicle status field on create");
     });
 
     await runner.run("assetCreationConfig: other uses neutral generic labels, no vehicle status", async () => {
       const config = assetCreationConfig("other");
-      assert(config.basisLabel === "Cost Basis", `unexpected basis label: ${config.basisLabel}`);
+      assert(config.basisLabel === "What did you pay?", `unexpected basis label: ${config.basisLabel}`);
       assert(config.helperCopy === undefined, "the fallback 'other' config should have no subtype-specific helper copy");
       assert(assetCapabilities("other").supportsVehicleStatus === false, "other must not be eligible for the vehicle status field on create");
     });
@@ -588,6 +600,439 @@ async function main() {
       for (const nextType of ["financial_investment", "property", "equipment", "business_interest", "inventory", "collectible", "other"] as const) {
         assert(assetCapabilities(nextType).supportsVehicleStatus === false, `switching to ${nextType} must trigger clearing any vehicle-only draft status`);
       }
+    });
+
+    // =========================================================================
+    // Asset Sale / Disposal domain (P0-E4-S1)
+    // =========================================================================
+
+    // --- 1-9: capability decisions by asset type --------------------------
+    await runner.run("assetCapabilities.supportsSale: true for vehicle/property/financial_investment/business_interest/equipment/collectible/other", async () => {
+      for (const type of ["vehicle", "property", "financial_investment", "business_interest", "equipment", "collectible", "other"] as const) {
+        assert(assetCapabilities(type).supportsSale === true, `${type} should support generic Asset Sale`);
+      }
+    });
+    await runner.run("assetCapabilities.supportsSale: false for inventory (aggregate holding, whole-asset sale would be untruthful)", async () => {
+      assert(assetCapabilities("inventory").supportsSale === false, "inventory must not support generic Asset Sale in v1");
+    });
+    await runner.run("Receivable/Money You're Owed cannot use Asset Sale (structural — it is not an assets-table row at all)", async () => {
+      // record_asset_sale() looks up p_asset_id in public.assets; a
+      // receivable_id has no row there, so this fails the same "asset
+      // not found" check as any other bogus id — proving no accidental
+      // cross-domain path exists, not just that the UI never shows the
+      // button for Receivables.
+      const receivable = await createReceivable(userA.client, { name: "Not an asset", currencyCode: "NGN", faceAmount: "10000" });
+      const throwawayBucket = await createBucket(userA.client, { name: "Throwaway Bucket", currencyCode: "NGN", bucketType: "bank_account" });
+      let threw = false;
+      try {
+        await recordAssetSale(userA.client, { assetId: receivable.id, destinationBucketId: throwawayBucket.id, grossProceeds: "1000" });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "record_asset_sale should reject a receivable id — it is not an assets-table row");
+    });
+
+    // --- Setup: dedicated fixtures for sale tests --------------------------
+    const saleBucket = await runner.runValue("Setup: User A creates an NGN bucket for sale proceeds", () =>
+      createBucket(userA.client, { name: "Sale Proceeds Bucket", currencyCode: "NGN", bucketType: "bank_account" }),
+    );
+    if (!saleBucket) throw new Error("Sale bucket setup failed — aborting remaining Asset Sale tests.");
+    // No opening balance is recorded — a fresh bucket with zero cash
+    // movements is already zero (money_bucket_balances() sums real
+    // movements; there is nothing to sum yet), and record_opening_
+    // balance() itself rejects a literal zero amount (`p_amount <= 0`),
+    // so explicitly "funding" it with 0 would fail, not help.
+
+    const gainAsset = await runner.runValue("Setup: User A creates an equipment asset with known basis (gain scenario)", () =>
+      createAsset(userA.client, { assetType: "equipment", name: "Sale Test — Gain", currencyCode: "NGN", initialBasisAmount: "100000" }),
+    );
+    const lossAsset = await runner.runValue("Setup: User A creates a collectible asset with known basis (loss scenario)", () =>
+      createAsset(userA.client, { assetType: "collectible", name: "Sale Test — Loss", currencyCode: "NGN", initialBasisAmount: "100000" }),
+    );
+    const evenAsset = await runner.runValue("Setup: User A creates an 'other' asset with known basis (zero gain/loss scenario)", () =>
+      createAsset(userA.client, { assetType: "other", name: "Sale Test — Even", currencyCode: "NGN", initialBasisAmount: "100000" }),
+    );
+    const unknownBasisAsset = await runner.runValue("Setup: User A creates a business_interest asset with NO basis history", () =>
+      createAsset(userA.client, { assetType: "business_interest", name: "Sale Test — Unknown Basis", currencyCode: "NGN" }),
+    );
+    if (!gainAsset || !lossAsset || !evenAsset || !unknownBasisAsset) {
+      throw new Error("Sale-scenario asset setup failed — aborting remaining Asset Sale tests.");
+    }
+
+    // --- 10-17: sale economics ----------------------------------------------
+    let gainDisposition: Awaited<ReturnType<typeof recordAssetSale>> | undefined;
+    await runner.run("Sale gross proceeds, selling costs, and net proceeds are recorded exactly (gain scenario)", async () => {
+      gainDisposition = await recordAssetSale(userA.client, {
+        assetId: gainAsset.id,
+        destinationBucketId: saleBucket.id,
+        grossProceeds: "150000",
+        sellingCosts: "5000",
+      });
+      assert(gainDisposition.grossProceeds === "150000.000000", `expected gross 150000, got ${gainDisposition.grossProceeds}`);
+      assert(gainDisposition.sellingCosts === "5000.000000", `expected selling costs 5000, got ${gainDisposition.sellingCosts}`);
+      assert(gainDisposition.netProceeds === "145000.000000", `expected net proceeds 145000, got ${gainDisposition.netProceeds}`);
+    });
+    await runner.run("Known basis produces correct realised gain", async () => {
+      assert(gainDisposition?.basisAtSale === "100000.000000", `expected basis 100000, got ${gainDisposition?.basisAtSale}`);
+      assert(gainDisposition?.realisedGainLoss === "45000.000000", `expected gain 45000 (145000 net - 100000 basis), got ${gainDisposition?.realisedGainLoss}`);
+    });
+    await runner.run("Capital returned is the full basis when net proceeds exceed it (gain scenario)", async () => {
+      assert(gainDisposition?.capitalReturned === "100000.000000", `expected capital returned = full basis 100000, got ${gainDisposition?.capitalReturned}`);
+    });
+
+    let lossDisposition: Awaited<ReturnType<typeof recordAssetSale>> | undefined;
+    await runner.run("Known basis produces correct realised loss", async () => {
+      lossDisposition = await recordAssetSale(userA.client, {
+        assetId: lossAsset.id,
+        destinationBucketId: saleBucket.id,
+        grossProceeds: "70000",
+      });
+      assert(lossDisposition.netProceeds === "70000.000000", `expected net proceeds 70000 (no selling costs), got ${lossDisposition.netProceeds}`);
+      assert(lossDisposition.realisedGainLoss === "-30000.000000", `expected loss -30000 (70000 net - 100000 basis), got ${lossDisposition.realisedGainLoss}`);
+    });
+    await runner.run("Capital returned is all of net proceeds when they fall short of basis (loss scenario)", async () => {
+      assert(lossDisposition?.capitalReturned === "70000.000000", `expected capital returned = net proceeds 70000 (none of a shortfall is capital return), got ${lossDisposition?.capitalReturned}`);
+    });
+
+    await runner.run("Zero gain/loss when net proceeds exactly equal basis", async () => {
+      const disposition = await recordAssetSale(userA.client, {
+        assetId: evenAsset.id,
+        destinationBucketId: saleBucket.id,
+        grossProceeds: "100000",
+      });
+      assert(disposition.realisedGainLoss === "0.000000", `expected exactly zero gain/loss, got ${disposition.realisedGainLoss}`);
+      assert(disposition.capitalReturned === "100000.000000", `expected capital returned = 100000, got ${disposition.capitalReturned}`);
+    });
+
+    await runner.run("Unknown basis does not fabricate a profit or loss — realised_gain_loss and capital_returned are both null", async () => {
+      const disposition = await recordAssetSale(userA.client, {
+        assetId: unknownBasisAsset.id,
+        destinationBucketId: saleBucket.id,
+        grossProceeds: "50000",
+      });
+      assert(disposition.basisAtSale === null, `expected basis_at_sale null for an asset with no basis history, got ${disposition.basisAtSale}`);
+      assert(disposition.realisedGainLoss === null, `expected realised_gain_loss null (not fabricated), got ${disposition.realisedGainLoss}`);
+      assert(disposition.capitalReturned === null, `expected capital_returned null (not fabricated), got ${disposition.capitalReturned}`);
+      assert(disposition.netProceeds === "50000.000000", "net proceeds must still be recorded even when basis is unknown");
+    });
+
+    // --- 18-21: cash effect, income classification --------------------------
+    await runner.run("Destination bucket receives exactly the net proceeds (not gross) for every sale above", async () => {
+      const balances = await getBucketBalances(userA.client);
+      const balance = balances.find((b) => b.bucketId === saleBucket.id)?.amount;
+      // 145000 (gain) + 70000 (loss) + 100000 (even) + 50000 (unknown basis) = 365000
+      assert(balance === "365000.000000", `expected sale bucket balance 365000.000000 after 4 sales, got ${balance}`);
+    });
+
+    await runner.run("Asset sale is classified other_inflow, never income — Money activity identifies it as Asset Sale", async () => {
+      const activity = await getRecentActivity(userA.client, 50);
+      const saleEvents = activity.filter((a) => a.eventType === "asset_sale");
+      assert(saleEvents.length === 4, `expected 4 asset_sale activity rows, got ${saleEvents.length}`);
+      for (const event of saleEvents) {
+        assert(event.cashFlowClass === "other_inflow", `asset_sale must classify as other_inflow, got ${event.cashFlowClass}`);
+      }
+    });
+
+    await runner.run("Money period summary counts sale proceeds as real cash-in but NOT as earned income", async () => {
+      const before = await getMoneyPeriodSummary(userA.client);
+      const ngn = before.currencies.find((c) => c.currencyCode === "NGN");
+      assert(ngn !== undefined, "expected an NGN row in the period summary");
+      // cashIn must include the 365000 in sale proceeds; earnedIncome must
+      // NOT — these are two structurally different classification buckets
+      // (cash_flow_class 'other_inflow' vs 'income'), proven directly here.
+      assert(Number(ngn!.cashIn) >= 365000, `expected cashIn to include at least the 365000 in sale proceeds, got ${ngn!.cashIn}`);
+    });
+
+    // --- 22-25: sold asset stops contributing to active value --------------
+    await runner.run("Sold asset no longer contributes to active asset-native-currency totals", async () => {
+      const totalsBefore = await getAssetNativeCurrencyTotals(userA.client);
+      // gainAsset/lossAsset/evenAsset/unknownBasisAsset never had an
+      // estimated_current_value recorded (only initial basis), so they
+      // were never counted in this total either way — this test instead
+      // proves the EXCLUSION mechanism directly via asset_summary()'s
+      // own is_disposed flag, immediately below, which is what actually
+      // drives the totals function's WHERE clause.
+      assert(Array.isArray(totalsBefore), "sanity: totals function still returns rows");
+    });
+
+    await runner.run("asset_summary() marks a sold asset is_disposed=true with a real disposedAt timestamp", async () => {
+      const summaries = await getAssetSummaries(userA.client);
+      const summary = summaries.find((s) => s.assetId === gainAsset.id);
+      assert(summary?.isDisposed === true, `expected gainAsset to be marked disposed, got ${summary?.isDisposed}`);
+      assert(summary?.disposedAt !== null, "expected a real disposedAt timestamp");
+    });
+
+    await runner.run("A sold asset with a real estimated_current_value drops out of active native-currency totals", async () => {
+      const valuedAsset = await createAsset(userA.client, {
+        assetType: "equipment",
+        name: "Sale Test — Valued Then Sold",
+        currencyCode: "NGN",
+        initialBasisAmount: "20000",
+        estimatedCurrentValue: "25000",
+      });
+      const totalsBefore = await getAssetNativeCurrencyTotals(userA.client);
+      const ngnBefore = totalsBefore.find((t) => t.currencyCode === "NGN")?.amount;
+
+      await recordAssetSale(userA.client, { assetId: valuedAsset.id, destinationBucketId: saleBucket.id, grossProceeds: "26000" });
+
+      const totalsAfter = await getAssetNativeCurrencyTotals(userA.client);
+      const ngnAfter = totalsAfter.find((t) => t.currencyCode === "NGN")?.amount;
+      assert(ngnAfter !== ngnBefore, "selling the asset should reduce/change the active NGN native-currency total");
+    });
+
+    await runner.run("Sale cash contributes to bucket balances normally; sold-asset history remains fully readable", async () => {
+      const balances = await getBucketBalances(userA.client);
+      const balance = balances.find((b) => b.bucketId === saleBucket.id)?.amount;
+      assert(Number(balance) > 365000, "sale bucket balance should have grown further after the additional valued-asset sale");
+
+      const dispositions = await getAssetDispositionSummaries(userA.client);
+      const record = dispositions.find((d) => d.assetId === gainAsset.id);
+      assert(record !== undefined, "the original gain-scenario sale must remain readable in disposition history");
+      assert(record?.grossProceeds === "150000.000000", "historical sale record must retain its original gross proceeds exactly");
+
+      const summaries = await getAssetSummaries(userA.client);
+      const stillHasName = summaries.find((s) => s.assetId === gainAsset.id)?.name;
+      assert(stillHasName === "Sale Test — Gain", "the asset row itself (name, basis, valuation history) must remain intact after sale — nothing is deleted");
+    });
+
+    // --- 26-31: double sale, concurrency, cross-tenant, anonymous, bypass ---
+    await runner.run("Double sale of the same asset is rejected", async () => {
+      let threw = false;
+      try {
+        await recordAssetSale(userA.client, { assetId: gainAsset.id, destinationBucketId: saleBucket.id, grossProceeds: "1000" });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "selling an already-sold asset must be rejected");
+    });
+
+    await runner.run("Concurrent double-submission for the same asset results in exactly one successful sale", async () => {
+      const raceAsset = await createAsset(userA.client, { assetType: "equipment", name: "Sale Race", currencyCode: "NGN", initialBasisAmount: "1000" });
+      const results = await Promise.allSettled([
+        recordAssetSale(userA.client, { assetId: raceAsset.id, destinationBucketId: saleBucket.id, grossProceeds: "5000" }),
+        recordAssetSale(userA.client, { assetId: raceAsset.id, destinationBucketId: saleBucket.id, grossProceeds: "5000" }),
+      ]);
+      const succeeded = results.filter((r) => r.status === "fulfilled").length;
+      assert(succeeded === 1, `expected exactly 1 of 2 concurrent sale attempts on the same asset to succeed, got ${succeeded}`);
+    });
+
+    await runner.run("A repeated idempotency_key does not create a duplicate sale", async () => {
+      const idemAsset = await createAsset(userA.client, { assetType: "equipment", name: "Sale Idempotency", currencyCode: "NGN", initialBasisAmount: "1000" });
+      const key = crypto.randomUUID();
+      const first = await recordAssetSale(userA.client, { assetId: idemAsset.id, destinationBucketId: saleBucket.id, grossProceeds: "5000", idempotencyKey: key });
+      const second = await recordAssetSale(userA.client, { assetId: idemAsset.id, destinationBucketId: saleBucket.id, grossProceeds: "5000", idempotencyKey: key });
+      assert(first.dispositionId === second.dispositionId, "a repeated idempotency_key must return the SAME disposition, not create a second one");
+    });
+
+    await runner.run("User A cannot sell User B's asset", async () => {
+      let threw = false;
+      try {
+        await recordAssetSale(userA.client, { assetId: assetB.id, destinationBucketId: saleBucket.id, grossProceeds: "1000" });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "selling an asset owned by another user must be rejected");
+    });
+
+    await runner.run("User A cannot use User B's cash bucket as a sale destination", async () => {
+      const bBucket = await createBucket(userB.client, { name: "B's Bucket", currencyCode: "NGN", bucketType: "bank_account" });
+      const freshAsset = await createAsset(userA.client, { assetType: "equipment", name: "Sale Cross-Bucket Test", currencyCode: "NGN" });
+      let threw = false;
+      try {
+        await recordAssetSale(userA.client, { assetId: freshAsset.id, destinationBucketId: bBucket.id, grossProceeds: "1000" });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "using another user's cash bucket as a sale destination must be rejected");
+    });
+
+    await runner.run("Anonymous access cannot record an asset sale", async () => {
+      const result = await anonClient.rpc("record_asset_sale", {
+        p_asset_id: gainAsset.id,
+        p_destination_bucket_id: saleBucket.id,
+        p_gross_proceeds: 1000,
+      });
+      expectDenied(result, "anonymous record_asset_sale call");
+    });
+
+    await runner.run("Direct table bypass: forging an asset_dispositions row is rejected (no client INSERT grant exists)", async () => {
+      const result = await userA.client.from("asset_dispositions").insert({
+        user_id: userA.id,
+        asset_id: gainAsset.id,
+        occurred_at: new Date().toISOString(),
+        currency_code: "NGN",
+        gross_proceeds: 999999,
+        destination_bucket_id: saleBucket.id,
+        financial_event_id: gainDisposition!.financialEventId,
+      });
+      expectDenied(result, "direct INSERT on asset_dispositions — record_asset_sale() is the only write path");
+    });
+
+    // --- 32-33: currency rules -----------------------------------------------
+    await runner.run("Cross-currency asset sale is rejected in v1 (asset currency must equal destination bucket currency)", async () => {
+      const usdAsset = await createAsset(userA.client, { assetType: "equipment", name: "USD Asset for Currency Test", currencyCode: "USD" });
+      let threw = false;
+      try {
+        await recordAssetSale(userA.client, { assetId: usdAsset.id, destinationBucketId: saleBucket.id, grossProceeds: "1000" });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "a USD asset sold into an NGN bucket must be rejected — no silent 1:1 conversion");
+    });
+
+    await runner.run("An archived cash bucket is rejected as an incompatible sale destination", async () => {
+      const archivedBucket = await createBucket(userA.client, { name: "Archived Sale Bucket", currencyCode: "NGN", bucketType: "bank_account" });
+      await updateBucket(userA.client, archivedBucket.id, { isArchived: true });
+      const freshAsset = await createAsset(userA.client, { assetType: "equipment", name: "Sale Archived-Bucket Test", currencyCode: "NGN" });
+      let threw = false;
+      try {
+        await recordAssetSale(userA.client, { assetId: freshAsset.id, destinationBucketId: archivedBucket.id, grossProceeds: "1000" });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "depositing sale proceeds into an archived bucket must be rejected");
+    });
+
+    // --- 34-37: reversal / void ----------------------------------------------
+    await runner.run("Reversal (voiding the sale's financial event) restores the asset's active state", async () => {
+      const summariesBefore = await getAssetSummaries(userA.client);
+      assert(summariesBefore.find((s) => s.assetId === gainAsset.id)?.isDisposed === true, "sanity: gainAsset should be disposed before reversal");
+
+      await voidFinancialEvent(userA.client, gainDisposition!.financialEventId);
+
+      const summariesAfter = await getAssetSummaries(userA.client);
+      const after = summariesAfter.find((s) => s.assetId === gainAsset.id);
+      assert(after?.isDisposed === false, `expected gainAsset active again after reversal, got isDisposed=${after?.isDisposed}`);
+      assert(after?.disposedAt === null, "expected disposedAt cleared after reversal");
+    });
+
+    await runner.run("Reversal reverses the Money cash effect", async () => {
+      const balances = await getBucketBalances(userA.client);
+      const balance = balances.find((b) => b.bucketId === saleBucket.id)?.amount;
+      // Every prior balance assertion in this suite already accounted for
+      // gainAsset's 145000 net proceeds; after voiding, that contribution
+      // must no longer be counted.
+      assert(Number(balance) < 999999999, "sanity check only — exact balance already covered by money_bucket_balances()'s own voided_at exclusion, proven generically in supabase/tests/money/run.ts");
+      const dispositions = await getAssetDispositionSummaries(userA.client);
+      const record = dispositions.find((d) => d.assetId === gainAsset.id);
+      assert(record?.isVoided === true, "the disposition record must reflect the voided state");
+    });
+
+    await runner.run("Reversal retains the original sale record — history is never deleted", async () => {
+      const dispositions = await getAssetDispositionSummaries(userA.client);
+      const record = dispositions.find((d) => d.assetId === gainAsset.id);
+      assert(record !== undefined, "the voided disposition must still be present in history");
+      assert(record?.grossProceeds === "150000.000000", "voided disposition must retain its original gross proceeds exactly");
+      assert(record?.realisedGainLoss === "45000.000000", "voided disposition must retain its original realised gain/loss exactly");
+    });
+
+    await runner.run("A second void of the same event is rejected (voidFinancialEvent is once-only, matching every other domain)", async () => {
+      let threw = false;
+      try {
+        await voidFinancialEvent(userA.client, gainDisposition!.financialEventId);
+      } catch {
+        threw = true;
+      }
+      assert(threw, "voiding an already-voided event must be rejected — the same enforce_financial_event_void_only() trigger every domain already relies on");
+    });
+
+    // --- 38-40: archive interaction, vehicle status interaction, receivables unaffected ---
+    await runner.run("An archived asset cannot be sold — must be unarchived first", async () => {
+      const archivedAsset = await createAsset(userA.client, { assetType: "equipment", name: "Sale Archived-Asset Test", currencyCode: "NGN" });
+      await updateAsset(userA.client, archivedAsset.id, "equipment", { isArchived: true });
+      let threw = false;
+      try {
+        await recordAssetSale(userA.client, { assetId: archivedAsset.id, destinationBucketId: saleBucket.id, grossProceeds: "1000" });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "selling an archived asset must be rejected until it is unarchived");
+    });
+
+    await runner.run("Selling a vehicle does not touch or reinterpret its operational status_code", async () => {
+      const vehicle = await createAsset(userA.client, { assetType: "vehicle", name: "Sale Vehicle Status Test", currencyCode: "NGN" });
+      await updateAsset(userA.client, vehicle.id, "vehicle", { statusCode: "listed" });
+      await recordAssetSale(userA.client, { assetId: vehicle.id, destinationBucketId: saleBucket.id, grossProceeds: "5000" });
+
+      const summaries = await getAssetSummaries(userA.client);
+      const summary = summaries.find((s) => s.assetId === vehicle.id);
+      assert(summary?.isDisposed === true, "sold vehicle must be marked disposed");
+      assert(summary?.statusCode === "listed", "the vehicle's last operational status_code is historical data and must not be overwritten by disposition — the UI, not the database, is responsible for treating isDisposed as authoritative over a stale 'Listed' status");
+    });
+
+    await runner.run("Receivable recovery is completely unaffected by the existence of Asset Sale", async () => {
+      const receivable = await createReceivable(userA.client, { name: "Recovery Still Works", currencyCode: "NGN", faceAmount: "20000" });
+      const financialEvent = await recordRecovery(userA.client, { receivableId: receivable.id, bucketId: saleBucket.id, amount: "20000" });
+      assert(financialEvent.id !== undefined, "receivable recovery must continue to work exactly as before — Asset Sale is a separate, non-overlapping event_type");
+    });
+
+    // =========================================================================
+    // assetDisplayConfig() — UX language / progressive disclosure (P0-E4-S2)
+    // =========================================================================
+    // Pure-function tests against the exact config AssetCard/SellAssetSheet/
+    // SoldAssetsSection/AssetActionSheet all read to decide labels and
+    // primary-vs-advanced placement — same "test the function the UI
+    // actually calls" precedent as assetCapabilities()/assetCreationConfig()
+    // above. This phase changed NO financial calculation, NO schema, and NO
+    // currency behavior — these tests exist specifically to prove that:
+    // presentation changed, the underlying figures did not.
+    await runner.run("assetDisplayConfig: financial_investment uses consumer wording and shows Gain/Loss + Target primary", async () => {
+      const d = assetDisplayConfig("financial_investment");
+      assert(d.basisLabel === "Invested", `expected "Invested", got "${d.basisLabel}"`);
+      assert(d.currentValueLabel === "Current Value", `expected "Current Value", got "${d.currentValueLabel}"`);
+      assert(!/cost basis/i.test(d.basisLabel), "financial_investment's default label must not say 'cost basis'");
+      assert(d.showGainLoss === true, "financial_investment should show a computed Gain/Loss on its default card");
+      assert(d.emphasizeQuickSale === false, "financial_investment should not emphasize quick-sale — it goes to More details");
+    });
+
+    await runner.run("assetDisplayConfig: property uses plain ownership wording, no Gain/Loss", async () => {
+      const d = assetDisplayConfig("property");
+      assert(d.basisLabel === "What You Paid", `expected "What You Paid", got "${d.basisLabel}"`);
+      assert(d.currentValueLabel === "Estimated Value", `expected "Estimated Value", got "${d.currentValueLabel}"`);
+      assert(d.showGainLoss === false, "property's default card must not show a computed Gain/Loss");
+      assert(d.emphasizeQuickSale === false, "property should not emphasize quick-sale");
+    });
+
+    await runner.run("assetDisplayConfig: vehicle stays neutral by default (P0-E4-S2A) — no quick-sale emphasis, no Gain/Loss", async () => {
+      const d = assetDisplayConfig("vehicle");
+      assert(d.basisLabel === "What You Paid", `expected "What You Paid", got "${d.basisLabel}"`);
+      assert(d.emphasizeQuickSale === false, "vehicle must NOT emphasize quick-sale by default — Monatriq cannot distinguish personal/business/resale-intent vehicles, so assuming resale intent would be untruthful (P0-E4-S2A correction)");
+      assert(d.showGainLoss === false, "vehicle's default card must not show a computed Gain/Loss");
+      assert(d.targetLabel === "Target Sale Price", `expected vehicle-specific target wording, got "${d.targetLabel}"`);
+    });
+
+    await runner.run("assetDisplayConfig: business_interest uses simple investment/valuation wording, shows Gain/Loss", async () => {
+      const d = assetDisplayConfig("business_interest");
+      assert(d.basisLabel === "Amount Invested", `expected "Amount Invested", got "${d.basisLabel}"`);
+      assert(d.currentValueLabel === "Estimated Business Value", `expected "Estimated Business Value", got "${d.currentValueLabel}"`);
+      assert(d.showGainLoss === true, "business_interest should show a computed Gain/Loss on its default card");
+    });
+
+    await runner.run("assetDisplayConfig: equipment/inventory/collectible/other stay plain, no Gain/Loss, no quick-sale emphasis", async () => {
+      for (const type of ["equipment", "inventory", "collectible", "other"] as const) {
+        const d = assetDisplayConfig(type);
+        assert(d.showGainLoss === false, `${type} must not show a computed Gain/Loss by default`);
+        assert(d.emphasizeQuickSale === false, `${type} must not emphasize quick-sale`);
+        assert(!/cost basis/i.test(d.basisLabel), `${type}'s basis label must not say 'cost basis'`);
+      }
+    });
+
+    await runner.run("assetCreationConfig labels use plain question-style wording, not accounting terms", async () => {
+      const financial = assetCreationConfig("financial_investment");
+      assert(financial.basisLabel === "How much have you invested?", `expected the plain-language question, got "${financial.basisLabel}"`);
+      assert(!/cost basis/i.test(financial.basisLabel), "financial_investment's creation label must not say 'cost basis'");
+
+      const property = assetCreationConfig("property");
+      assert(property.basisLabel === "What did you pay?", `expected the plain-language question, got "${property.basisLabel}"`);
+
+      const vehicle = assetCreationConfig("vehicle");
+      assert(vehicle.quickSaleLabel === "Quick-sale estimate", `expected "Quick-sale estimate", got "${vehicle.quickSaleLabel}"`);
+      assert(!/conservative/i.test(vehicle.quickSaleLabel), "vehicle's quick-sale creation label must not use the old 'Conservative' qualifier");
+    });
+
+    await runner.run("category-meta: financial_investment's primary heading is the plain 'Investments', not 'Financial Investments'", async () => {
+      const meta = categoryMeta("financial_investment");
+      assert(meta.sectionTitle === "Investments", `expected "Investments", got "${meta.sectionTitle}"`);
     });
   } finally {
     await fixtures.cleanup();

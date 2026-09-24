@@ -22,13 +22,17 @@ interface MoneyReceivedFormProps {
 /**
  * "Receivable Recovery" and "Asset Sale" are not generic categories here
  * even though money_received_categories technically has rows for both
- * (P0-E3-S3 gap analysis): Receivable Recovery has a real, dedicated,
- * linked domain function (recordRecovery, which decrements a specific
- * receivable's outstanding balance atomically with the cash increase —
- * the generic category path never touches the receivables table at
- * all), and Asset Sale has no canonical mutation of any kind in Assets
- * yet. Selecting either switches this form's mode instead of setting a
- * plain categoryCode.
+ * (P0-E3-S3 gap analysis): both have a real, dedicated, linked domain
+ * mutation instead (recordRecovery / record_asset_sale), so the generic
+ * category path never touches those tables at all. Selecting either
+ * switches this form's mode instead of setting a plain categoryCode.
+ *
+ * Asset Sale specifically does NOT get a form here (P0-E4-S1) — Assets
+ * owns the sale workflow (gross proceeds, selling costs, cost basis, and
+ * realised gain/loss are Assets-domain facts this generic Money form has
+ * no business computing), so selecting it simply routes to the real
+ * per-asset Sell Asset action on /assets rather than duplicating that
+ * workflow here.
  */
 const GENERIC_SOURCES = ["business_income", "salary", "freelance_contract", "investment_income", "gift", "refund", "other"];
 
@@ -163,8 +167,7 @@ export function MoneyReceivedForm({ buckets, categories, onBack, onClose }: Mone
             <div className="flex items-start gap-2.5 rounded-lg bg-surface-strong p-3 text-sm text-text-secondary">
               <Info size={16} className="mt-0.5 shrink-0 text-attention" aria-hidden="true" />
               <span>
-                Asset sales aren&apos;t recorded here yet — capital returned and any realized gain or loss are distinct, and Assets doesn&apos;t yet have a
-                dedicated sale workflow.{" "}
+                Sales are recorded from the asset itself, so the sale price, costs, and profit or loss stay clear. Open the asset in Assets and choose Sell.{" "}
                 <Link href="/assets" onClick={onClose} className="text-accent-primary underline">
                   Go to Assets
                 </Link>
@@ -226,7 +229,7 @@ export function MoneyReceivedForm({ buckets, categories, onBack, onClose }: Mone
                   ))}
                 </Select>
                 {mode === "receivable_recovery" && selectedReceivable && eligibleBucketsForReceivable.length === 0 ? (
-                  <p className="text-xs text-danger">No {selectedReceivable.currencyCode} bucket exists yet to receive this recovery.</p>
+                  <p className="text-xs text-danger">No {selectedReceivable.currencyCode} account exists yet to receive this recovery.</p>
                 ) : null}
               </div>
 

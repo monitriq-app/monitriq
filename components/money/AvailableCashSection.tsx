@@ -36,7 +36,7 @@ export function AvailableCashSection({ buckets, balances, currencyTotals, curren
     return (
       <section className="rounded-xl bg-surface-raised p-4">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Available Cash</p>
-        <p className="mt-2 text-sm text-text-muted">No cash buckets yet — add one to start tracking your cash.</p>
+        <p className="mt-2 text-sm text-text-muted">No accounts yet — add one to start tracking your cash.</p>
       </section>
     );
   }
@@ -77,7 +77,7 @@ export function AvailableCashSection({ buckets, balances, currencyTotals, curren
         <span className="flex items-center gap-2.5">
           <span className="h-2 w-2 rounded-full bg-focus" aria-hidden="true" />
           <span className="text-base font-semibold text-text-primary">
-            View {activeBuckets.length} cash {activeBuckets.length === 1 ? "bucket" : "buckets"}
+            View {activeBuckets.length} {activeBuckets.length === 1 ? "account" : "accounts"}
           </span>
         </span>
         <span className="flex items-center gap-1 text-sm font-semibold text-focus">

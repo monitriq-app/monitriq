@@ -69,14 +69,14 @@ export function AddCashBalanceForm({ buckets, currencies, defaultCurrencyCode }:
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3" noValidate>
-      <FormField label="Bucket" htmlFor="opening-bucket">
+      <FormField label="Account" htmlFor="opening-bucket">
         <Select id="opening-bucket" required value={bucketId} onChange={(e) => setBucketId(e.target.value)}>
           {buckets.map((b) => (
             <option key={b.id} value={b.id}>
               {b.name} ({b.currency_code})
             </option>
           ))}
-          <option value={NEW_BUCKET}>+ Create a new cash bucket</option>
+          <option value={NEW_BUCKET}>+ Add a new account</option>
         </Select>
       </FormField>
 

@@ -6,12 +6,14 @@ import { categoryMeta } from "@/lib/domain/assets/category-meta";
 import { formatCurrencyAmount } from "@/lib/domain/currency/format";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { AssetSummary, AssetTypeCode, AssetValueByType } from "@/lib/domain/assets/types";
+import type { CashBucket } from "@/lib/domain/money/types";
 import { AssetCard } from "@/components/assets/AssetCard";
 import { AssetActionSheet } from "@/components/assets/AssetActionSheet";
 
 interface AssetsBoardProps {
   activeAssets: AssetSummary[];
   valueByType: AssetValueByType[];
+  buckets: CashBucket[];
   currencies: Map<string, Currency>;
 }
 
@@ -31,7 +33,7 @@ function fmt(amount: string, currencyCode: string, currencies: Map<string, Curre
  * exactly one asset at a time; closing it — or a successful mutation
  * inside it — clears the selection.
  */
-export function AssetsBoard({ activeAssets, valueByType, currencies }: AssetsBoardProps) {
+export function AssetsBoard({ activeAssets, valueByType, buckets, currencies }: AssetsBoardProps) {
   const [filter, setFilter] = useState<AssetTypeCode | "all">("all");
   const [managingAssetId, setManagingAssetId] = useState<string | null>(null);
 
@@ -121,7 +123,7 @@ export function AssetsBoard({ activeAssets, valueByType, currencies }: AssetsBoa
         })}
       </div>
 
-      {managingAsset ? <AssetActionSheet asset={managingAsset} onClose={() => setManagingAssetId(null)} /> : null}
+      {managingAsset ? <AssetActionSheet asset={managingAsset} buckets={buckets} currencies={currencies} onClose={() => setManagingAssetId(null)} /> : null}
     </section>
   );
 }
