@@ -1,5 +1,6 @@
 "use client";
 
+import { useTerms } from "@/components/language/LanguageProvider";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -76,6 +77,7 @@ export function MinimumCashSection({ ruleSummaries, currencies }: MinimumCashSec
 }
 
 function MinimumCashRow({ rule, currencies, onSave }: { rule: FinancialRuleSummary; currencies: Currency[]; onSave: (value: string) => Promise<void> }) {
+  const terms = useTerms();
   const currency = currencies.find((c) => c.code === rule.currencyCode);
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(rule.currentThreshold ?? "");
@@ -103,7 +105,7 @@ function MinimumCashRow({ rule, currencies, onSave }: { rule: FinancialRuleSumma
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{rule.currencyCode}</p>
-          <p className="text-xs text-text-muted">Minimum cash to keep</p>
+          <p className="text-xs text-text-muted">{terms.t("money_to_keep")}</p>
           {!editing ? <p className="tabular-figures mt-0.5 text-lg font-semibold text-text-primary">{formatted}</p> : null}
         </div>
         {!editing ? (
@@ -137,6 +139,7 @@ function MinimumCashRow({ rule, currencies, onSave }: { rule: FinancialRuleSumma
 }
 
 function MinimumCashAddForm({ currencies, onCancel, onSave }: { currencies: Currency[]; onCancel: () => void; onSave: (currencyCode: string, value: string) => Promise<void> }) {
+  const terms = useTerms();
   const [currencyCode, setCurrencyCode] = useState("");
   const [value, setValue] = useState("");
   const [pending, setPending] = useState(false);
@@ -174,7 +177,7 @@ function MinimumCashAddForm({ currencies, onCancel, onSave }: { currencies: Curr
       </div>
       <div className="flex flex-col gap-1.5">
         <label htmlFor="new-floor-value" className="text-sm font-medium text-text-secondary">
-          Minimum cash to keep
+          {terms.t("money_to_keep")}
         </label>
         <Input id="new-floor-value" required inputMode="decimal" pattern="^\d+(\.\d+)?$" value={value} onChange={(e) => setValue(e.target.value)} placeholder="0.00" />
         <p className="text-[11px] text-text-muted">The amount you want to keep untouched before Monitriq treats other cash as available to use. 0 is a valid choice.</p>

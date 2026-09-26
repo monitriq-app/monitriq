@@ -368,10 +368,10 @@ function RulesTab({ ruleSummaries, currencies }: { ruleSummaries: FinancialRuleS
       {ruleSummaries.length === 0 ? (
         <div className="rounded-xl bg-surface-raised p-4">
           <div className="flex items-center justify-between">
-            <span className="text-sm font-semibold text-text-primary">Minimum Cash to Keep</span>
+            <span className="text-sm font-semibold text-text-primary">Money you want to keep</span>
             <span className="rounded-full bg-surface-strong px-2 py-0.5 text-[11px] font-semibold text-text-secondary">Not set</span>
           </div>
-          <p className="mt-1 text-xs text-text-muted">The amount you want to keep untouched per currency, before Decisions treats anything else as Safe to Deploy.</p>
+          <p className="mt-1 text-xs text-text-muted">The amount you want to keep untouched per currency, before Monitriq treats anything above it as available.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
@@ -383,7 +383,7 @@ function RulesTab({ ruleSummaries, currencies }: { ruleSummaries: FinancialRuleS
               return (
                 <div key={r.ruleId} className="rounded-xl bg-surface-raised p-4">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-text-primary">{r.currencyCode} — Minimum Cash to Keep</span>
+                    <span className="text-sm font-semibold text-text-primary">{r.currencyCode} — Money you want to keep</span>
                   </div>
                   <p className="mt-1 tabular-figures text-sm text-text-secondary">{formatted}</p>
                 </div>

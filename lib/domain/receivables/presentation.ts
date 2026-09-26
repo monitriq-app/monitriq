@@ -1,6 +1,7 @@
 import type { Currency, CurrencyAmount } from "../currency/types.ts";
 import { currencyTotalLines, formatAmount, shortDate, type CurrencyTotalLine } from "../common/presentation.ts";
 import type { ReceivableSummary } from "./types.ts";
+import { terminology } from "../language/terms.ts";
 
 /** Money Owed to You presentation (P0-E5-S2B). Route/domain stay "receivables". Money owed is NOT cash in hand. */
 
@@ -65,3 +66,11 @@ export const MONEY_OWED_EMPTY = {
   body: "Add money someone owes you to keep track of what has been paid back.",
   action: "Add Money Owed",
 } as const;
+
+/** Empty-state copy by explanation mode (route and domain stay "receivables"). Simple mode equals MONEY_OWED_EMPTY. */
+export function moneyOwedEmpty(mode: unknown): { title: string; body: string; action: string } {
+  const t = terminology(mode);
+  if (t.mode === "simple") return { ...MONEY_OWED_EMPTY };
+  if (t.mode === "financial") return { title: "No receivables are being tracked.", body: "Add an amount someone owes you to track what has been collected.", action: "Add Receivable" };
+  return { title: "No money owed to you is being tracked.", body: "Add money someone owes you to keep track of what has been paid back.", action: "Add Money Owed" };
+}

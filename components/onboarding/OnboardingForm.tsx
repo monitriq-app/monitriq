@@ -9,6 +9,8 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
+import { LanguageModeSelector } from "@/components/language/LanguageModeSelector";
+import { LANGUAGE_QUESTION, resolveLanguageMode, type FinancialLanguageMode } from "@/lib/domain/language/types";
 import { useSupportedTimezones, useDetectedTimezone } from "./useTimezoneOptions";
 
 interface OnboardingFormValues {
@@ -16,6 +18,7 @@ interface OnboardingFormValues {
   preferred_name: string;
   preferred_currency: string;
   timezone: string;
+  financial_language_mode: FinancialLanguageMode;
 }
 
 interface OnboardingFormProps {
@@ -49,6 +52,7 @@ export function OnboardingForm({ currencies, initial }: OnboardingFormProps) {
         preferred_name: values.preferred_name.trim() || null,
         preferred_currency: values.preferred_currency,
         timezone: timezoneValue,
+        financial_language_mode: resolveLanguageMode(values.financial_language_mode),
       });
       router.replace("/home");
       router.refresh();
@@ -121,6 +125,10 @@ export function OnboardingForm({ currencies, initial }: OnboardingFormProps) {
           ))}
         </Select>
       </FormField>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-1 text-sm font-medium text-text-secondary">{LANGUAGE_QUESTION}</legend>
+        <LanguageModeSelector name="financial_language_mode" value={values.financial_language_mode} onChange={(mode) => setValues((v) => ({ ...v, financial_language_mode: mode }))} />
+      </fieldset>
       {error ? (
         <p role="alert" className="text-sm text-danger">
           {error}

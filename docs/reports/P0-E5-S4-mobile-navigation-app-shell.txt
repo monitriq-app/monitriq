@@ -1,0 +1,124 @@
+P0-E5-S4 — MOBILE APP SHELL + NAVIGATION HIERARCHY
+================================================================
+
+1. PHASE
+P0-E5-S4 — application shell and navigation hierarchy only.
+
+2. STATUS
+COMPLETE, pending one manual browser review. Nothing committed or pushed. No financial domain, schema, RLS, RPC or calculation change.
+
+3. OLD NAVIGATION AUDIT
+- Bottom nav (mobile) and DesktopNav: Home, Money, +, Assets, Decisions, Goals.
+- Header: logo left, account icon right. The account menu mixed product navigation ("Foundation routes": Budget, Financial Position, Rules & Obligations, Money Owed to You, Debts) with settings (appearance) and Sign out. "Foundation routes" was internal development wording visible to users.
+- Scrolling: the DOCUMENT (viewport) was already the single vertical scroller (sticky header, fixed bottom nav, no inner scroll container), so the persistent desktop-style scrollbar seen on narrow layouts was the viewport's own scrollbar chrome, not an inner element.
+
+4. NEW INFORMATION ARCHITECTURE
+- Everyday (bottom nav): Home, Money, [+ Quick Add], Budget, Goals.
+- Secondary financial tools (left drawer): YOUR MONEY - Assets, Debts, Money Owed to You; PLANNING - Decisions, Financial Overview, Rules & Commitments.
+- Account and settings (profile menu): name, email, preferred currency, appearance, password, sign out.
+- Spending Check ("Can I afford this?") is intentionally NOT in nav: it stays on Home, Quick Add and the Decisions link.
+Structure is plain data in components/layout/nav-items.ts, shared by every nav surface. Routes and domain names are unchanged (/liabilities, /receivables, /financial-position, /rules); only visible labels changed. The Financial Overview and Rules & Commitments page headings were aligned to the new labels (copy only).
+
+5. BOTTOM NAV
+Order verified in the browser: Home, Money, +, Budget, Goals. Assets and Decisions are gone from it. Active-state styling (aria-current + accent colour), 48px targets, safe-area bottom padding, md:hidden and the existing Quick Add trigger (aria-label "Quick Add") are preserved. DesktopNav mirrors the same four everyday destinations plus the Add button.
+
+6. DRAWER (components/layout/NavDrawer.tsx)
+Menu button (left of the logo, 48x48, aria-label "Open navigation", aria-expanded) opens a left drawer: 85vw up to 20rem (81% of a 393px viewport = 320px; 272px at 320px), slides in (200ms, honours prefers-reduced-motion via the existing global rule), dimmed backdrop, safe-area padding on top/bottom/left, inner vertical scroll with overscroll containment, active item highlighted with aria-current, 48px rows. Closes on backdrop click, Escape, the Close navigation button and route selection. Page scrolling is locked only while it is open (html.nav-locked). Focus moves to the Close button on open, Tab is trapped inside, and focus returns to the menu button on Escape/close/backdrop (not after navigating). Semantics: role="dialog" aria-modal aria-label "Navigation" containing <nav aria-label="App navigation"> with section headings. It is rendered as a sibling of <header> because the header's backdrop-blur would otherwise become the containing block of the drawer's fixed positioning. The same drawer opens as a left side panel on tablet/desktop (verified at 1024px, 320px wide); no desktop sidebar was built. No Help & Support or version footer was added because neither exists in the product yet.
+
+7. PROFILE MENU (components/layout/AccountMenu.tsx)
+Now account/settings only: display name (preferred name, else first name; never hardcoded) and email (email alone when no name), ACCOUNT: preferred currency (read-only line - there is no profile-edit screen yet), APPEARANCE: Light / Dark / System with visible labels, titles, aria-labels and a clear selected state (still the existing theme system), SECURITY: Change password (existing /update-password route), and Sign out at the bottom as a quiet text row instead of a bordered secondary button. Verified: no product navigation inside it. Panel width min(18rem, 100vw-2rem). Escape/outside-click close it and Escape returns focus to the trigger. Drawer and profile are mutually exclusive: one overlay state in ShellHeader; opening either closes the other (verified both directions).
+
+8. SCROLL OWNERSHIP
+Audited: the document is the only vertical scroller (sticky header, fixed bottom nav, main has no overflow). It was kept that way; no inner scroll container was added and nothing sets overflow:hidden on the page. The only overflow:hidden is html.nav-locked, applied while the drawer is open.
+
+9. MOBILE SCROLLBAR FIX (app/globals.css)
+Below the app's existing md breakpoint (max-width 767.98px): html { scrollbar-width: none; -ms-overflow-style: none } and html::-webkit-scrollbar { display: none; width: 0; height: 0 } - visual chrome only, scrolling untouched. From md up a normal scrollbar remains, with scrollbar-gutter: stable so opening the drawer never shifts the layout. -webkit-overflow-scrolling: touch kept. No JavaScript scroll handling, no rubber-band hacks.
+Verified in real Chrome with headless "hide scrollbars" DISABLED (the default would have hidden them and made the check meaningless): 0px scrollbar width at 320, 360, 375, 393, 412 and 430 on Home, Money, Budget and Goals in dark and light (48 combinations); 15px scrollbar at 768/1024/1280 on the same pages; all four pages scroll (wheel/scrollTo), PageDown scrolls, no horizontal overflow anywhere.
+
+10. SAFE-AREA BEHAVIOR
+main bottom padding is now calc(6rem + env(safe-area-inset-bottom)) (previously a fixed 6rem = 96px, which did not cover the 64px nav plus a large home-indicator inset). Verified with a seeded long page: the bottom-most content ends at least 31px above the nav on every mobile width. Header keeps its top inset; drawer respects top/bottom/left insets.
+
+11. PWA / WEBVIEW COMPATIBILITY
+Uses only standard CSS (env() safe areas, dvh, scrollbar-width plus the WebKit pseudo-element, overscroll-behavior, scrollbar-gutter, prefers-reduced-motion) and standard React events; no Chrome-only APIs, no native code. Notes: iOS/Android WebViews use overlay scrollbars, so the hiding rule is a no-op there and harmless; html overflow:hidden for the scroll lock is honoured by current iOS Safari/WKWebView but was only verified in desktop Chrome, not on iOS or Android devices.
+
+12. MOBILE QA (real Chrome, seeded local user)
+Home / Money / Budget / Goals at 320-430; drawer open (393 dark, 320 light, 1024 dark); profile open; Quick Add open at 320 (no overflow); long-page scrolling; no horizontal overflow at any width (also 768-1280); themes Light/Dark/System switch correctly from the profile menu. Screenshots reviewed.
+
+13. ACCESSIBILITY
+Menu button and Close button labels as specified; drawer dialog/nav semantics; focus in on open and back to the trigger on close; Tab trap; Escape; 48px targets on the menu button, drawer rows and profile rows; appearance radiogroup with labels, titles and aria-checked; profile popover uses dialog semantics (replacing an incorrect role="menu"); meaning not carried by colour alone (labels plus aria-current).
+
+14. TESTS
+New supabase/tests/app-shell/run.ts (npm run test:app-shell), 10 checks: bottom-nav order and exclusions; drawer contents and routes; no "foundation routes" copy; profile menu has no product navigation and does have account/settings (name from the profile, email-only fallback); appearance options and accessibility wiring; sign-out wiring plus a real sign-out against local Supabase; overlay exclusivity, Escape/backdrop/route closing and focus wiring; scroll-ownership CSS, no page-level overflow:hidden, safe-area padding, no competing scroll container or JS scroll interception; label alignment; no domain imports in the shell. The repo has no DOM test runner, so tests 15-24 are asserted at source level and their runtime behaviour (open/close, backdrop, route close, mutual exclusion, focus, 320px overflow, scrollbar hidden while scrolling works, content clearing the nav, light/dark/system) was verified in a real browser as described above rather than by automated DOM tests.
+
+15. REGRESSION
+All existing suites unchanged and passing (20/48/11/114/27/25/56/86/90/33/30/31), Budget 30, Budget UI 22, Core UI 28, Spending check 34, App shell 10. Lint clean; app and harness typecheck clean; production build clean.
+
+16. FILES CHANGED
+New: components/layout/{NavDrawer,ShellHeader}.tsx, components/layout/nav-items.ts, supabase/tests/app-shell/run.ts, this report.
+Modified: components/layout/{AppShell,AccountMenu,MobileBottomNav,DesktopNav}.tsx, components/auth/SignOutButton.tsx (quiet variant), components/theme/ThemeToggle.tsx (optional visible labels, titles, 48px targets), app/globals.css, app/(app)/{financial-position,rules}/page.tsx (heading copy), package.json (test:app-shell).
+
+17. SCHEMA / RLS CONFIRMATION
+No migration, table, RPC, RLS or grant change; no file under lib/domain or supabase/migrations changed. Only the display name/preferred currency already in the profile are read (getCurrentProfile, cached per request).
+
+18. OPEN ISSUES
+- Pre-existing, not from this phase: Money's Recent Activity list (components/money/MoneyActivityList.tsx) formats dates with the browser locale, causing a React hydration mismatch on /money ("1 Sept" vs "Sep 1") for activity older than yesterday; it does not break the page (React regenerates the tree) but logs errors and should get deterministic formatting. Left untouched because Money is out of scope.
+- "Profile" and "Preferred currency" are display-only; there is no profile-edit screen.
+- Change password uses the existing /update-password route, which returns to /login after saving.
+- Home no longer links to Assets/Decisions except via the drawer and existing in-page links.
+- Drawer scroll lock relies on html overflow:hidden; not verified on real iOS/Android.
+
+19. GIT STATUS
+Uncommitted; nothing staged or pushed (10 modified, 4 new entries).
+
+20. RECOMMENDED NEXT STEP
+One manual browser review (including a real phone or the installed PWA for the drawer scroll lock and scrollbar), then fix the Money activity date hydration issue in a small follow-up, then the planned onboarding / mobile packaging work.
+
+
+================================================================
+S4 ADDENDUM — EVERYDAY FINANCIAL LANGUAGE + SEMANTIC COLOR
+================================================================
+
+STATUS
+COMPLETE. Language and presentation only. No financial calculation, schema, RLS, RPC or repository change. Nothing committed.
+
+1. SAFE TO DEPLOY LANGUAGE
+The canonical internal names (safe_to_deploy, currencySafeToDeployAfter, safeToDeployStatus, etc.) are unchanged everywhere. Every user-facing label is now "Available after protections" with the supporting copy "Cash left after the amount you chose to keep and money protected for goals or commitments." Defined once in lib/domain/rules/labels.ts and used on: Home tile, Rules & Commitments card and heading, Decisions position card, Decisions review rows and calculation block ("Available after protections (before/after)"), Cash-use evaluator, Financial Overview, Spending Check (rows and "How this was calculated"), and the new-user setup list. Copy that mentioned the old term (commitment sheet, empty states, Decisions rule blurb, Decisions position footer) was reworded.
+
+2. RELATED LANGUAGE
+Required Retained Cash -> Money to keep protected. Minimum Cash Floor -> Minimum cash to keep. Protected Commitments -> Money protected for goals and commitments. Retained Cash Deficit -> "Short of the money to keep protected by X". Liquid Cash -> Tracked cash; "Liquid & Protected Position" -> "Cash & protections"; "Potential Liquidity (not deployable cash)" -> "Could become cash later (not cash you can use now)". The action for a missing minimum is now "Set minimum cash to keep" (Home, Decisions, Financial Overview, Spending Check, Decisions calculation block). One existing Decisions test assertion that pinned the old action label ("Set minimum cash") was updated to the new label; no value assertion changed. The Financial Overview's technical "Liquidity Completeness" heading and coverage panel were left as advanced detail.
+
+3. CALCULATION EXPLANATION
+New AvailableExplanation component behind the shared MoreDetails disclosure ("How this is worked out", aria-expanded): Tracked cash / Money to keep protected / Available after protections. Values are passed in from the canonical figures already on screen (liquidCash, requiredRetainedCash, safeToDeploy); it performs no arithmetic. Shown on the Home tile (per currency), the Rules & Commitments card and the Decisions position card; the Financial Overview already lists the same components as rows. Verified in the browser: NGN 1,000,000 / NGN 400,000 / NGN 600,000.
+
+4. LIQUID / ILLIQUID LANGUAGE
+Home no longer says "illiquid": the header badge reads "N% of your net worth is tied up in assets" (amber attention signal; it now wraps on narrow screens instead of forcing one line), and the summary line reads "Tied up in assets: X (N%)" and "Cash available: X (N%)". Heading "Where Your Capital Lives" was intentionally left as is (not in the list of terms to change). Technical liquid/liquidity wording remains only in advanced Financial Overview details.
+
+5. COLOR SEMANTICS
+Color now communicates status via one helper, availableAfterProtectionsState (a classification of the already-computed canonical figure, no formula): teal = positive available amount; neutral = zero; amber = not configured / attention / review; red = actual deficit. Implemented on Home, Rules card, Decisions card and Financial Overview (previously the amount was always amber). Home's net worth and cash position stay neutral; the "Cash available" figure is no longer teal. Spending Check: suggestion icon colour is proceed = teal, review/more setup = amber, wait (protected money crossed) and reduce (cash shortfall or overall Budget breach) = red; "Short by" and "Over budget by" are red, "Over category budget by" is amber. Overall Budget breach ("Over by") is now red on the Budget page and Home Budget card; a category over its plan stays amber. Overdue obligations were already red. Every state also carries words (status text, "Not configured", "All your current cash is protected.", "Over by"), so color is never the only signal.
+
+6. ZERO STATE
+Available after protections = 0 is neutral with the sentence "All your current cash is protected." (not red). Red appears only when the engine reports an actual deficit ("Your protected amounts are more than your cash"). Verified in the browser for zero and for a deficit.
+
+7. NOT CONFIGURED
+Shows "Not configured" in amber, never an amount or green, with the action "Set minimum cash to keep" (48px link to Rules) on Home, the Decisions card, the Financial Overview and the Spending Check. Verified on Home.
+
+8. HOME COPY
+No "illiquid", "retained capital", "deployable capital" or "capital efficiency" remains in user-facing text. Home layout was not redesigned; only terminology, the explanatory disclosure and status colors changed.
+
+9. TESTS (supabase/tests/app-shell/run.ts, now 18 checks; 8 added)
+Labels defined exactly as specified; a scan of every user-facing file for the old terms outside identifiers (mutation-checked: reintroducing "Safe to Deploy" in a component fails it); Home tile wording, action and canonical-field explanation; tied-up wording, neutral cash, wrapping amber badge; status helper unit tests (zero neutral, deficit red, not configured amber with no amount and the action, positive teal) and their use on each surface; neutral information (net worth, cash); suggestion/Budget tone mapping; Financial Overview wording; and a check that no migration, Rules/Money/Budget/Goals repository, financial-position code or spending-check policy/service file changed.
+
+10. VALIDATION
+npm run test: all 17 suites pass (20/48/11/114/27/25/56/86/90/33/30/31 + Budget 30 + Budget UI 22 + Core UI 28 + Spending check 34 + App shell 18), exit 0. Lint clean, app and harness typecheck clean, production build clean. Browser check: no overflow on Home in any state; no hydration errors.
+
+11. CONFIRMATION - NO FORMULA CHANGES
+No file under supabase/migrations, no repository, no calculation (safe_to_deploy_by_currency, evaluate_proposed_cash_use, financial-position, Budget, Goals, Money) and no spending-check policy/service changed; the language test asserts this against git.
+
+12. FILES CHANGED
+New: lib/domain/rules/labels.ts, components/rules/AvailableExplanation.tsx.
+Modified: components/home/{PositionSection,CapitalDistributionSection,NewUserSetup,BudgetHomeCard}.tsx, components/rules/{SafeToDeployCard,AddCommitmentSheet,CommitmentsSection,CashUseEvaluatorForm}.tsx, app/(app)/rules/page.tsx, components/decisions/{DecisionPositionCard,DecisionReviewSheet,DecisionsWorkspace}.tsx, lib/domain/decisions/presentation.ts (labels only), components/financial-position/NativePositionList.tsx, lib/domain/spending-check/presentation.ts (labels and tones only), components/spending-check/SpendingCheckWorkspace.tsx, components/budget/BudgetWorkspace.tsx (overall-breach colour), supabase/tests/{app-shell,decisions}/run.ts.
+
+13. OPEN ISSUES
+- "Where Your Capital Lives" and a few advanced Overview labels (Liquidity Completeness, Asset Quick-Sale Estimates) still use financial vocabulary.
+- Several other pages (Money, Assets, Goals) use their own status colours and were not audited against the new palette rules in this pass.
+- The Financial Overview lists "Protected Goal Cash" separately from "Money protected for goals and commitments" (the canonical two components), which may read as duplication.

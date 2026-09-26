@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
 import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
+import { getLanguageMode } from "@/lib/supabase/get-language-mode";
+import { terminology } from "@/lib/domain/language/terms";
 import { createClient } from "@/lib/supabase/server";
 import { listCurrencies } from "@/lib/domain/currency/repository";
 import { listAssetTypes } from "@/lib/domain/assets/repository";
@@ -42,6 +44,7 @@ export default async function HomePage() {
 
   const supabase = await createClient();
   const profile = await getCurrentProfile();
+  const terms = terminology(await getLanguageMode());
 
   const [currencies, assetTypes, summary, bucketBalances] = await Promise.all([
     listCurrencies(supabase),
@@ -93,7 +96,7 @@ export default async function HomePage() {
   const movesCount = (summary.focusGoal ? 1 : 0) + summary.activeDecisions.length;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5">
       <GreetingHeader preferredName={preferredName} timeOfDay={timeOfDay} />
 
       {isNewUser ? (
@@ -107,6 +110,7 @@ export default async function HomePage() {
               reportingPosition={summary.reportingPosition}
               currencies={currenciesByCode}
               activeReserveCountByCurrency={activeReserveCountByCurrency}
+              terms={terms}
             />
           </section>
 
@@ -115,7 +119,7 @@ export default async function HomePage() {
           </section>
 
           <section className="flex flex-col gap-2.5">
-            <CapitalDistributionSection distribution={summary.capitalDistribution} currencies={currenciesByCode} assetTypes={assetTypesByCode} />
+            <CapitalDistributionSection distribution={summary.capitalDistribution} currencies={currenciesByCode} assetTypes={assetTypesByCode} terms={terms} />
             <LiquidityNote assetCoverage={summary.assetQuickSaleCoverage} receivableCoverage={summary.receivableRecoverabilityCoverage} currencies={currenciesByCode} />
           </section>
 

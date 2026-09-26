@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
+import { getLanguageMode } from "@/lib/supabase/get-language-mode";
+import { terminology } from "@/lib/domain/language/terms";
 import { listCurrencies } from "@/lib/domain/currency/repository";
 import { getFinancialRuleSummaries, getSafeToDeployByCurrency } from "@/lib/domain/rules/repository";
 import { getObligationSummaries } from "@/lib/domain/obligations/repository";
@@ -34,6 +36,7 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
   }
 
   const supabase = await createClient();
+  const terms = terminology(await getLanguageMode());
 
   const [currencies, ruleSummaries, safeToDeploy, obligations, goals, buckets, shortfalls] = await Promise.all([
     listCurrencies(supabase),
@@ -54,7 +57,7 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
       <div>
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
           <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-primary" aria-hidden="true" />
-          Rules &amp; Obligations
+          Rules &amp; Commitments
         </p>
         <p className="text-sm text-text-secondary">What money do you want to keep protected, and what&apos;s coming up?</p>
       </div>
@@ -62,14 +65,14 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
       <ShortfallBanner shortfalls={shortfalls} currencies={currenciesByCode} />
 
       <section className="flex flex-col gap-2.5">
-        <h2 className="text-[15px] font-semibold text-text-primary">Safe to Deploy</h2>
-        <SafeToDeployCard results={safeToDeploy} currencies={currenciesByCode} />
+        <h2 className="text-[15px] font-semibold text-text-primary">{terms.t("your_cash_heading")}</h2>
+        <SafeToDeployCard results={safeToDeploy} currencies={currenciesByCode} terms={terms} />
       </section>
 
       <section className="flex flex-col gap-2.5">
         <div>
-          <h2 className="text-[15px] font-semibold text-text-primary">Minimum Cash to Keep</h2>
-          <p className="text-xs text-text-muted">The amount you want to keep untouched before Monitriq treats other cash as available to use.</p>
+          <h2 className="text-[15px] font-semibold text-text-primary">{terms.t("money_to_keep")}</h2>
+          <p className="text-xs text-text-muted">{terms.t("money_to_keep_help")}</p>
         </div>
         <MinimumCashSection ruleSummaries={ruleSummaries} currencies={currencies} />
       </section>

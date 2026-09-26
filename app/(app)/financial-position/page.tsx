@@ -2,6 +2,8 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
 import { listCurrencies } from "@/lib/domain/currency/repository";
 import { getFinancialPositionSummary } from "@/lib/domain/financial-position/repository";
+import { getLanguageMode } from "@/lib/supabase/get-language-mode";
+import { terminology } from "@/lib/domain/language/terms";
 import { NativePositionList } from "@/components/financial-position/NativePositionList";
 import { FocusGoalPanel } from "@/components/financial-position/FocusGoalPanel";
 import { ActiveDecisionsList } from "@/components/financial-position/ActiveDecisionsList";
@@ -19,6 +21,7 @@ import { LiquidityCoveragePanel } from "@/components/financial-position/Liquidit
  * empty/"Not set" states throughout.
  */
 export default async function FinancialPositionPage() {
+  const terms = terminology(await getLanguageMode());
   const user = await getCurrentUser();
   if (!user) {
     return null;
@@ -32,8 +35,8 @@ export default async function FinancialPositionPage() {
   return (
     <div className="flex flex-col gap-10">
       <div>
-        <h1 className="text-xl font-semibold text-text-primary">Financial Position</h1>
-        <p className="text-text-secondary">Foundation-level view — not the final design.</p>
+        <h1 className="text-xl font-semibold text-text-primary">Financial Overview</h1>
+        <p className="text-text-secondary">Everything you have and owe, in one place.</p>
         <p className="mt-1 text-xs text-text-muted">
           As of {new Date(summary.asOf).toLocaleString()}. Reporting currency:{" "}
           {summary.reportingCurrency ?? "Not set"}.
@@ -42,7 +45,7 @@ export default async function FinancialPositionPage() {
 
       <section className="flex flex-col gap-3">
         <h2 className="text-sm font-medium text-text-secondary">Financial Position by Currency</h2>
-        <NativePositionList positions={summary.nativePositions} currencies={currenciesByCode} />
+        <NativePositionList positions={summary.nativePositions} currencies={currenciesByCode} terms={terms} />
       </section>
 
       <section className="flex flex-col gap-3">

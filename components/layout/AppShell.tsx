@@ -1,11 +1,11 @@
 import type { ReactNode } from "react";
-import { HeaderBrand } from "@/components/layout/HeaderBrand";
 import { PageContainer } from "@/components/layout/PageContainer";
-import { DesktopNav } from "@/components/layout/DesktopNav";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
-import { AccountMenu } from "@/components/layout/AccountMenu";
+import { ShellHeader } from "@/components/layout/ShellHeader";
+import { LanguageProvider } from "@/components/language/LanguageProvider";
 import { QuickAddProvider } from "@/components/quick-add/QuickAddProvider";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
+import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
 import { createClient } from "@/lib/supabase/server";
 import { listBuckets, listMoneyReceivedCategories, listMoneySpendingCategories, getBucketBalances } from "@/lib/domain/money/repository";
 
@@ -44,6 +44,8 @@ interface AppShellProps {
  */
 export async function AppShell({ children }: AppShellProps) {
   const user = await getCurrentUser();
+  const profile = user ? await getCurrentProfile() : null;
+  const displayName = profile?.preferred_name || profile?.first_name || null;
   const supabase = await createClient();
 
   const [buckets, balances, receivedCategories, spendingCategories] = user
@@ -51,20 +53,16 @@ export async function AppShell({ children }: AppShellProps) {
     : [[], [], [], []];
 
   return (
+    <LanguageProvider mode={profile?.financial_language_mode}>
     <QuickAddProvider buckets={buckets} balances={balances} receivedCategories={receivedCategories} spendingCategories={spendingCategories}>
       <div className="flex min-h-dvh flex-col bg-background text-text-primary">
-        <header className="sticky top-0 z-30 border-b border-border bg-background/90 pt-[max(env(safe-area-inset-top),0px)] backdrop-blur">
-          <PageContainer className="flex h-14 items-center justify-between gap-3">
-            <HeaderBrand />
-            <DesktopNav />
-            <AccountMenu email={user?.email ?? null} />
-          </PageContainer>
-        </header>
-        <main className="flex-1 pb-24 md:pb-8">
+        <ShellHeader displayName={displayName} email={user?.email ?? null} preferredCurrency={profile?.preferred_currency ?? null} />
+        <main className="flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
           <PageContainer className="py-6 md:py-8">{children}</PageContainer>
         </main>
         <MobileBottomNav />
       </div>
     </QuickAddProvider>
+    </LanguageProvider>
   );
 }

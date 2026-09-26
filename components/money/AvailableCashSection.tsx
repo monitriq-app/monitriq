@@ -5,6 +5,9 @@ import { Wallet, ChevronDown } from "lucide-react";
 import { formatCurrencyAmount } from "@/lib/domain/currency/format";
 import type { Currency, CurrencyAmount } from "@/lib/domain/currency/types";
 import type { CashBucket, BucketBalance } from "@/lib/domain/money/types";
+import type { SafeToDeployResult } from "@/lib/domain/rules/types";
+import { cashStatus, cashStatusSentence } from "@/lib/domain/rules/cash-status";
+import { CashStatusBadge } from "@/components/rules/CashStatusBadge";
 
 interface AvailableCashSectionProps {
   buckets: CashBucket[];
@@ -12,6 +15,8 @@ interface AvailableCashSectionProps {
   /** Real per-currency totals from money_currency_totals() — the canonical sum, never re-derived from individual bucket balances in the client. */
   currencyTotals: CurrencyAmount[];
   currencies: Map<string, Currency>;
+  /** Canonical Rules rows (safe_to_deploy_by_currency) — read only, used to show where cash stands against the amount the user wants to keep. */
+  cashRules?: SafeToDeployResult[];
 }
 
 function fmt(amount: string, currencyCode: string, currencies: Map<string, Currency>): string {
@@ -28,7 +33,7 @@ function fmt(amount: string, currencyCode: string, currencies: Map<string, Curre
  * exactly when there's only one, and degrading honestly (one block per
  * currency) otherwise.
  */
-export function AvailableCashSection({ buckets, balances, currencyTotals, currencies }: AvailableCashSectionProps) {
+export function AvailableCashSection({ buckets, balances, currencyTotals, currencies, cashRules = [] }: AvailableCashSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const activeBuckets = buckets.filter((b) => !b.is_archived);
 
@@ -61,7 +66,19 @@ export function AvailableCashSection({ buckets, balances, currencyTotals, curren
           ) : (
             <p className="tabular-figures mt-0.5 text-[32px] font-bold leading-tight tracking-tight text-text-muted">No balance yet</p>
           )}
-          <p className="mt-0.5 text-xs text-text-muted">Across your tracked liquid balances</p>
+          <p className="mt-0.5 text-xs text-text-muted">Across your tracked accounts</p>
+          {cashRules
+            .map((r) => ({ r, st: cashStatus({ status: r.status, liquidCash: r.liquidCash, requiredRetainedCash: r.requiredRetainedCash, safeToDeploy: r.safeToDeploy, retainedDeficit: r.retainedDeficit }) }))
+            .filter(({ st }) => st.state !== "needs_setup")
+            .map(({ r, st }) => (
+              <p key={r.currencyCode} className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
+                <CashStatusBadge result={st} />
+                <span className="min-w-0">
+                  {currencyTotals.length > 1 ? `${r.currencyCode}: ` : ""}
+                  {cashStatusSentence(st, (v) => fmt(v, r.currencyCode, currencies), "money")}
+                </span>
+              </p>
+            ))}
         </div>
         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-surface-strong text-focus">
           <Wallet size={20} aria-hidden="true" />

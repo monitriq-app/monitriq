@@ -29,7 +29,11 @@
     "test:budget-ui": "node --env-file-if-exists=.env.test.local supabase/tests/budget-ui/run.ts",
     "test:core-ui": "node --env-file-if-exists=.env.test.local supabase/tests/core-ui/run.ts",
     "test:spending-check": "node --env-file-if-exists=.env.test.local supabase/tests/spending-check/run.ts",
-    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets && npm run test:receivables && npm run test:liabilities && npm run test:goals && npm run test:rules && npm run test:decisions && npm run test:financial-position && npm run test:home-readiness && npm run test:home && npm run test:budget && npm run test:budget-ui && npm run test:core-ui && npm run test:spending-check"
+    "test:app-shell": "node --env-file-if-exists=.env.test.local supabase/tests/app-shell/run.ts",
+    "test:cash-status": "node --env-file-if-exists=.env.test.local supabase/tests/cash-status/run.ts",
+    "test:language": "node --env-file-if-exists=.env.test.local supabase/tests/language/run.ts",
+    "test:home-density": "node --env-file-if-exists=.env.test.local supabase/tests/home-density/run.ts",
+    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets && npm run test:receivables && npm run test:liabilities && npm run test:goals && npm run test:rules && npm run test:decisions && npm run test:financial-position && npm run test:home-readiness && npm run test:home && npm run test:budget && npm run test:budget-ui && npm run test:core-ui && npm run test:spending-check && npm run test:app-shell && npm run test:cash-status && npm run test:language && npm run test:home-density"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

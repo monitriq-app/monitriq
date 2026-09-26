@@ -37,3 +37,9 @@ pnpm-debug.log*
 .turbo/
 .cache/
 coverage/
+
+.env.local
+.env.test.local
+
+.env.local
+.env.test.local

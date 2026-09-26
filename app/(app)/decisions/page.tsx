@@ -7,6 +7,8 @@ import { getAssetSummaries } from "@/lib/domain/assets/repository";
 import { getLiabilitySummaries } from "@/lib/domain/liabilities/repository";
 import { getFinancialRuleSummaries } from "@/lib/domain/rules/repository";
 import { getFinancialPositionSummary } from "@/lib/domain/financial-position/repository";
+import { getLanguageMode } from "@/lib/supabase/get-language-mode";
+import { terminology } from "@/lib/domain/language/terms";
 import { DecisionPositionCard } from "@/components/decisions/DecisionPositionCard";
 import { DecisionsWorkspace } from "@/components/decisions/DecisionsWorkspace";
 
@@ -22,6 +24,7 @@ import { DecisionsWorkspace } from "@/components/decisions/DecisionsWorkspace";
  * user's own real records — nothing invented, no suggestion engine.
  */
 export default async function DecisionsPage() {
+  const terms = terminology(await getLanguageMode());
   const user = await getCurrentUser();
   if (!user) return null;
 
@@ -54,6 +57,7 @@ export default async function DecisionsPage() {
       </div>
 
       <DecisionPositionCard
+        terms={terms}
         nativePositions={positionSummary.nativePositions}
         upcomingObligations={positionSummary.upcomingObligations}
         currencies={currenciesByCode}

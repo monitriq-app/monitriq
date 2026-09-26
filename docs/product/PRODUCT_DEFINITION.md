@@ -166,3 +166,29 @@ Budget is a simple monthly plan for everyday spending: pick a currency and month
 ## Can I afford this? (Spending check, P0-E5-S3)
 
 The everyday front door to decisions. A person enters what they are thinking of buying, the amount, the currency, the account they would pay from, and optionally a spending category. Monitriq shows what spending that money today would change: cash before and after, Budget left (overall and for the category), Safe to Deploy, money protected for goals, and money protected for known commitments. It then gives one plain suggested next step: Proceed within your plan, Reduce the amount, Wait, Review first, or More setup needed, with the reasons in plain language. Checks that cannot be completed (no Budget, no minimum cash set) are shown as such and are never assumed to pass. Expected income is planning context and is never treated as cash. Nothing is recorded, moved or saved by a check; "Record this purchase" only opens Money Spent pre-filled for the user to confirm. It is reachable from Home and Quick Add, and links to Decisions for detailed comparisons. It gives no scores, no AI recommendation and no future forecast.
+
+## Product language constitution (P0-E5-S4A)
+
+**If an ordinary user would need to look up a financial term to understand a primary Monitriq screen, prefer plain language and move the technical term into secondary detail.** Plain language must stay financially accurate; it never dumbs down the meaning.
+
+| Technical / internal term | Primary UI wording |
+| --- | --- |
+| liability | debt |
+| receivable | money owed to you |
+| illiquid assets | money tied up in assets |
+| liquid cash / tracked cash | cash you have / cash available |
+| minimum cash floor | money you want to keep ("The lowest amount you want your cash to reach.") |
+| protected goal cash | money set aside for goals |
+| protected commitments | money set aside for goals and upcoming payments |
+| required retained cash | money Monitriq is protecting |
+| safe to deploy | available above that / available above what's protected |
+
+Internal identifiers (schema, RPCs, repositories, types) keep their canonical names. Avoid "cash buffer", "cash floor" and "liquidity reserve" in primary UI.
+
+**Monitriq should never require a user to understand financial jargon before they can understand their own money.** Technical terminology may be introduced progressively, but the financial meaning must remain unchanged.
+
+### Adaptive financial language (P0-E5-S5)
+One financial engine, three explanation styles. During onboarding (and later in the profile menu under "Language & explanations") the user answers "How would you like Monitriq to explain your money?": **Keep it simple** (everyday words and clear explanations, the default), **Balanced** (simple explanations with financial terms when useful) or **Financial terms** (traditional financial wording and more detail). It is stored as `profiles.financial_language_mode` (`simple` | `balanced` | `financial`). The preference changes wording and explanation depth only; it never changes a calculation, Budget or Safe-to-Deploy value, warning threshold or state, the Spending Check recommendation, permissions or feature access, and never introduces currency conversion. All wording comes from one typed vocabulary (`lib/domain/language`); components ask for semantic keys and never branch on the mode. Plain language stays accurate: net worth is never "cash", asset value is never "money available", sale proceeds are never "profit", Budget remaining is never "cash available", and "available above what's protected" is never "safe to spend". Balanced mode may add a subtle line that teaches the term ("Also called liabilities."). An unknown or missing value always resolves to Simple.
+
+### Cash warning states
+Where cash stands against the amount the user chose to keep is shown per currency as one of five states, decided by one central presentation policy (lib/domain/rules/cash-status.ts) from the Rules engine's own figures: **Comfortable** (teal), **Getting close** (amber), **At your limit** (amber), **Below your limit** (red, only for an actual retained deficit) and **Needs setup** (amber, when no amount to keep is set). The warning zone begins when the money left above the protected amount is 25% or less of the protected amount; this is a UI policy constant (`WARNING_ZONE_FRACTION`), not Safe-to-Deploy mathematics, and can become user-configurable later. With an explicit zero amount to keep there is no percentage zone. Colour reflects status, never how much money someone has, and every state also carries a text label and sentence.

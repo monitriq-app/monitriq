@@ -497,14 +497,14 @@ export function buildDecisionCalculationExplanation(
     }
   }
 
-  // SAFE TO DEPLOY — see the function's own doc comment for why this never shows an equation.
+  // AVAILABLE AFTER PROTECTIONS (canonical safe_to_deploy) — see the function's own doc comment for why this never shows an equation.
   if (hasCashRelevance) {
     if (evaluation.currencySafeToDeployAfter !== null) {
       const context: { label: string; amount: string }[] = [];
       if (minimumCashFloor.configured && minimumCashFloor.amount !== null) {
-        context.push({ label: "Minimum cash to keep", amount: minimumCashFloor.amount });
+        context.push({ label: "Money you want to keep", amount: minimumCashFloor.amount });
       }
-      blocks.push({ key: "safeToDeploy", title: "Safe to Deploy after", calculated: true, terms: [], result: { label: "Safe to Deploy after", amount: evaluation.currencySafeToDeployAfter }, reason: null, context, coveredMissingInfoCodes: [] });
+      blocks.push({ key: "safeToDeploy", title: "Available above that (after)", calculated: true, terms: [], result: { label: "Available above that (after)", amount: evaluation.currencySafeToDeployAfter }, reason: null, context, coveredMissingInfoCodes: [] });
     } else {
       let reason: string;
       let actionLabel: string | undefined;
@@ -516,13 +516,13 @@ export function buildDecisionCalculationExplanation(
       } else if (!minimumCashFloor.configured) {
         // Not a missing_information code — a separate Rules-configuration
         // state — so nothing to mark covered here either.
-        reason = `Set your Minimum Cash to Keep for ${evaluation.currencyCode} before Monitriq can calculate this.`;
-        actionLabel = "Set minimum cash";
+        reason = `Choose the amount of cash you want to keep for ${evaluation.currencyCode} before Monitriq can calculate this.`;
+        actionLabel = "Set amount to keep";
         actionHref = "/rules";
       } else {
         reason = "Add the missing information to calculate this.";
       }
-      blocks.push({ key: "safeToDeploy", title: "Safe to Deploy after", calculated: false, terms: [], result: null, reason, actionLabel, actionHref, context: [], coveredMissingInfoCodes: covered });
+      blocks.push({ key: "safeToDeploy", title: "Available above that (after)", calculated: false, terms: [], result: null, reason, actionLabel, actionHref, context: [], coveredMissingInfoCodes: covered });
     }
   }
 

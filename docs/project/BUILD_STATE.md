@@ -1356,3 +1356,23 @@ Production Goals / Debts (/liabilities) / Money Owed to You (/receivables) with 
 ## P0-E5-S3 — Spending Decision Assistant "Can I afford this?" (awaiting review)
 
 /spending-check: hypothetical immediate-purchase check composed from existing canonical reads (evaluate_proposed_cash_use, safe_to_deploy_by_currency, budget_facts_for_date); deterministic suggestion policy; Home CTA; Quick Add PLAN "Check a Purchase"; Money Spent prefill handoff. No schema/migration/RLS change. Tests: spending-check 27. Report: docs/reports/P0-E5-S3-spending-decision-assistant.txt. Nothing committed.
+
+## P0-E5-S4 — Mobile app shell + navigation hierarchy (awaiting review)
+
+Bottom nav is Home / Money / + / Budget / Goals; Assets, Debts, Money Owed to You, Decisions, Financial Overview and Rules & Commitments moved to a left navigation drawer; profile menu is account/settings only; mobile scrollbar chrome hidden below md (document remains the single scroller). No domain/schema/RLS change. Tests: app-shell 10. Report: docs/reports/P0-E5-S4-mobile-navigation-app-shell.txt. Nothing committed.
+
+S4 addendum: everyday financial language + semantic colour — "Safe to Deploy" is now "Available after protections" (Money to keep protected, Minimum cash to keep, Money protected for goals and commitments) on every user-facing surface; internal safe_to_deploy names unchanged; Home says "tied up in assets"; colours follow status (teal within plan, amber attention/incomplete, red shortfall/conflict, neutral information). No formula change. Included in docs/reports/P0-E5-S4-mobile-navigation-app-shell.txt.
+
+## P0-E5-S4A — Everyday money language + cash warning states (awaiting review)
+
+Primary UI now says Cash you have / Money you want to keep / Money Monitriq is protecting / Available above that (canonical safe_to_deploy etc. unchanged); five cash states (Comfortable, Getting close, At your limit, Below your limit, Needs setup) from one central policy with a 25% warning zone; shown on Home, Rules & Commitments, Money, Decisions, Financial Overview and Spending Check (after-purchase status from the canonical hypothetical row). Supersedes the wording of the earlier S4 addendum. No formula/schema/RLS change. Tests: cash-status 20. Report: docs/reports/P0-E5-S4A-everyday-money-language-warning-states.txt. Nothing committed.
+
+## P0-E5-S5 — Adaptive financial language + explanation preferences (awaiting review; migration LOCAL only)
+
+New migration 20261003090000_add_financial_language_mode.sql (profiles.financial_language_mode, NOT NULL DEFAULT 'simple', CHECK simple|balanced|financial, column UPDATE grant) — applied locally only; NOT pushed to Monitriq Dev (pending after approval). One typed vocabulary (lib/domain/language), onboarding choice, profile-menu setting, adopted on Home, Rules, Spending Check, Financial Overview, Assets, Debts, Money Owed and the drawer. Values, warning states and recommendations identical in every mode. Tests: language 14. Report: docs/reports/P0-E5-S5-adaptive-financial-language.txt. Nothing committed.
+
+P0-E5-S5R1: Monitriq Dev is confirmed at 20261002090000 (Budget tables exist); 20261003090000_add_financial_language_mode.sql is the ONLY pending migration and is NOT yet applied remotely (profiles.financial_language_mode missing -> language save fails). The CLI login on this machine is a different Supabase account (project "Nemryn"), so `supabase migration list/db push --linked` returns 403 for ref mvnwrkfcszazqqccmmxq; apply with a login/access token or DB URL that has access to Monitriq Dev.
+
+P0-E5-S5R1 update: 20261003090000_add_financial_language_mode.sql is now APPLIED on Monitriq Dev. `supabase migration list --linked` shows all 18 migrations on both Local and Remote; a read-only remote schema dump confirms the column (NOT NULL, default 'simple'), the CHECK, the authenticated column grant and unchanged profiles RLS. Authenticated UI save/persistence still to be confirmed by a signed-in manual test.
+
+P0-E5-S5B: Home density refinement — Cash/Net Worth/Available cards tightened (row -21..-34%, Cash -9.5%), "Can I afford this?" +~14% presence; content-driven sizing, no calculation change. Tests: home-density 7. Report: docs/reports/P0-E5-S5B-home-card-density-refinement.txt. Note: in-repo `next build` collides with a running `next dev` (shared .next); build verified in a byte-identical scratch copy.

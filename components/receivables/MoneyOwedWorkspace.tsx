@@ -5,11 +5,12 @@ import { useRouter } from "next/navigation";
 import { HandCoins, Plus } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { updateReceivable } from "@/lib/domain/receivables/repository";
-import { MONEY_OWED_EMPTY, NOT_CASH_NOTE, type MoneyOwedView } from "@/lib/domain/receivables/presentation";
+import { moneyOwedEmpty, NOT_CASH_NOTE, type MoneyOwedView } from "@/lib/domain/receivables/presentation";
 import type { ReceivableSummary } from "@/lib/domain/receivables/types";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { CashBucket } from "@/lib/domain/money/types";
 import { BackLink } from "@/components/layout/BackLink";
+import { useTerms } from "@/components/language/LanguageProvider";
 import { MoreDetails } from "@/components/ui/MoreDetails";
 import { AddMoneyOwedSheet } from "@/components/receivables/AddMoneyOwedSheet";
 import { RecordRecoverySheet } from "@/components/receivables/RecordRecoverySheet";
@@ -25,6 +26,8 @@ interface Props {
 export function MoneyOwedWorkspace({ view, receivables, currencies, buckets, defaultCurrencyCode }: Props) {
   const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const terms = useTerms();
+  const empty = moneyOwedEmpty(terms.mode);
   const [recoveringId, setRecoveringId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -49,13 +52,14 @@ export function MoneyOwedWorkspace({ view, receivables, currencies, buckets, def
       <BackLink />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-text-primary">Money Owed to You</h1>
-          <p className="text-sm text-text-secondary">Track money you expect to receive.</p>
+          <h1 className="text-xl font-semibold text-text-primary">{terms.t("money_owed")}</h1>
+          <p className="text-sm text-text-secondary">{terms.t("money_owed_subtitle")}</p>
+          {terms.hint("money_owed") ? <p className="text-xs text-text-muted">{terms.hint("money_owed")}</p> : null}
         </div>
         {view.cards.length > 0 ? (
           <button type="button" onClick={() => setAdding(true)} className="flex min-h-12 shrink-0 items-center gap-1.5 rounded-full bg-accent-primary px-4 text-[13px] font-semibold text-background">
             <Plus size={14} aria-hidden="true" />
-            Add Money Owed
+            Add {terms.t("money_owed_singular")}
           </button>
         ) : null}
       </div>
@@ -63,10 +67,10 @@ export function MoneyOwedWorkspace({ view, receivables, currencies, buckets, def
       {view.cards.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl bg-surface-raised p-6 text-center">
           <HandCoins size={24} className="text-text-secondary" aria-hidden="true" />
-          <p className="text-[15px] font-semibold text-text-primary">{MONEY_OWED_EMPTY.title}</p>
-          <p className="max-w-xs text-sm text-text-muted">{MONEY_OWED_EMPTY.body}</p>
+          <p className="text-[15px] font-semibold text-text-primary">{empty.title}</p>
+          <p className="max-w-xs text-sm text-text-muted">{empty.body}</p>
           <button type="button" onClick={() => setAdding(true)} className="h-12 rounded-full bg-accent-primary px-6 text-sm font-semibold text-background">
-            {MONEY_OWED_EMPTY.action}
+            {empty.action}
           </button>
         </div>
       ) : (

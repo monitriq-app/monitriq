@@ -949,8 +949,8 @@ async function main() {
       const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
       const stdBlock = blocks.find((b) => b.key === "safeToDeploy");
       assert(stdBlock !== undefined && stdBlock!.calculated === false, "expected a not-calculated Safe to Deploy block");
-      assert(stdBlock!.reason === "Set your Minimum Cash to Keep for NGN before Monitriq can calculate this.", `unexpected reason: ${stdBlock!.reason}`);
-      assert(stdBlock!.actionLabel === "Set minimum cash" && stdBlock!.actionHref === "/rules", "expected a real action pointing at the Rules & Obligations screen");
+      assert(stdBlock!.reason === "Choose the amount of cash you want to keep for NGN before Monitriq can calculate this.", `unexpected reason: ${stdBlock!.reason}`);
+      assert(stdBlock!.actionLabel === "Set amount to keep" && stdBlock!.actionHref === "/rules", "expected a real action pointing at the Rules & Obligations screen");
     });
 
     await runner.run("buildDecisionCalculationExplanation: Safe to Deploy — configured minimum shown as context only, never combined into an equation with a bucket-scoped cash figure", async () => {
@@ -961,7 +961,7 @@ async function main() {
       assert(stdBlock !== undefined && stdBlock!.calculated === true, "expected a calculated Safe to Deploy block");
       assert(stdBlock!.result?.amount === "250000.000000", "Safe to Deploy result must be copied verbatim from currencySafeToDeployAfter");
       assert(stdBlock!.terms.length === 0, "Safe to Deploy must never show equation terms — the real formula spans every bucket in the currency, not one bucket");
-      assert(stdBlock!.context[0]?.label === "Minimum cash to keep" && stdBlock!.context[0]?.amount === "500000.000000", "expected the configured minimum shown as read-only context");
+      assert(stdBlock!.context[0]?.label === "Money you want to keep" && stdBlock!.context[0]?.amount === "500000.000000", "expected the configured minimum shown as read-only context");
     });
 
     await runner.run("buildDecisionCalculationExplanation: no block renders for a decision type with no cash/asset/liability relevance", async () => {

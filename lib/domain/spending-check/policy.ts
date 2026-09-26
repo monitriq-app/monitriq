@@ -1,4 +1,5 @@
 import { Decimal } from "decimal.js";
+import { cashStatus } from "../rules/cash-status.ts";
 import type {
   BudgetCheck,
   CashCheck,
@@ -104,7 +105,18 @@ export function checkProtection(f: SpendingCheckFacts): ProtectionCheck {
     if (isPositive(worsened)) otherDeficit = str(worsened);
   }
 
+  const after = f.safeAfter;
+  const statusAfter = cashStatus({
+    status: after?.status ?? "not_configured",
+    liquidCash: after?.liquidCash ?? "0",
+    requiredRetainedCash: after?.requiredRetainedCash ?? null,
+    safeToDeploy: after?.safeToDeploy ?? null,
+    retainedDeficit: after?.retainedDeficit ?? null,
+  });
+
   return {
+    statusAfter,
+    protectingAfter: after?.requiredRetainedCash ?? null,
     minimumCash: {
       state: configured ? "checked" : "needs_setup",
       minimum: minimum ? str(minimum) : null,

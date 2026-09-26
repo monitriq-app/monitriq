@@ -46,7 +46,7 @@ export function BudgetHomeCard({ summaries, currencies }: BudgetHomeCardProps) {
                 </span>
                 <span className="min-w-0">
                   <span className="block text-[11px] font-semibold uppercase tracking-wide text-text-muted">{o.remainingCaption}</span>
-                  <span className={`tabular-figures block break-words text-[15px] font-semibold ${o.isOver ? "text-attention" : "text-text-primary"}`}>{o.remainingLabel}</span>
+                  <span className={`tabular-figures block break-words text-[15px] font-semibold ${o.isOver ? "text-danger" : "text-text-primary"}`}>{o.remainingLabel}</span>
                 </span>
               </span>
             </Link>

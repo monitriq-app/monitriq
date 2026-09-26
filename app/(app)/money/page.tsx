@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/supabase/get-current-user";
 import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
 import { createClient } from "@/lib/supabase/server";
 import { listCurrencies } from "@/lib/domain/currency/repository";
+import { getSafeToDeployByCurrency } from "@/lib/domain/rules/repository";
 import {
   listBuckets,
   listMoneyReceivedCategories,
@@ -45,7 +46,7 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
   const periodKey: MoneyPeriodKey = periodParam === "week" || periodParam === "3m" || periodParam === "year" ? periodParam : "month";
   const { start, end } = resolveMoneyPeriodRange(periodKey, profile?.timezone ?? "UTC");
 
-  const [buckets, currencies, receivedCategories, spendingCategories, bucketBalances, currencyTotals, activity, periodSummary, weeklyBuckets, categoryBreakdown] = await Promise.all([
+  const [buckets, currencies, receivedCategories, spendingCategories, bucketBalances, currencyTotals, activity, periodSummary, weeklyBuckets, categoryBreakdown, cashRules] = await Promise.all([
     listBuckets(supabase),
     listCurrencies(supabase),
     listMoneyReceivedCategories(supabase),
@@ -56,6 +57,7 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
     getMoneyPeriodSummary(supabase, start, end),
     getMoneyWeeklySummary(supabase, start, end),
     getMoneyCategoryBreakdown(supabase, start, end),
+    getSafeToDeployByCurrency(supabase),
   ]);
 
   const currenciesByCode = new Map(currencies.map((c) => [c.code, c]));
@@ -94,7 +96,7 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
             <CashFlowChart weeklyBuckets={weeklyBuckets} currencies={currenciesByCode} />
           </section>
 
-          <AvailableCashSection buckets={buckets} balances={bucketBalances} currencyTotals={currencyTotals} currencies={currenciesByCode} />
+          <AvailableCashSection buckets={buckets} balances={bucketBalances} currencyTotals={currencyTotals} currencies={currenciesByCode} cashRules={cashRules} />
 
           <WhereMoneyWentSection breakdown={categoryBreakdown} currencies={currenciesByCode} />
 

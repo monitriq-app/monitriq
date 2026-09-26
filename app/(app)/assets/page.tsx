@@ -1,6 +1,8 @@
 import { SlidersHorizontal } from "lucide-react";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
 import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
+import { getLanguageMode } from "@/lib/supabase/get-language-mode";
+import { terminology } from "@/lib/domain/language/terms";
 import { createClient } from "@/lib/supabase/server";
 import { listCurrencies } from "@/lib/domain/currency/repository";
 import { listAssetTypes, getAssetSummaries, getAssetValueByType, getAssetDispositionSummaries } from "@/lib/domain/assets/repository";
@@ -27,6 +29,7 @@ import { AddAssetButton } from "@/components/assets/AddAssetButton";
  * "Manually Valued" is real: no automated valuation source exists.
  */
 export default async function AssetsPage() {
+  const terms = terminology(await getLanguageMode());
   const user = await getCurrentUser();
   if (!user) return null;
 
@@ -87,17 +90,17 @@ export default async function AssetsPage() {
         </div>
       ) : (
         <>
-          <TrackedAssetsSummaryCard activeAssets={activeAssets} valueByType={valueByType} currencies={currenciesByCode} />
+          <TrackedAssetsSummaryCard terms={terms} activeAssets={activeAssets} valueByType={valueByType} currencies={currenciesByCode} />
 
           <CapitalAllocationCard valueByType={valueByType} />
 
           <NeedsAttentionSection activeAssets={activeAssets} receivables={activeReceivables} />
 
-          <PotentialLiquiditySection activeAssets={activeAssets} currencies={currenciesByCode} />
+          <PotentialLiquiditySection terms={terms} activeAssets={activeAssets} currencies={currenciesByCode} />
 
           <AssetsBoard activeAssets={activeAssets} valueByType={valueByType} buckets={buckets} currencies={currenciesByCode} />
 
-          <ReceivablesSection receivables={activeReceivables} currencies={currenciesByCode} />
+          <ReceivablesSection terms={terms} receivables={activeReceivables} currencies={currenciesByCode} />
 
           <SoldAssetsSection dispositions={dispositions} currencies={currenciesByCode} />
         </>

@@ -125,12 +125,12 @@ export function CashUseEvaluatorForm({ buckets }: CashUseEvaluatorFormProps) {
               <dd className="tabular-figures text-text-secondary">{evaluation.postUseBalance}</dd>
             </div>
             <div>
-              <dt className="text-text-muted">Safe to Deploy (after)</dt>
+              <dt className="text-text-muted">Available above that (after)</dt>
               <dd className="tabular-figures text-text-secondary">{evaluation.currencySafeToDeployAfter ?? "Not configured"}</dd>
             </div>
           </dl>
           <ul className="mt-3 flex flex-col gap-1">
-            <li>Minimum Cash Floor: {LABELS[evaluation.minimumCashFloorStatus]}</li>
+            <li>Money you want to keep: {LABELS[evaluation.minimumCashFloorStatus]}</li>
             <li>Protected Goal: {LABELS[evaluation.protectedGoalStatus]}</li>
             <li>Protected Obligation: {LABELS[evaluation.protectedObligationStatus]}</li>
           </ul>

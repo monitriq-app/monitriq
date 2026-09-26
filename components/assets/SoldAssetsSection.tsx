@@ -1,5 +1,7 @@
 "use client";
 
+import { useTerms } from "@/components/language/LanguageProvider";
+import { assetBasisLabel } from "@/lib/domain/language/assets";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Tag } from "lucide-react";
@@ -35,6 +37,7 @@ function fmt(amount: string, currencyCode: string, currencies: Map<string, Curre
  * asset_summary()'s is_disposed in the migration).
  */
 export function SoldAssetsSection({ dispositions, currencies }: SoldAssetsSectionProps) {
+  const terms = useTerms();
   const router = useRouter();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,15 +83,15 @@ export function SoldAssetsSection({ dispositions, currencies }: SoldAssetsSectio
                   <p className="tabular-figures text-sm font-semibold text-text-primary">{fmt(d.grossProceeds, d.currencyCode, currencies)}</p>
                 </div>
                 <div className="rounded-lg bg-surface-strong/70 p-2 text-[11px]">
-                  <p className="text-text-muted">Received After Costs</p>
+                  <p className="text-text-muted">{terms.t("money_after_costs")}</p>
                   <p className="tabular-figures text-sm font-semibold text-accent-primary">{fmt(d.netProceeds, d.currencyCode, currencies)}</p>
                 </div>
                 <div className="rounded-lg bg-surface-strong/70 p-2 text-[11px]">
-                  <p className="text-text-muted">{display.basisLabel}</p>
+                  <p className="text-text-muted">{assetBasisLabel(terms.mode, display.basisLabel)}</p>
                   <p className="tabular-figures text-sm font-semibold text-text-primary">{d.basisAtSale ? fmt(d.basisAtSale, d.currencyCode, currencies) : "Not set"}</p>
                 </div>
                 <div className="rounded-lg bg-surface-strong/70 p-2 text-[11px]">
-                  <p className="text-text-muted">Profit / Loss</p>
+                  <p className="text-text-muted">{terms.t("sale_result")}</p>
                   <p className={`tabular-figures text-sm font-semibold ${d.realisedGainLoss && d.realisedGainLoss.startsWith("-") ? "text-danger" : "text-text-primary"}`}>
                     {d.realisedGainLoss ? fmt(d.realisedGainLoss, d.currencyCode, currencies) : "Not calculated"}
                   </p>

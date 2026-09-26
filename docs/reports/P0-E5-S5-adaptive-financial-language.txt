@@ -1,0 +1,131 @@
+P0-E5-S5 — ADAPTIVE FINANCIAL LANGUAGE + EXPLANATION PREFERENCES
+================================================================
+
+1. PHASE
+P0-E5-S5 — one financial engine, three explanation styles.
+
+2. STATUS
+COMPLETE, pending manual review. Nothing committed or pushed. The one new migration is applied to the LOCAL database only and has NOT been pushed to Monitriq Dev.
+
+3. OBJECTIVE
+Let each user choose how Monitriq explains their money (Keep it simple / Balanced / Financial terms) without changing any financial truth: same numbers, same warning states and colours, same recommendations, same permissions.
+
+4. GIT PREFLIGHT
+HEAD 8c7bee5 (Spending Assistant). The working tree held only the known, still-uncommitted S4 and S4A work (app shell/navigation, everyday language, cash warning states, plus their tests and reports). No unrelated changes; that work was preserved untouched apart from the wording this phase intentionally supersedes.
+
+5. EXISTING PROFILE AUDIT
+public.profiles (20260922201924): id = auth.users id, first_name, preferred_name, preferred_currency, timezone, generated onboarding_completed, created_at/updated_at; CHECKs on name lengths and currency shape; BEFORE UPDATE/INSERT trigger validates the timezone and sets updated_at; RLS on with profiles_select_own and profiles_update_own (auth.uid() = id); `revoke all` from anon/authenticated, `grant select`, and a COLUMN-LEVEL `grant update (first_name, preferred_name, preferred_currency, timezone)`. handle_new_user() inserts a row at signup without naming any preference column. The app reads it through getProfile()/getCurrentProfile() (per-request cached) and writes through updateProfile().
+
+6. PREFERENCE MODEL
+profiles.financial_language_mode text, stable codes simple | balanced | financial (never display labels). Display labels: Keep it simple / Balanced / Financial terms. Default and fallback: simple. resolveLanguageMode() maps missing, null or invalid input to simple; terminology() never throws.
+
+7. MIGRATION (one, local only)
+supabase/migrations/20261003090000_add_financial_language_mode.sql: `alter table profiles add column financial_language_mode text not null default 'simple'`, a named CHECK constraint (simple|balanced|financial), a column comment, and the column-level UPDATE grant. NOT NULL DEFAULT backfills every existing row to 'simple' and gives new signups 'simple' without touching handle_new_user(), so no existing user is blocked. No new table. `supabase db reset --local` applied all 19 migrations cleanly (LOCAL Docker only; the remote was never touched).
+
+8. RLS / GRANTS
+Ownership is unchanged (profiles_update_own). Only the column-level grant was extended so the established profile boundary can write the field; anon still has no grants on profiles; no service role in application code. Tested against the real database: A reads own mode; A updates own mode; A's update of B's row affects zero rows and B is unchanged; A cannot read B's preference; anonymous read and update are denied; an invalid value ('expert') and NULL are rejected by the constraint.
+
+9. ONBOARDING
+The existing single onboarding form gained one lightweight fieldset, "How would you like Monitriq to explain your money?", with three radio cards (label plus one-line description). Simple is preselected; it is not a test and has no levels or badges. It saves in the same updateProfile() call. Verified in Chrome: Keep it simple preselected, choosing Balanced saved 'balanced', no overflow at 320, 360, 393 and 430 px in dark and light, cards 63-79px tall.
+
+10. SETTINGS
+Profile menu > "Language & explanations" > "How Monitriq explains money" with the same three options (the same LanguageModeSelector component). Saving calls updateProfile() then router.refresh(); the server re-renders in the new mode with no sign-out (verified: switching through all three modes in the UI, the session stayed signed in). The menu now scrolls within the viewport height on short phones.
+
+11. TERMINOLOGY ARCHITECTURE
+lib/domain/language: types.ts (modes, default, resolve, selector copy), terms.ts (a typed vocabulary of about 35 semantic keys, each with a label per mode and an optional balanced-only hint; terminology(mode).t(key)/.hint(key)), explain.ts (explanation depth by mode), assets.ts (asset-card wording). The server resolves the mode once per request from the already-cached profile (getLanguageMode, no extra query); server components receive a `terms` object, and client components read it from a LanguageProvider mounted once in AppShell (useTerms(); outside a provider it is Simple). Components ask for semantic keys and never branch on the mode (tested: no mode comparisons in any component or page). One page tree, one set of components and domain reads; there is no SimpleHome/BalancedHome/FinancialHome.
+
+12. SIMPLE VOCABULARY (default)
+Cash you have; Money you want to keep ("The lowest amount you want your cash to reach."); Money Monitriq is protecting; Available above that / Available above what's protected; Money set aside for goals; Money set aside for goals and upcoming payments; Debts; Money Owed to You; Money tied up in assets; Cash available; Amount invested; What you paid; Current value; Money received after costs; Change in value so far; Gain or loss compared with what you paid; Upcoming payments. No primary Simple label contains Safe to Deploy, Minimum Cash Floor, Required Retained Cash, Illiquid, Receivables, Liabilities, Liquidity, Capital Allocation or Disposition (tested).
+
+13. BALANCED VOCABULARY
+Cash position; Minimum cash to keep; Required protected cash (hint "Also called required retained cash."); Available after protections; Protected goal funds; Protected commitments; Less-liquid assets (hint "Money tied up in assets."); Debts (hint "Also called liabilities."); Money Owed to You (hint "Also called receivables."); Amount invested / Amount paid; Potential liquidity; Upcoming commitments.
+
+14. FINANCIAL VOCABULARY
+Liquid cash; Minimum Cash Floor; Required Retained Cash; Safe to Deploy; Protected goal cash; Protected Commitments; Illiquid assets; Liabilities; Receivables; Cost basis; Current valuation; Realised gain / loss; Net proceeds; Upcoming obligations; "See the calculation". Kept readable, not jargon for its own sake.
+
+15. HOME
+Tile "Available above what's protected" / "Available after protections" / "Safe to Deploy"; first tile "Cash you have" / "Cash position" / "Liquid cash"; the tied-up badge reads "N% of your net worth is tied up in assets" / "...in less-liquid assets" / "N% in illiquid assets"; summary lines and the status sentence follow the mode; the disclosure follows the mode. Amounts, status chip and colour are identical.
+
+16. RULES
+Headings, the three-line summary (Cash / protecting / available), help text, "Money you want to keep" section and its help, and "Upcoming payments" / "commitments" / "obligations" all come from the vocabulary.
+
+17. SPENDING CHECK
+Row titles, line labels, reasons and the status sentence follow the mode (Simple: "This purchase would leave you NGN 20,000 below the amount you chose to keep."; Balanced: "...below your protected amount."; Financial: "This purchase creates a NGN 20,000 retained-cash deficit below Required Retained Cash."). The evaluation, reason codes, amounts, suggestion (Proceed within your plan / Wait / Reduce the amount / Review first), warning state and colour are identical; tested across five scenarios covering all four suggestions.
+
+18. ASSETS
+Card basis label (Simple keeps "What did you pay?"/"Amount invested"; Balanced "Amount invested"/"Amount paid"; Financial "Cost basis"), current value ("Current valuation" in Financial), the unrealised gain line, Sold-assets wording (Money received after costs / Received after costs / Net proceeds; Gain or loss compared with what you paid / Gain / loss on sale / Realised gain / loss; never "profit" in Simple), Potential liquidity ("Could become cash" / "Potential liquidity"), the tracked-assets heading and the owed-to-you section. Calculations untouched.
+
+19. DEBTS
+Title, subtitle, balanced teaching line, Add button and empty state: Debts / Debts + "Also called liabilities." / Liabilities ("Add Debt" / "Add Debt" / "Add Liability"). The /liabilities route and domain names are unchanged.
+
+20. MONEY OWED
+Money Owed to You / Money Owed to You + "Also called receivables." / Receivables (Add Money Owed / Add Receivable). The /receivables route and domain are unchanged. The "not cash you can spend until paid" note is unchanged.
+
+21. FINANCIAL OVERVIEW
+Labels, the protections heading and block, the explanation and "convertible to cash" line follow the mode (e.g. Money tied up in assets / Non-cash assets / Non-cash assets (illiquid); Debts you owe / Debts / Liabilities outstanding). The navigation drawer labels for Debts and Money Owed follow the mode as well.
+
+22. EXPLANATION DEPTH
+Simple: "Why is NGN 350,200 available? You have NGN 850,200 in tracked cash. Monitriq is keeping NGN 500,000 protected based on the limits and goals you set. It protects whichever amount is higher, so the same money is not counted twice." Balanced: "Available after protections is the cash remaining after your minimum cash amount and protected goals and commitments are considered..." Financial: "Safe to Deploy is liquid cash remaining after Required Retained Cash, based on the greater of the Minimum Cash Floor and protected commitments." Formula unchanged.
+
+23. EDUCATIONAL TERMINOLOGY
+Balanced mode shows short, subtle teaching lines (Also called liabilities. / Also called receivables. / Also called required retained cash. / Money tied up in assets.) only where the term appears; Simple and Financial show none.
+
+24. WARNING-STATE CONSISTENCY
+cashStatus() takes no mode input at all (tested at source level); for every canonical case the state and tone are the same in every mode and only the sentence differs (three distinct wordings per state). The Spending Check status row uses the same state and colour in every mode (tested).
+
+25. FINANCIAL-VALUE INVARIANCE
+Tested against the real database: after switching the preference simple -> balanced -> financial -> simple, a snapshot of Money balances, Safe-to-Deploy rows for NGN and USD, the full financial position (net worth), the Budget summary, goals, debts, money owed and assets is byte-identical every time; the Spending Check evaluation, suggestion, every row value and every amount quoted in the reasons are identical across modes. Browser: NGN 850,200 / 500,000 / 350,200 on Home, Rules and the Spending Check in all three modes.
+
+26. MULTI-CURRENCY
+Nothing in the language layer touches currency: the mode changes wording only. NGN and USD rows stay separate and identical in every mode (the invariance test includes both; the Home tile shows NGN Comfortable next to USD Needs setup in all three modes). No conversion was introduced.
+
+27. MOBILE
+Onboarding selector at 320, 360, 393 and 430 px: no horizontal overflow, descriptions wrap, cards at least 63px tall. Profile menu with the new section: no overflow in any mode. Home, Rules, Spending Check, Financial Overview, Debts and Money Owed showed no horizontal overflow in any mode; Home at 320 px also clean.
+
+28. LIGHT / DARK
+Selector uses the shared tokens only (accent border/tint for the selected card). Onboarding checked in dark (393, 360) and light (320, 430); screenshots reviewed.
+
+29. ACCESSIBILITY
+Native radio inputs in labelled cards inside a radiogroup with an accessible name, the onboarding question as a fieldset legend, keyboard operable, 48px+ targets, visible selection (border, tint and the filled radio), error announcements via role="alert". State labels and sentences never depend on colour.
+
+30. TESTS
+New supabase/tests/language/run.ts (npm run test:language), 14 checks against the real local database and code: default simple; onboarding can save each mode and it persists; settings wiring and update without sign-out; invalid, null and unknown values (fallback and constraint); RLS isolation including anonymous; exact vocabulary by mode (Home/Rules); explanation depth; value invariance (item 25); warning states identical across modes; Spending Check identical evaluation and recommendation and mode-specific wording; Assets / Debts / Money Owed / Overview / drawer vocabulary; architecture (no mode branching in components, one server resolution, provider fallback, no three-app trees); no hardcoded mode or personal data and no route/onboarding dependence on the preference. Browser-verified: onboarding at four widths, the settings switch through all three modes in dark, and overflow. Existing tests whose assertions pinned Simple-mode component source or the old placement were updated intentionally (cash-status suite now checks the vocabulary keys and Simple values; core-ui debt empty-state wording; app-shell allows the profile/language imports in the account menu; the engine-file guard allows exactly the new language migration). No value assertion changed.
+
+31. REGRESSION
+All 19 suites pass: 20/48/11/114/27/25/56/86/90/33/30/31 (existing, unchanged) + Budget 30 + Budget UI 22 + Core UI 28 + Spending check 34 + App shell 10 + Cash status 20 + Language 14. The RLS/profile suite passes unchanged with the new column.
+
+32. LINT / TYPECHECK / BUILD
+Lint clean; app and harness typecheck clean; production build clean.
+
+33. MIGRATION STATUS (final, after P0-E5-S5R1)
+- Migration before: Monitriq Dev (ref mvnwrkfcszazqqccmmxq) was at 20261002090000_create_budget_domain.sql (confirmed; the Budget tables exist remotely). profiles.financial_language_mode did not exist (Postgres 42703), which was the root cause of "Could not save this. Please try again.".
+- Migration applied: 20261003090000_add_financial_language_mode.sql, applied to Monitriq Dev by the project owner (the CLI on this machine was first logged into a different Supabase account, so the push was done from an authorized login). Only that one migration was pending; no reset, no data drop.
+- Remote migration list (supabase migration list --linked): all 18 migrations show on BOTH Local and Remote, including 20261003090000.
+- Remote schema verified from a read-only `supabase db dump --linked --schema public`: profiles.financial_language_mode text DEFAULT 'simple' NOT NULL; CHECK profiles_financial_language_mode_check (simple, balanced, financial); COMMENT present; GRANT UPDATE(financial_language_mode) to authenticated alongside the existing column grants; profiles_select_own and profiles_update_own policies unchanged (auth.uid() = id), no other profiles grant or policy changed.
+- Remote read-only probes with the public anon key: selecting the column now returns 42501 permission denied (it returned 42703 column does not exist before); an anonymous PATCH of profiles returns 401 42501 permission denied.
+- Not verified from here: the authenticated behaviours on Monitriq Dev (own read/update, another user's row untouched, the CHECK rejecting "expert" through an authenticated client) and the UI save/persistence round trip, because that needs a signed-in Monitriq Dev session and no test user or data was created on the remote project. The same behaviours are proven against the identical migration on the local database (language suite: own read/update, cross-user update affects zero rows, anonymous denied, invalid and NULL rejected) and the remote schema matches the local one for this column.
+
+P0-E5-S5R1 FINDINGS
+- Root cause of the save error: only the missing remote column (migration not yet applied). No permission, grant, constraint, stale-types or stale-build problem was found; the deployed grants and policies match the local ones.
+- Error handling: the settings selector now shows the real Supabase message ("Could not save this: <message>") and logs it to the console, so a future failure is diagnosable.
+- The earlier note that the Budget migration was "unconfirmed" is removed: it is remote.
+
+34. FILES CHANGED
+New: supabase/migrations/20261003090000_add_financial_language_mode.sql; lib/domain/language/{types,terms,explain,assets}.ts; lib/supabase/get-language-mode.ts; components/language/{LanguageProvider,LanguageModeSelector}.tsx; supabase/tests/language/run.ts; this report.
+Modified: lib/supabase/database.types.ts (regenerated), lib/domain/profile/types.ts, lib/domain/rules/cash-status.ts (wording by mode only), lib/domain/spending-check/presentation.ts, lib/domain/liabilities/presentation.ts, lib/domain/receivables/presentation.ts, components/onboarding/OnboardingForm.tsx, app/onboarding/page.tsx, components/layout/{AppShell,AccountMenu,NavDrawer,nav-items}, components/rules/{AvailableExplanation,SafeToDeployCard,MinimumCashSection,CommitmentsSection}, components/home/{PositionSection,CapitalDistributionSection}, components/decisions/DecisionPositionCard, components/financial-position/NativePositionList, components/spending-check/SpendingCheckWorkspace, components/assets/{AssetCard,SoldAssetsSection,TrackedAssetsSummaryCard,PotentialLiquiditySection,ReceivablesSection}, components/liabilities/DebtsWorkspace, components/receivables/MoneyOwedWorkspace, pages: home, rules, decisions, financial-position, assets; docs/product/PRODUCT_DEFINITION.md (language constitution additions), docs/project/BUILD_STATE.md; tests: cash-status, core-ui, app-shell; package.json (test:language).
+
+35. OPEN ISSUES
+- Not yet adapted: Goals and Budget supporting text and the Goal-protection help, Decisions review text, Money page labels other than the cash status, the assets add/edit forms, the Quick Add forms. Coverage was intentionally limited to the required terminology-heavy surfaces.
+- Financial mode still uses "Expected to recover from money owed to you" and "Financial Position by Currency" on the Overview.
+- A Spending Check result already on screen keeps its wording until it is re-checked after a mode change.
+- Only 20261003090000 (this phase) is pending on Monitriq Dev; the Budget migration is already remote.
+- Pre-existing: Money's activity list locale-date hydration warnings.
+
+36. RISKS
+Balanced and Financial wording reflect my own draft copy and should be reviewed by someone who knows each audience. New terminology-heavy strings added later must go through the vocabulary (a test blocks mode branching in components but cannot catch a hard-coded jargon string in every new file).
+
+37. GIT STATUS
+Uncommitted; nothing staged or pushed. About 90 changed/untracked entries in total (the uncommitted S4, S4A and S5 work).
+
+38. RECOMMENDED NEXT PHASE
+Manual review of the three modes on a phone (including onboarding), apply the pending language migration to Monitriq Dev, then extend the vocabulary to Goals, Budget and the Money forms, and consider real-user copy testing for Balanced.

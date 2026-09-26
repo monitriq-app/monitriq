@@ -2,9 +2,11 @@ import { HandCoins } from "lucide-react";
 import { formatCurrencyAmount } from "@/lib/domain/currency/format";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { ReceivableSummary } from "@/lib/domain/receivables/types";
+import type { Terminology } from "@/lib/domain/language/terms";
 import { LogFollowUpButton, RecordRecoveryButton } from "@/components/assets/ReceivableActions";
 
 interface ReceivablesSectionProps {
+  terms: Terminology;
   receivables: ReceivableSummary[];
   currencies: Map<string, Currency>;
 }
@@ -25,7 +27,7 @@ function fmt(amount: string, currencyCode: string, currencies: Map<string, Curre
  * outstanding amount, recoverable estimate, and expected payment date are
  * all read verbatim from receivable_summary() — none derived here.
  */
-export function ReceivablesSection({ receivables, currencies }: ReceivablesSectionProps) {
+export function ReceivablesSection({ receivables, currencies, terms }: ReceivablesSectionProps) {
   const active = receivables.filter((r) => !r.isArchived);
   if (active.length === 0) return null;
 
@@ -39,7 +41,7 @@ export function ReceivablesSection({ receivables, currencies }: ReceivablesSecti
       <div className="flex items-center justify-between">
         <h2 className="flex items-center gap-1.5 text-lg font-semibold leading-6 text-text-primary">
           <HandCoins size={16} className="text-focus" aria-hidden="true" />
-          Money You&apos;re Owed
+          {terms.t("money_owed")}
         </h2>
         <span className="text-xs text-text-muted">
           {Array.from(outstandingByCurrency.entries())
@@ -51,7 +53,7 @@ export function ReceivablesSection({ receivables, currencies }: ReceivablesSecti
         {active.map((r) => (
           <div key={r.receivableId} className="rounded-xl bg-surface-raised p-3.5">
             <div className="mb-1.5 flex items-center gap-1.5">
-              <span className="rounded-full bg-surface-strong px-1.5 py-0.5 text-[10px] font-semibold text-text-secondary">Money Owed to You</span>
+              <span className="rounded-full bg-surface-strong px-1.5 py-0.5 text-[10px] font-semibold text-text-secondary">{terms.t("money_owed")}</span>
               <span className="rounded-full bg-surface-strong px-1.5 py-0.5 text-[10px] font-semibold text-text-secondary">
                 {r.lastFollowUpAt ? `Followed up ${new Date(r.lastFollowUpAt).toLocaleDateString()}` : "Last follow-up: Not set"}
               </span>

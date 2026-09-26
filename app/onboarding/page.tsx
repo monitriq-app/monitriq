@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
 import { createClient } from "@/lib/supabase/server";
 import { listCurrencies } from "@/lib/domain/currency/repository";
 import { AuthCard } from "@/components/auth/AuthCard";
+import { resolveLanguageMode } from "@/lib/domain/language/types";
 import { OnboardingForm } from "@/components/onboarding/OnboardingForm";
 
 /**
@@ -39,6 +40,7 @@ export default async function OnboardingPage() {
             preferred_name: profile?.preferred_name ?? "",
             preferred_currency: profile?.preferred_currency ?? "",
             timezone: profile?.timezone ?? "",
+            financial_language_mode: resolveLanguageMode(profile?.financial_language_mode),
           }}
         />
       </AuthCard>

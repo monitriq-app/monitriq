@@ -62,7 +62,7 @@ async function main() {
       assert(v.suggestionLabel === "Review first" && v.rows.find((x) => x.key === "budget")!.status === "Not available", "labels");
       assert(v.rows.find((x) => x.key === "budget")!.action?.href === "/budget?quick=1", "Create budget action");
       assert(v.rows.find((x) => x.key === "protected")!.status === "Needs setup" && v.rows.find((x) => x.key === "protected")!.action?.href === "/rules", "Set minimum cash action");
-      assert(v.reasons.some((s) => /don't have an active budget for this month/.test(s)) && v.reasons.some((s) => /haven't set the minimum cash/.test(s)), "plain-language reasons");
+      assert(v.reasons.some((s) => /don't have an active budget for this month/.test(s)) && v.reasons.some((s) => /haven't chosen the amount of cash you want to keep/.test(s)), "plain-language reasons");
     });
 
     await runner.run("2/3 amount above the account cash -> 'Reduce the amount' with a factual reason; exact balance is allowed", async () => {
@@ -199,7 +199,7 @@ async function main() {
       const r = await check("700", undefined, undefined, usd);
       assert(r.suggestion.state === "wait" && r.suggestion.reasons[0].code === "uses_protected_goal_money" && D(r.suggestion.reasons[0].amounts.used).eq(100), JSON.stringify(r.suggestion));
       assert(r.suggestion.caveats.some((x) => x.code === "minimum_cash_not_set"), "incomplete protection still disclosed");
-      assert(/USD 100 currently protected for your goals/.test(view(r).reasons[0]), view(r).reasons[0]);
+      assert(/USD 100 currently set aside for your goals/.test(view(r).reasons[0]), view(r).reasons[0]);
     });
 
     await runner.run("32/34 NGN purchase does not consume a USD Budget; USD Budget applies only to USD checks; no FX", async () => {
@@ -225,7 +225,7 @@ async function main() {
       assert(D(before.protectedCommitments).eq(500) && D(before.retainedDeficit).eq(0), "canonical: 500 protected for the commitment, no deficit yet");
       const reason = r.suggestion.reasons[0];
       assert(reason.code === "below_required_cash" && D(reason.amounts.required).eq(500) && D(reason.amounts.cashAfter).eq(300) && D(reason.amounts.belowBy).eq(200), JSON.stringify(reason));
-      assert(/GBP 500 protected for your minimum cash, goals and known commitments/.test(view(r).reasons[0]) && /GBP 200 below/.test(view(r).reasons[0]), view(r).reasons[0]);
+      assert(/Monitriq is protecting GBP 500/.test(view(r).reasons[0]) && /GBP 200 below/.test(view(r).reasons[0]), view(r).reasons[0]);
       assert(r.suggestion.state === "wait", `state ${r.suggestion.state} ${JSON.stringify(r.suggestion)}`);
       const small = await check("100", undefined, undefined, gbp);
       assert(small.protection.commitments.shortfall === null, "small purchase leaves commitments covered");
@@ -245,7 +245,7 @@ async function main() {
       assert(r.suggestion.state === "wait", r.suggestion.state);
       const codes = r.suggestion.reasons.map((x) => x.code);
       assert(codes.includes("commitments_underprotected") && codes.includes("uses_protected_goal_money"), codes.join());
-      assert(view(r).reasons.some((t) => /EUR 200 less than the amount currently protected for known commitments/.test(t)), view(r).reasons.join(" | "));
+      assert(view(r).reasons.some((t) => /EUR 200 less than the amount currently set aside for upcoming payments/.test(t)), view(r).reasons.join(" | "));
       const ok = await check("300", undefined, undefined, eur);
       assert(ok.protection.commitments.shortfall === null && ok.suggestion.state !== "wait", "a smaller purchase keeps the commitment backed");
     });

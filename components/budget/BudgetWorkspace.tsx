@@ -169,7 +169,7 @@ export function BudgetWorkspace({ nav, summary, categories, commitments, currenc
               </div>
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{overview.remainingCaption}</p>
-                <p className={`tabular-figures break-words text-[15px] font-semibold ${overview.isOver ? "text-attention" : "text-text-primary"}`}>{overview.remainingLabel}</p>
+                <p className={`tabular-figures break-words text-[15px] font-semibold ${overview.isOver ? "text-danger" : "text-text-primary"}`}>{overview.remainingLabel}</p>
               </div>
             </div>
             {overview.expectedMoneyInLabel ? (

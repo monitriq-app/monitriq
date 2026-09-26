@@ -190,7 +190,7 @@ async function main() {
     await runner.run("24 Pay Down Debt handoff: Decisions links to /liabilities, which is a production page with Add Debt", async () => {
       assert(/href="\/liabilities"/.test(src("components/decisions/DecisionReviewSheet.tsx")), "handoff link");
       const page = src("app/(app)/liabilities/page.tsx") + src("components/liabilities/DebtsWorkspace.tsx");
-      assert(/DEBTS_EMPTY/.test(page) && /Add Debt/.test(page) && !BUILD_STAGE_COPY.test(page), "production page");
+      assert(/debtsEmpty/.test(page) && /debt_singular/.test(page) && /Add Debt/.test(src("lib/domain/liabilities/presentation.ts")) && !BUILD_STAGE_COPY.test(page), "production page")
     });
 
     await runner.run("Debts wording: 'Debts', plain field labels, no raw internal names", async () => {

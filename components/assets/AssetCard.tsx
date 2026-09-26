@@ -1,3 +1,7 @@
+"use client";
+
+import { useTerms } from "@/components/language/LanguageProvider";
+import { assetBasisLabel, assetCurrentValueLabel } from "@/lib/domain/language/assets";
 import { Settings2 } from "lucide-react";
 import { Decimal } from "decimal.js";
 import { formatCurrencyAmount } from "@/lib/domain/currency/format";
@@ -57,6 +61,7 @@ function Metric({ label, value, valueClassName }: { label: string; value: string
  *   (AssetActionSheet) regardless.
  */
 export function AssetCard({ asset, currencies, onManage }: AssetCardProps) {
+  const terms = useTerms();
   const capabilities = assetCapabilities(asset.assetType);
   const display = assetDisplayConfig(asset.assetType);
 
@@ -98,11 +103,11 @@ export function AssetCard({ asset, currencies, onManage }: AssetCardProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-2 pt-1 text-[11px] sm:grid-cols-4">
-        <Metric label={display.basisLabel} value={fmt(asset.costBasis, asset.currencyCode, currencies)} valueClassName="text-text-primary" />
-        <Metric label={display.currentValueLabel} value={fmt(asset.estimatedCurrentValue, asset.currencyCode, currencies)} valueClassName="text-focus" />
+        <Metric label={assetBasisLabel(terms.mode, display.basisLabel)} value={fmt(asset.costBasis, asset.currencyCode, currencies)} valueClassName="text-text-primary" />
+        <Metric label={assetCurrentValueLabel(terms.mode, display.currentValueLabel)} value={fmt(asset.estimatedCurrentValue, asset.currencyCode, currencies)} valueClassName="text-focus" />
         {gainLoss ? (
           <Metric
-            label="Unrealized Gain / Loss"
+            label={terms.t("unrealised")}
             value={`${gainLoss.isNegative() ? "" : "+"}${fmt(gainLoss.toString(), asset.currencyCode, currencies)}`}
             valueClassName={gainLoss.isNegative() ? "text-danger" : "text-accent-primary"}
           />

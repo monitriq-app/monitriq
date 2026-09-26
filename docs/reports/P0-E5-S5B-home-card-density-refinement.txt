@@ -1,0 +1,66 @@
+P0-E5-S5B — HOME CARD DENSITY + ACTION EMPHASIS REFINEMENT
+================================================================
+
+STATUS
+COMPLETE, pending manual browser review. Nothing committed or pushed. No calculation, warning logic, language-mode behaviour, navigation, schema, RLS, domain logic or other page was changed.
+
+1. CARDS CHANGED
+Home only: the Cash card, the Net Worth card, the Available card (Available above what's protected / Available after protections / Safe to Deploy), the "Can I afford this?" card, and the shared gap between Home sections.
+
+2. PADDING / SPACING APPROACH
+Content-driven, no fixed heights (no h-[..px] anywhere on these cards).
+- Cash card: padding p-4 -> px-4 py-3.5; label-to-amount gap 6px -> 2px; helper block 8px -> 6px; the helper sentence and the reserve pill now share one wrapping row (flex-wrap; helper flex-[1_1_12rem]) so the pill only takes its own line when it does not fit. Additional currencies are shown at a secondary size (text-xl) while the first currency keeps the 32px headline; values are the same exact strings.
+- Net Worth card: p-4 -> p-3, tighter label/amount/helper gaps, amount text-[15px] (secondary currencies text-sm) so a figure like "NGN 460,000" does not wrap at 320px.
+- Available card: p-3; the title may wrap (leading-tight) with the status dot top-aligned; the per-currency stack drops the redundant currency label above the amount (the amount already carries its code) and puts the code inside the chip row only for currencies with no amount (Needs setup); currency blocks are separated by a thin divider instead of large gaps; the "Set amount to keep" link is visually compact (h-7) with a ::before hit area that keeps a 48px effective target; the disclosure in this tile uses a short label ("How it's worked out" / "See the calculation") so it stays on one line, and no longer repeats the currency code (each block already sits under its own amount). The full label is unchanged on the Rules page.
+- Two-card row: grid-cols-2 -> content-weighted columns (1fr : 1.25fr) with an 8px gap, so the tile with the long explanatory sentences gets more width and wraps fewer lines. Cards still stretch to equal height (cards are not forced to a fixed height; the Net Worth card simply matches its neighbour when the neighbour has more content).
+- "Can I afford this?": padding p-4 -> px-4 py-[1.125rem], icon 36px -> 40px (glyph 18 -> 20), title text-sm -> text-[15px], thin teal-tinted border (existing accent token at 25%) for presence; icon, title, copy and chevron are unchanged, 48px minimum kept. No gradient, glow, blur or shadow.
+- Page rhythm: the Home section gap 24px -> 20px.
+Shared classes only; no per-language or per-state overrides.
+
+3. RESPONSIVE TREATMENT
+Wrapping is allowed everywhere (min-w-0, break-words, flex-wrap); nothing is clipped or fixed-height. The Net Worth card keeps a readable amount at 320px; long Financial-mode labels ("Safe to Deploy", "See the calculation", "Liquid cash", "Required Retained Cash") wrap inside their tile.
+
+4. RESULTS (real Chrome, local scratch build of this source; scrollbars enabled; measured against the pre-change baseline)
+Multi-currency user (NGN + USD, the worst case; 5 states x 3 modes x widths 320/393/430):
+- Net Worth / Available row height: -26% on average (range -21% to -34%) versus the baseline of 400-480px; e.g. 449 -> 333px (393px wide, Getting close, Simple).
+- Cash card: 201 -> 182px (-9.5%).
+- "Can I afford this?": 68 -> 78px at 393px (+13.4% to +15%), 84 -> 93px at 320px.
+- The action card now starts and ends about 14% higher on the page (bottom edge of the CTA: 966-1061px before, 832-898px after), so more useful content is above the fold.
+Single-currency user (after): Cash 126px (393) / 154px (320); row 177-196px; CTA bottom edge 636-731px.
+Every state uses the same shared classes; no state has its own height.
+
+5. LANGUAGE-MODE CHECKS
+Simple, Balanced and Financial all measured (three modes x five states x three widths, plus a six-width sweep per mode): no horizontal overflow, no clipped or out-of-bounds text in any combination. Financial 320px screenshots reviewed ("SAFE TO DEPLOY" title, "Liquid cash", "See the calculation").
+
+6. WARNING-STATE CHECKS
+Needs setup, Comfortable, Getting close, At your limit and Below your limit all rendered and measured in every mode (real canonical Rules rows in the database), including the multi-currency case NGN <state> + USD Needs setup. Colours and states are unchanged (teal / amber / red logic untouched).
+
+7. MULTI-CURRENCY CHECKS
+Every currency keeps its own amount, status chip, sentence, setup action and disclosure in the Available tile, and its own amount in the Cash and Net Worth cards; nothing was removed to save height. Additional currencies are visually secondary but complete.
+
+8. CAN I AFFORD THIS? EMPHASIS
+About +14% presence (height and effective tap area), larger icon and title, thin accent border, same copy, icon, chevron and route. It sits directly after the position cards (hierarchy: Cash position, Net worth / money protection, Can I afford this?, Asset/cash distribution, remaining sections).
+
+9. MOBILE WIDTHS TESTED
+320, 360, 375, 393, 412, 430 (sweep in every language mode); full state matrix at 320, 393, 430.
+
+10. SCROLL / BOTTOM NAV
+Home still scrolls naturally (max scroll 1735px multi-currency / 1111px single-currency), scrollbar width 0 on mobile, and the last content ends 31px above the fixed nav. Nothing in the page-level scroll CSS or safe-area padding changed.
+
+11. TESTS
+New supabase/tests/home-density/run.ts (npm run test:home-density), 7 checks: Home section order and the two-card row preserved; the CTA keeps icon, title, copy, chevron and route and gains padding, icon, title and border with no gradient/glow/shadow; sizing is content-driven (no fixed pixel/rem heights or inline heights), wrapping and 48px hit areas kept; multi-currency blocks and secondary sizing present with no arithmetic in the cards; all five warning states from real canonical rows render in all three modes (15 distinct wordings, same state and tone); no engine, domain or schema file touched by this refinement and the Home cards still read the canonical fields verbatim; scroll and safe-area rules untouched. Deliberately no pixel-dimension assertions: measured heights above are browser results, not tests. Existing suites (language, cash-status, app-shell, core-ui) pass unchanged.
+
+12. LINT / TYPECHECK / BUILD
+npm run test: all 20 suites pass (existing 12 unchanged + Budget 30, Budget UI 22, Core UI 28, Spending check 34, App shell 10, Cash status 20, Language 14, Home density 7). Lint clean. App and harness typecheck clean. Production build: the build inside the repo failed only because the developer's own `next dev` (port 3000) is running in the same folder and shares `.next`, which produced a Turbopack `next/font/google` module-resolution error unrelated to the code; I did not stop that server. The identical source (verified byte-for-byte against the repo) was built in a scratch copy: compiled successfully and generated all 21 routes, so the code builds. Re-run `npm run build` with the dev server stopped for the in-repo confirmation.
+
+13. FILES CHANGED
+Modified: components/home/PositionSection.tsx, components/home/SpendingCheckCard.tsx, components/rules/AvailableExplanation.tsx (optional short label), components/decisions/DecisionPositionCard.tsx (uses the short label in its compact tile), lib/domain/language/terms.ts (one new label key how_worked_out_short), app/(app)/home/page.tsx (section gap), package.json (test:home-density).
+New: supabase/tests/home-density/run.ts, this report.
+
+14. OPEN ISSUES
+- The Net Worth card still stretches to its neighbour's height; with a long Available tile (multi-currency needs-setup) part of it is empty, by design (no forced fixed heights).
+- The greeting card wraps "Good afternoon, Ada" at 320px (not part of this refinement).
+- The in-repo production build needs the local dev server stopped (or a separate dist dir) to avoid the shared `.next` collision.
+
+15. GIT STATUS
+Uncommitted; nothing staged or pushed (about 75 changed/untracked entries, this phase plus the earlier uncommitted S4/S4A/S5 work).

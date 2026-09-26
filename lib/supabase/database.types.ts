@@ -1568,6 +1568,7 @@ export type Database = {
       profiles: {
         Row: {
           created_at: string
+          financial_language_mode: string
           first_name: string | null
           id: string
           onboarding_completed: boolean
@@ -1578,6 +1579,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          financial_language_mode?: string
           first_name?: string | null
           id: string
           onboarding_completed?: boolean
@@ -1588,6 +1590,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          financial_language_mode?: string
           first_name?: string | null
           id?: string
           onboarding_completed?: boolean

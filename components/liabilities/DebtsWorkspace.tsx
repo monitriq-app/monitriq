@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import { Plus, Wallet } from "lucide-react";
-import { DEBTS_EMPTY, type DebtsView } from "@/lib/domain/liabilities/presentation";
+import { debtsEmpty, type DebtsView } from "@/lib/domain/liabilities/presentation";
 import type { LiabilitySummary, LiabilityType } from "@/lib/domain/liabilities/types";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { CashBucket } from "@/lib/domain/money/types";
 import { BackLink } from "@/components/layout/BackLink";
+import { useTerms } from "@/components/language/LanguageProvider";
 import { MoreDetails } from "@/components/ui/MoreDetails";
 import { AddDebtSheet } from "@/components/liabilities/AddDebtSheet";
 import { RecordPaymentSheet } from "@/components/liabilities/RecordPaymentSheet";
@@ -23,6 +24,8 @@ interface Props {
 
 export function DebtsWorkspace({ view, liabilities, liabilityTypes, currencies, buckets, defaultCurrencyCode, openAdd }: Props) {
   const [adding, setAdding] = useState(openAdd);
+  const terms = useTerms();
+  const empty = debtsEmpty(terms.mode);
   const [payingId, setPayingId] = useState<string | null>(null);
   const currenciesByCode = new Map(currencies.map((c) => [c.code, c]));
   const paying = payingId ? liabilities.find((l) => l.liabilityId === payingId) : undefined;
@@ -32,13 +35,14 @@ export function DebtsWorkspace({ view, liabilities, liabilityTypes, currencies, 
       <BackLink />
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold text-text-primary">Debts</h1>
-          <p className="text-sm text-text-secondary">What you owe.</p>
+          <h1 className="text-xl font-semibold text-text-primary">{terms.t("debts")}</h1>
+          <p className="text-sm text-text-secondary">{terms.t("debts_subtitle")}</p>
+          {terms.hint("debts") ? <p className="text-xs text-text-muted">{terms.hint("debts")}</p> : null}
         </div>
         {view.cards.length > 0 ? (
           <button type="button" onClick={() => setAdding(true)} className="flex min-h-12 shrink-0 items-center gap-1.5 rounded-full bg-accent-primary px-4 text-[13px] font-semibold text-background">
             <Plus size={14} aria-hidden="true" />
-            Add Debt
+            Add {terms.t("debt_singular")}
           </button>
         ) : null}
       </div>
@@ -46,10 +50,10 @@ export function DebtsWorkspace({ view, liabilities, liabilityTypes, currencies, 
       {view.cards.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-xl bg-surface-raised p-6 text-center">
           <Wallet size={24} className="text-text-secondary" aria-hidden="true" />
-          <p className="text-[15px] font-semibold text-text-primary">{DEBTS_EMPTY.title}</p>
-          <p className="max-w-xs text-sm text-text-muted">{DEBTS_EMPTY.body}</p>
+          <p className="text-[15px] font-semibold text-text-primary">{empty.title}</p>
+          <p className="max-w-xs text-sm text-text-muted">{empty.body}</p>
           <button type="button" onClick={() => setAdding(true)} className="h-12 rounded-full bg-accent-primary px-6 text-sm font-semibold text-background">
-            {DEBTS_EMPTY.action}
+            {empty.action}
           </button>
         </div>
       ) : (

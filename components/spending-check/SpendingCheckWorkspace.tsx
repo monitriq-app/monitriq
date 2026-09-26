@@ -5,16 +5,19 @@ import Link from "next/link";
 import { CheckCircle2, Clock, HelpCircle, MinusCircle, PauseCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { runSpendingCheck } from "@/lib/domain/spending-check/service";
-import { NO_ACCOUNT_TEXT, PAGE_SUBTITLE, PAGE_TITLE, presentSpendingCheck, purchaseCategories, type SpendingCheckView } from "@/lib/domain/spending-check/presentation";
+import { NO_ACCOUNT_TEXT, PAGE_SUBTITLE, PAGE_TITLE, SUGGESTION_TONE, presentSpendingCheck, purchaseCategories, type SpendingCheckView } from "@/lib/domain/spending-check/presentation";
+import { TONE_TEXT_CLASS } from "@/lib/domain/rules/labels";
 import { validateMoneyInput } from "@/lib/domain/common/presentation";
 import type { SpendingCheckResult, SuggestionState } from "@/lib/domain/spending-check/types";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { CashBucket, MoneySpendingCategory } from "@/lib/domain/money/types";
+import { CashStatusBadge } from "@/components/rules/CashStatusBadge";
 import { BackLink } from "@/components/layout/BackLink";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { MoreDetails } from "@/components/ui/MoreDetails";
+import { useLanguageMode } from "@/components/language/LanguageProvider";
 import { useQuickAdd } from "@/components/quick-add/QuickAddContext";
 
 interface Props {
@@ -43,6 +46,7 @@ interface Checked {
 
 export function SpendingCheckWorkspace({ currencies, buckets, categories, defaultCurrencyCode }: Props) {
   const { openSpent } = useQuickAdd();
+  const languageMode = useLanguageMode();
   const currenciesByCode = new Map(currencies.map((c) => [c.code, c]));
   const active = buckets.filter((b) => !b.is_archived);
   const startCurrency = defaultCurrencyCode && currenciesByCode.has(defaultCurrencyCode) ? defaultCurrencyCode : (active[0]?.currency_code ?? "");
@@ -83,7 +87,7 @@ export function SpendingCheckWorkspace({ currencies, buckets, categories, defaul
       const label = offered.find((c) => c.code === categoryCode)?.display_name ?? null;
       const trimmed = amount.trim();
       const result = await runSpendingCheck(createClient(), { bucketId, amount: trimmed, categoryCode: categoryCode || null, categoryLabel: label, description: description.trim() });
-      setChecked({ result, view: presentSpendingCheck(result, description.trim(), currenciesByCode), description: description.trim(), bucketId, categoryCode: categoryCode || null, amount: trimmed });
+      setChecked({ result, view: presentSpendingCheck(result, description.trim(), currenciesByCode, languageMode), description: description.trim(), bucketId, categoryCode: categoryCode || null, amount: trimmed });
     } catch (err) {
       setError((err as { message?: string })?.message || "Could not check this purchase.");
     } finally {
@@ -191,7 +195,7 @@ function ResultView({ checked, onEdit, onRecord }: { checked: Checked; onEdit: (
       <section aria-label="Suggested next step" className="rounded-xl bg-surface-raised p-4">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Suggested next step</p>
         <p className="mt-1 flex items-center gap-2 text-lg font-semibold text-text-primary">
-          <Icon size={20} className="shrink-0 text-accent-primary" aria-hidden="true" />
+          <Icon size={20} className={`shrink-0 ${TONE_TEXT_CLASS[SUGGESTION_TONE[view.suggestionState]]}`} aria-hidden="true" />
           {view.suggestionLabel}
         </p>
         {view.suggestionState === "proceed" ? <p className="mt-1 text-sm text-text-secondary">{view.summary}</p> : null}
@@ -227,10 +231,18 @@ function ResultView({ checked, onEdit, onRecord }: { checked: Checked; onEdit: (
                 {row.lines.map((l) => (
                   <div key={l.label} className="flex items-baseline justify-between gap-3">
                     <dt className="min-w-0 text-text-muted">{l.label}</dt>
-                    <dd className="tabular-figures min-w-0 break-words text-right font-semibold text-text-primary">{l.value}</dd>
+                    <dd className={`tabular-figures min-w-0 break-words text-right font-semibold ${l.tone ? TONE_TEXT_CLASS[l.tone] : "text-text-primary"}`}>{l.value}</dd>
                   </div>
                 ))}
               </dl>
+            ) : null}
+            {row.cashStatus && row.cashStatus.result.state !== "needs_setup" ? (
+              <div className="mt-2 flex flex-col gap-1">
+                <span>
+                  <CashStatusBadge result={row.cashStatus.result} />
+                </span>
+                <p className="text-xs text-text-secondary">{row.cashStatus.sentence}</p>
+              </div>
             ) : null}
             {row.note ? <p className="mt-1.5 text-xs text-text-muted">{row.note}</p> : null}
             {row.action ? (

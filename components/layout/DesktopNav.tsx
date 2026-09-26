@@ -2,21 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Wallet, PieChart, Compass, Target, Plus } from "lucide-react";
+import { Home, Wallet, PiggyBank, Target, Plus, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { useQuickAdd } from "@/components/quick-add/QuickAddContext";
+import { PRIMARY_AFTER_ADD, PRIMARY_BEFORE_ADD, type PrimaryNavItem } from "@/components/layout/nav-items";
 
-const ITEMS = [
-  { href: "/home", label: "Home", Icon: Home },
-  { href: "/money", label: "Money", Icon: Wallet },
-  { href: "/assets", label: "Assets", Icon: PieChart },
-  { href: "/decisions", label: "Decisions", Icon: Compass },
-  { href: "/goals", label: "Goals", Icon: Target },
-] as const;
+const ICONS: Record<PrimaryNavItem["icon"], LucideIcon> = { home: Home, money: Wallet, budget: PiggyBank, goals: Target };
+const ITEMS = [...PRIMARY_BEFORE_ADD, ...PRIMARY_AFTER_ADD];
 
 /**
- * Tablet/desktop primary navigation — the same conceptual five items as
- * the mobile bottom nav (see MobileBottomNav.tsx), plus a real Quick Add
+ * Tablet/desktop primary navigation — the same four everyday destinations as
+ * the mobile bottom nav (Home, Money, Budget, Goals; the other tools are in the left drawer) (see MobileBottomNav.tsx), plus a real Quick Add
  * trigger (P0-E3-S3): MobileBottomNav's central `+` is `md:hidden`, so
  * without an equivalent control here, Quick Add would be completely
  * unreachable at tablet/desktop widths. Link padding is tighter below `lg`
@@ -33,7 +29,9 @@ export function DesktopNav() {
 
   return (
     <nav aria-label="Primary" className="hidden items-center gap-1 md:flex">
-      {ITEMS.map(({ href, label, Icon }) => (
+      {ITEMS.map(({ href, label, icon }) => {
+        const Icon = ICONS[icon];
+        return (
         <Link
           key={href}
           href={href}
@@ -46,7 +44,8 @@ export function DesktopNav() {
           <Icon size={17} aria-hidden="true" />
           {label}
         </Link>
-      ))}
+        );
+      })}
       <button
         type="button"
         onClick={openQuickAdd}

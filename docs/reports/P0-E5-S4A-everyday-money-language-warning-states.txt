@@ -1,0 +1,76 @@
+P0-E5-S4A — EVERYDAY MONEY LANGUAGE + CASH WARNING STATES
+================================================================
+
+STATUS
+COMPLETE, pending manual review. Nothing committed or pushed. No financial formula, schema, migration, RLS or RPC change. This phase supersedes the wording of the "S4 ADDENDUM" appended to docs/reports/P0-E5-S4-mobile-navigation-app-shell.txt (that addendum used "Available after protections"); S4 itself was already complete and awaiting review, so this is a separate report.
+
+1. TERMINOLOGY CHANGES (primary UI only; internal identifiers unchanged)
+Cash you have (was tracked/liquid cash; Cash Position on Home and Decisions). Money you want to keep (was minimum cash floor / Minimum Cash to Keep; "The lowest amount you want your cash to reach."). Money Monitriq is protecting (was required retained cash). Available above that (was safe to deploy; "Available above what's protected" on Home where the tile stands alone). Money set aside for goals (was protected goal cash). Money set aside for goals and upcoming payments (was protected commitments). Money tied up in assets (was illiquid / non-cash assets). Debts you owe / Money owed to you (was liabilities / receivables outstanding). Upcoming payments (was upcoming commitments on the Rules page). Money that may be convertible to cash (was potential liquidity). Action "Set amount to keep" (was Set minimum cash). All strings live in lib/domain/rules/labels.ts. "Cash buffer", "cash floor" and "liquidity reserve" appear nowhere in primary UI. No blind replacement: each surface was edited in context (e.g. Decisions "Protected Cash" became "Money set aside for goals and upcoming payments" because that is what the figure actually is).
+
+2. PROTECTION EXPLANATION
+Primary summary (Rules & Commitments "Your cash", one card per currency): Cash you have / Money Monitriq is protecting / Available above that, each read verbatim from the canonical row (liquid cash, required retained cash, safe to deploy). "See how this is worked out" (existing MoreDetails disclosure) shows Money you want to keep, Money set aside for goals and upcoming payments, Money Monitriq is protecting, and the sentence "Monitriq protects whichever amount is higher, so the same money is not counted twice." The MAX() is not shown to normal users. The same disclosure is on Home and the Decisions card. "Available above that" is supported by "Money left above the amount currently being protected." and never says it is safe to spend.
+
+3. WARNING POLICY (lib/domain/rules/cash-status.ts — one place, deterministic, per currency)
+cashStatus() reads one currency's canonical row and returns one of: Comfortable (teal), Getting close (amber), At your limit (amber), Below your limit (red), Needs setup (amber). It classifies figures the engine already computed; it adds no protection arithmetic and changes no figure. Available-above-that shown in the status colour, always with a text label, an icon and a sentence.
+- Below your limit: canonical retained deficit greater than zero (this includes negative cash). Sentence: "Your cash is X below the amount you chose to keep protected."
+- At your limit: available above that is exactly zero with no deficit.
+- Getting close: available above that is greater than zero but at or below the warning zone.
+- Comfortable: available above that is above the warning zone.
+- Needs setup: the engine reports not configured (no amount to keep). Never shows Comfortable, no amount shown; action "Set amount to keep".
+
+4. 25% PRESENTATION THRESHOLD
+WARNING_ZONE_FRACTION = "0.25" is the single constant. The warning zone begins when the money left above the protected amount is 25% or less of the protected amount (protecting 500,000: cash above 625,000 is Comfortable; above 500,000 and up to 625,000 Getting close; exactly 500,000 At your limit; below Below your limit). Exactly 25% is inside the zone; 25% plus one cent is Comfortable (tested). It is a Monitriq UI policy, not Safe-to-Deploy mathematics, is not referenced anywhere else in the codebase (tested), and cashStatus() accepts an override so it can become user-configurable later. Documented in PRODUCT_DEFINITION.md.
+
+5. ZERO BEHAVIOR
+If the amount being protected is explicitly zero there is no percentage zone: positive cash is Comfortable with neutral colour and the sentence "You haven't asked Monitriq to protect any money right now."; zero cash is At your limit (amber) with "You have no cash tracked in this currency right now."; negative cash is Below your limit (red, factual). Available above that = 0 with a positive protected amount is At your limit (amber), not red.
+
+6. UNCONFIGURED BEHAVIOR
+When no amount to keep exists for a currency: chip "Needs setup" (amber), no amount, "Choose the minimum amount of cash you want to keep so Monitriq can warn you before you reach it.", action "Set amount to keep" (48px link to Rules). Verified on Home, Rules & Commitments, Decisions, Financial Overview and the Spending Check; the Money page deliberately stays quiet for this state.
+
+7. SEMANTIC COLOR RULES
+Teal: Comfortable, within plan, positive progress. Amber: Getting close, At your limit, Needs setup, incomplete checks, a category over its plan, tied-up-in-assets badge. Red/coral: only Below your limit, cash shortfall, protected-money conflict, overdue commitments, explicit overall Budget breach. Neutral: cash totals, net worth, asset values, informational figures. Colour never depends on wealth (tested: the same relative situation gives the same status at NGN 600 and NGN 6 billion; NGN 49 million can be below the limit while NGN 100 can be comfortable). Every state carries a text label and sentence; icons and colour reinforce.
+
+8. HOME CHANGES
+Tile "Available above what's protected": amount in the status colour, status chip, one plain sentence (e.g. "Only NGN 80,000 remains before you reach the amount you're keeping protected." for cash 580,000 with 500,000 protected, amber), "See how this is worked out", and per-currency blocks when there are several. The first tile now reads "Cash you have". No "illiquid": the badge reads "N% of your net worth is tied up in assets" (amber, wraps), the summary line reads "Tied up in assets" and "Cash available" (neutral). No layout redesign.
+
+9. RULES CHANGES
+Section "Your cash" (three lines + status + explanation per currency), "Money you want to keep" (edit unchanged; "The lowest amount you want your cash to reach."), "Upcoming payments". Page name remains Rules & Commitments.
+
+10. MONEY CHANGES
+Under Available Cash a compact chip and one line per configured currency ("Getting close to the amount you want to keep."; With several currencies each line is prefixed with its code). No new card; hidden for Needs setup. The Money page now also reads the canonical Rules rows (read only). "Across your tracked liquid balances" became "Across your tracked accounts".
+
+11. SPENDING CHECK CHANGES
+"Money you want to keep" row now shows Money you want to keep, Money Monitriq is protecting (after), All your NGN cash after this purchase, Available above that (after), a status chip and after-purchase sentence: "This would leave NGN 40,000 above the amount you want to keep protected." (Getting close) or "This purchase would leave you NGN 20,000 below the amount you chose to keep." (Below your limit, red). The status uses the SAME policy on the CANONICAL hypothetical row: getSafeToDeployByCurrency() gained an optional hypothetical argument that calls the same safe_to_deploy_by_currency(bucket, delta) evaluate_proposed_cash_use() already uses; no separate warning mathematics. The suggestion policy and its precedence are unchanged. Existing reason sentences were reworded to the new terms (values unchanged).
+
+12. ADVANCED-SCREEN TREATMENT (Financial Overview)
+The line "Foundation-level view — not the final design." is gone (replaced by "Everything you have and owe, in one place."). Labels use the plain terms; the protection block shows the same status, sentence and the whichever-is-higher explanation; "Potential liquidity" became "Money that may be convertible to cash (not cash you can use now)". The screen's structure and domain were not redesigned; a few technical headings remain as advanced detail (Financial Position by Currency, Liquidity Completeness).
+
+13. MULTI-CURRENCY
+The policy takes exactly one currency's row; status is computed per currency and never combined. Verified from real canonical rows: AUD Comfortable, NGN Getting close, ZAR At your limit, EUR Below your limit (shortfall equals the engine's retained deficit), USD Needs setup; and in the browser NGN Comfortable/Getting close/At limit/Below limit next to USD Needs setup on Home. No FX anywhere.
+
+14. TESTS
+New supabase/tests/cash-status/run.ts (npm run test:cash-status), 20 checks covering: the five states, the 25% boundary (exactly, just above, just below), explicit zero, negative cash, per-currency independence, no wealth-based status, the sentences (including the Home 580,000 / 500,000 example and after-purchase wording), real canonical rows for each state, the engine math unchanged and nothing double counted (required = MAX(minimum, goals + uncovered); 300,000 of goals under a 500,000 minimum leaves required at 500,000, not 800,000; 550,000 of goals gives required 550,000; available = MAX(cash - required, 0); deficit = MAX(required - cash, 0)), the Spending Check after-purchase status from the canonical hypothetical row, wording of Home / Rules / Money / Overview / Decisions, no forbidden terms in any user-facing string (Safe to Deploy, Available after protections, cash buffer, cash floor, liquidity reserve, illiquid, Minimum Cash Floor, Required Retained Cash, Protected Commitments, foundation-level), colour tones and labels, and no threshold or arithmetic outside the central policy plus no engine/domain/migration file changed (checked against git). Pinned copy in older tests was updated where the wording intentionally changed: Decisions (action label, reason, context label) and Spending check (four reason sentences); no value assertion changed, and the language checks moved out of the app-shell suite (back to 10 shell checks). Browser-only checks: rendering, colours (computed rgb: teal 14,111,98; amber 217,142,43; red 229,72,77) and overflow.
+
+15. REGRESSION
+All 18 suites pass: 20/48/11/114/27/25/56/86/90/33/30/31 (existing, unchanged) + Budget 30 + Budget UI 22 + Core UI 28 + Spending check 34 + App shell 10 + Cash status 20.
+
+16. LINT / TYPECHECK / BUILD
+Lint clean; app and harness typecheck clean; production build clean.
+
+17. FORMULAS UNCHANGED
+No file under supabase/migrations, no Rules/Money/Budget/Goals/financial-position calculation and no repository logic changed. The only repository edit is an optional argument on the getSafeToDeployByCurrency wrapper that calls the existing RPC's existing hypothetical parameters (its diff is checked to contain no arithmetic). The engine outputs verified end to end in the tests above.
+
+18. FILES CHANGED
+New: lib/domain/rules/cash-status.ts, components/rules/CashStatusBadge.tsx, supabase/tests/cash-status/run.ts, this report.
+Rewritten: lib/domain/rules/labels.ts, components/rules/{AvailableExplanation,SafeToDeployCard}.tsx.
+Modified: components/home/{PositionSection,NewUserSetup}.tsx, components/money/AvailableCashSection.tsx, app/(app)/{money,rules,financial-position}/page.tsx, components/rules/{MinimumCashSection,CommitmentsSection,CashUseEvaluatorForm,AddCommitmentSheet}.tsx, components/decisions/{DecisionPositionCard,DecisionReviewSheet,DecisionsWorkspace}.tsx, components/financial-position/NativePositionList.tsx, components/spending-check/SpendingCheckWorkspace.tsx, lib/domain/decisions/presentation.ts (labels), lib/domain/spending-check/{types,policy,service,presentation}.ts, lib/domain/rules/repository.ts (optional hypothetical argument), supabase/tests/{app-shell,decisions,spending-check}/run.ts, package.json (test:cash-status), docs/product/PRODUCT_DEFINITION.md (language constitution + warning states), docs/project/BUILD_STATE.md.
+
+19. OPEN ISSUES
+- Pre-existing and out of scope: /money's Recent Activity formats dates with the browser locale ("1 Sept" vs "Sep 1"), causing React hydration warnings; the Financial Overview "As of" timestamp is locale formatted too.
+- The Decisions position card and a few advanced surfaces still say "Upcoming Obligations"; "Where Your Capital Lives" and some advanced Overview headings still use financial vocabulary.
+- The Goals, Assets and Money pages use their own status colours and were not audited against the full palette rules.
+- The 25% warning zone is a fixed policy for V1 (not user-configurable yet); "Needs setup" is not shown on the Money page by design.
+- The Spending Check "cash after" is all tracked cash in the currency (which the amount to keep applies to), not just the selected account; the line says so.
+
+20. GIT STATUS
+Uncommitted; nothing staged or pushed. 47 changed/untracked entries (this phase plus the uncommitted S4 work).

@@ -21,11 +21,11 @@ const OPTIONS = [
  * effect state needed in this component either way. UI-only state
  * throughout — never a financial one.
  */
-export function ThemeToggle() {
+export function ThemeToggle({ showLabels = false }: { showLabels?: boolean }) {
   const { theme, setTheme } = useTheme();
 
   return (
-    <div role="radiogroup" aria-label="Appearance" className="inline-flex items-center gap-1 rounded-lg border border-border bg-surface p-1">
+    <div role="radiogroup" aria-label="Appearance" className="flex w-full items-center gap-1 rounded-lg border border-border bg-surface p-1">
       {OPTIONS.map(({ value, label, Icon }) => {
         const selected = theme === value;
         return (
@@ -35,14 +35,15 @@ export function ThemeToggle() {
             role="radio"
             aria-checked={selected}
             aria-label={label}
+            title={label}
             onClick={() => setTheme(value)}
             className={cn(
-              "inline-flex h-9 min-w-9 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors",
+              "inline-flex min-h-12 min-w-12 flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors",
               selected ? "bg-accent-primary text-background" : "text-text-secondary hover:text-text-primary",
             )}
           >
             <Icon size={15} aria-hidden="true" />
-            <span className="hidden sm:inline">{label}</span>
+            <span className={showLabels ? "" : "hidden sm:inline"}>{label}</span>
           </button>
         );
       })}

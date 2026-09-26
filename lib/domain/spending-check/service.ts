@@ -27,8 +27,9 @@ export async function runSpendingCheck(client: Client, input: SpendingCheckInput
   const profile = await getProfile(client);
   const onDate = input.onDate ?? todayInTimezone(profile?.timezone ?? "UTC");
 
-  const [safe, allFacts, budgets] = await Promise.all([
+  const [safe, safeHypothetical, allFacts, budgets] = await Promise.all([
     getSafeToDeployByCurrency(client),
+    getSafeToDeployByCurrency(client, { bucketId: input.bucketId, delta: `-${input.amount}` }),
     getBudgetFactsForDate(client, { currencyCode, onDate, categoryCode: input.categoryCode ?? undefined }),
     listBudgets(client),
   ]);
@@ -46,6 +47,7 @@ export async function runSpendingCheck(client: Client, input: SpendingCheckInput
     categoryLabel: input.categoryLabel ?? null,
     evaluation,
     safeBefore: safe.find((s) => s.currencyCode === currencyCode) ?? null,
+    safeAfter: safeHypothetical.find((s) => s.currencyCode === currencyCode) ?? null,
     budgetFacts,
     inactiveBudget,
   });

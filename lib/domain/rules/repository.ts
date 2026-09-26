@@ -59,8 +59,16 @@ export async function getFinancialRuleHistory(
   }));
 }
 
-export async function getSafeToDeployByCurrency(client: Client): Promise<SafeToDeployResult[]> {
-  const { data, error } = await client.rpc("safe_to_deploy_by_currency");
+/**
+ * Real state by default. With `hypothetical`, the SAME canonical calculation with one account's
+ * balance shifted by `delta` (e.g. a proposed purchase = a negative delta): a pure read, exactly what
+ * evaluate_proposed_cash_use() uses for its "after" figures. No formula lives in this wrapper.
+ */
+export async function getSafeToDeployByCurrency(client: Client, hypothetical?: { bucketId: string; delta: string }): Promise<SafeToDeployResult[]> {
+  const { data, error } = await client.rpc(
+    "safe_to_deploy_by_currency",
+    hypothetical ? { p_hypothetical_bucket_id: hypothetical.bucketId, p_hypothetical_delta: asNumericParam(hypothetical.delta) } : undefined,
+  );
   if (error) throw error;
   return (data ?? []).map((row) => ({
     currencyCode: row.currency_code,

@@ -1,6 +1,7 @@
 import type { Currency, CurrencyAmount } from "../currency/types.ts";
 import { currencyTotalLines, formatAmount, monthYear, type CurrencyTotalLine } from "../common/presentation.ts";
 import type { LiabilitySummary } from "./types.ts";
+import { terminology } from "../language/terms.ts";
 
 /** Debts presentation (P0-E5-S2B). Route/domain stay "liabilities"; user-facing wording is "Debts". */
 
@@ -65,3 +66,16 @@ export const DEBTS_EMPTY = {
   body: "Add a debt if you want Monitriq to include it in your financial picture and spending decisions.",
   action: "Add Debt",
 } as const;
+
+/** Empty-state copy by explanation mode (route and domain stay "liabilities"). Simple mode equals DEBTS_EMPTY. */
+export function debtsEmpty(mode: unknown): { title: string; body: string; action: string } {
+  const t = terminology(mode);
+  if (t.mode === "simple") return { ...DEBTS_EMPTY };
+  const name = t.t("debts").toLowerCase();
+  const singular = t.t("debt_singular").toLowerCase();
+  return {
+    title: `No ${name} tracked yet.`,
+    body: `Add a ${singular} if you want Monitriq to include it in your financial ${t.mode === "financial" ? "position" : "picture"} and spending decisions.`,
+    action: `Add ${t.t("debt_singular")}`,
+  };
+}

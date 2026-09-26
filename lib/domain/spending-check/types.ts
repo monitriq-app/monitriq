@@ -1,5 +1,6 @@
 import type { BudgetFact } from "../budget/types.ts";
 import type { ProposedCashUseEvaluation, RuleConflictStatus, SafeToDeployResult } from "../rules/types.ts";
+import type { CashStatusResult } from "../rules/cash-status.ts";
 
 /**
  * "Can I afford this?" — a hypothetical, immediate-purchase check. It
@@ -26,6 +27,8 @@ export interface SpendingCheckFacts {
   categoryLabel: string | null;
   evaluation: ProposedCashUseEvaluation;
   safeBefore: SafeToDeployResult | null;
+  /** The canonical hypothetical row (this purchase applied) for the same currency: the source of the after-purchase status. */
+  safeAfter: SafeToDeployResult | null;
   /** Rows from budget_facts_for_date() — ONLY when the covering Budget is active; otherwise empty. */
   budgetFacts: BudgetFact[];
   /** A non-active (closed) Budget covers today in this currency and was deliberately not used. */
@@ -77,6 +80,10 @@ export interface ProtectionCheck {
     safeToDeployBefore: string | null;
     safeToDeployAfter: string | null;
   };
+  /** Where cash would stand against the amount the user wants to keep, after this purchase (same policy as Home/Rules/Money). */
+  statusAfter: CashStatusResult;
+  /** Money Monitriq is protecting after this purchase (canonical required_retained_cash from the hypothetical row). */
+  protectingAfter: string | null;
   goals: { status: RuleConflictStatus; moneyUsed: string | null };
   commitments: { status: RuleConflictStatus; shortfall: string | null };
   /** Set only when required protected cash worsens for a reason none of the three above explains. */

@@ -8,3 +8,55 @@
 
 @import "../lib/styles/tokens.css";
 @import "../lib/styles/typography.css";
+
+/*
+ * App-shell scroll ownership (P0-E5-S4). The DOCUMENT (the viewport) is the
+ * one and only vertical scroller — the header is sticky, the bottom nav is
+ * fixed, and no inner element owns page scrolling — so long pages keep
+ * native touch momentum, wheel, trackpad, keyboard and programmatic
+ * scrolling. Below the app's `md` breakpoint (768px, where the bottom nav
+ * takes over) only the permanent desktop-style scrollbar CHROME is hidden;
+ * scrolling itself is untouched. From `md` up a normal scrollbar remains,
+ * and its gutter is reserved so opening the drawer (which locks scrolling)
+ * never shifts the layout. Never `overflow: hidden` on the page itself.
+ */
+html {
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 767.98px) {
+  html {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  html::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+}
+
+@media (min-width: 768px) {
+  html {
+    scrollbar-gutter: stable;
+  }
+}
+
+/* Set only while the navigation drawer is open (see NavDrawer). */
+html.nav-locked {
+  overflow: hidden;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.drawer-panel {
+  animation: drawer-in 200ms ease-out;
+}

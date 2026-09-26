@@ -1,3 +1,4 @@
+import type { Terminology } from "@/lib/domain/language/terms";
 import { Info } from "lucide-react";
 import { Decimal } from "decimal.js";
 import { formatCurrencyAmount } from "@/lib/domain/currency/format";
@@ -6,6 +7,7 @@ import type { Currency } from "@/lib/domain/currency/types";
 import type { AssetSummary, AssetTypeCode, AssetValueByType } from "@/lib/domain/assets/types";
 
 interface TrackedAssetsSummaryCardProps {
+  terms: Terminology;
   activeAssets: AssetSummary[];
   valueByType: AssetValueByType[];
   currencies: Map<string, Currency>;
@@ -26,7 +28,7 @@ function fmt(amount: string, currencyCode: string, currencies: Map<string, Curre
  * of already-fetched rows (whether `estimatedCurrentValue` is null),
  * same presentational-aggregation pattern established on Home.
  */
-export function TrackedAssetsSummaryCard({ activeAssets, valueByType, currencies }: TrackedAssetsSummaryCardProps) {
+export function TrackedAssetsSummaryCard({ activeAssets, valueByType, currencies, terms }: TrackedAssetsSummaryCardProps) {
   const valuedCount = activeAssets.filter((a) => a.estimatedCurrentValue !== null).length;
   const unvaluedCount = activeAssets.length - valuedCount;
 
@@ -57,7 +59,7 @@ export function TrackedAssetsSummaryCard({ activeAssets, valueByType, currencies
       <div aria-hidden="true" className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent-primary/30 to-transparent" />
 
       <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Investments &amp; Things You Own</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{terms.t("non_cash_assets")}</p>
         <span className="shrink-0 rounded-full bg-surface-strong px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-text-muted">Manually Valued</span>
       </div>
 

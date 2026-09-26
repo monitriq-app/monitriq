@@ -121,7 +121,7 @@ export function AddCommitmentSheet({ currencies, goals, onClose }: AddCommitment
 
           <label className="flex min-h-12 items-center gap-2 text-sm text-text-secondary">
             <input type="checkbox" checked={isProtected} onChange={(e) => setIsProtected(e.target.checked)} className="h-5 w-5" />
-            Protected — count this when calculating Safe to Deploy
+            Protected — set money aside for this before showing what is available above it
           </label>
 
           {error ? (

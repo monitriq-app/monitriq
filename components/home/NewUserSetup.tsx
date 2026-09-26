@@ -7,7 +7,7 @@ const TRACKED_ITEMS = [
   { label: "Assets", Icon: PieChart },
   { label: "Decisions", Icon: Compass },
   { label: "Commitments", Icon: CalendarClock },
-  { label: "Safe to deploy", Icon: ShieldCheck },
+  { label: "Money you want to keep", Icon: ShieldCheck },
 ] as const;
 
 /**

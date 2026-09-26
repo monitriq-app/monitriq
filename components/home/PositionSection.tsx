@@ -4,6 +4,11 @@ import { formatCurrencyAmount } from "@/lib/domain/currency/format";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { NativeFinancialPosition } from "@/lib/domain/financial-position/types";
 import type { ReportingFinancialPosition } from "@/lib/domain/financial-position/aggregate";
+import { TONE_TEXT_CLASS, type StatusTone } from "@/lib/domain/rules/labels";
+import type { Terminology } from "@/lib/domain/language/terms";
+import { cashStatus, cashStatusSentence, type CashStatusResult } from "@/lib/domain/rules/cash-status";
+import { CashStatusBadge } from "@/components/rules/CashStatusBadge";
+import { AvailableExplanation } from "@/components/rules/AvailableExplanation";
 
 interface PositionSectionProps {
   nativePositions: NativeFinancialPosition[];
@@ -12,6 +17,8 @@ interface PositionSectionProps {
   currencies: Map<string, Currency>;
   /** Count of the user's own buckets currently holding a positive balance, per currency — real domain state, from Money's own canonical money_bucket_balances(). */
   activeReserveCountByCurrency: Map<string, number>;
+  /** The user's explanation vocabulary (wording only; every figure is identical in every mode). */
+  terms: Terminology;
 }
 
 function fmt(amount: string, currencyCode: string, currencies: Map<string, Currency>): string {
@@ -71,70 +78,67 @@ function CurrentPositionHeader() {
  * figure as "NGN 12,000") rather than a currency symbol — the trusted
  * multi-currency formatting layer, unchanged by this visual pass.
  */
-export function PositionSection({ nativePositions, reportingCurrency, reportingPosition, currencies, activeReserveCountByCurrency }: PositionSectionProps) {
+export function PositionSection({ nativePositions, reportingCurrency, reportingPosition, currencies, activeReserveCountByCurrency, terms }: PositionSectionProps) {
   const calculated = reportingPosition?.status === "calculated" ? reportingPosition : null;
 
   return (
     <div>
       <CurrentPositionHeader />
 
-      <div className="flex flex-col gap-2.5">
-        <div className="relative overflow-hidden rounded-xl bg-surface-raised p-4">
+      <div className="flex flex-col gap-2">
+        <div className="relative overflow-hidden rounded-xl bg-surface-raised px-4 py-3.5">
           <div
             className="pointer-events-none absolute -top-10 -right-10 h-36 w-36 rounded-full bg-accent-primary/5 blur-2xl"
             aria-hidden="true"
           />
           <div className="relative">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Cash Position</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">{terms.t("cash")}</p>
             {calculated ? (
-              <p className="tabular-figures mt-1.5 text-[32px] font-bold leading-tight tracking-tight text-text-primary">
+              <p className="tabular-figures mt-0.5 text-[32px] font-bold leading-tight tracking-tight text-text-primary">
                 {fmt(calculated.liquidCash, calculated.reportingCurrency, currencies)}
               </p>
             ) : (
               <NativeAmountList positions={nativePositions} field="liquidCash" currencies={currencies} />
             )}
-            <div className="mt-2 flex flex-col gap-1.5">
-              <span className="flex items-start gap-1.5 text-xs text-text-secondary">
+            <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+              <span className="flex min-w-0 flex-[1_1_12rem] items-start gap-1.5 text-xs leading-snug text-text-secondary">
                 <Wallet size={14} className="mt-0.5 shrink-0 text-accent-primary" aria-hidden="true" />
                 <span>Actual cash across your reserves — not receivables, not estimates.</span>
               </span>
-              <div className="flex justify-end">
-                <ReserveContext positions={nativePositions} activeReserveCountByCurrency={activeReserveCountByCurrency} />
-              </div>
+              <ReserveContext positions={nativePositions} activeReserveCountByCurrency={activeReserveCountByCurrency} />
             </div>
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2.5">
-          <div className="rounded-xl bg-surface-raised p-4">
-            <div className="mb-1 flex items-center justify-between">
+        <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.25fr)] gap-2">
+          <div className="rounded-xl bg-surface-raised p-3">
+            <div className="mb-0.5 flex items-center justify-between gap-1">
               <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Net Worth</span>
               <Wallet size={14} className="text-text-muted" aria-hidden="true" />
             </div>
             {calculated ? (
-              <p className="tabular-figures text-lg font-semibold text-text-primary">
+              <p className="tabular-figures break-words text-[15px] font-semibold leading-snug text-text-primary">
                 {fmt(calculated.netWorth, calculated.reportingCurrency, currencies)}
               </p>
             ) : (
               <NativeAmountList positions={nativePositions} field="netWorth" currencies={currencies} compact />
             )}
             {reportingCurrency === null ? (
-              <p className="mt-1 text-xs text-text-muted">Not set.</p>
+              <p className="mt-0.5 text-xs text-text-muted">Not set.</p>
             ) : reportingPosition?.status === "not_calculated" ? (
-              <p className="mt-1 text-xs text-text-muted">Missing rate.</p>
+              <p className="mt-0.5 text-xs text-text-muted">Missing rate.</p>
             ) : (
-              <p className="mt-1 text-xs leading-snug text-text-muted">Tracked assets minus debt</p>
+              <p className="mt-0.5 text-xs leading-snug text-text-muted">Tracked assets minus debt</p>
             )}
           </div>
 
-          <div className="rounded-xl bg-surface-raised p-4">
-            <div className="mb-1 flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Safe to Deploy</span>
-              <span className="h-2 w-2 rounded-full bg-attention" aria-hidden="true" />
+          <div className="rounded-xl bg-surface-raised p-3">
+            <div className="mb-1 flex items-start justify-between gap-1.5">
+              <span className="min-w-0 text-[11px] font-semibold uppercase leading-tight tracking-wide text-text-muted">{terms.t("available_above_alone")}</span>
+              <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${DOT_CLASS[worstTone(nativePositions)]}`} aria-hidden="true" />
             </div>
-            <SafeToDeployList positions={nativePositions} currencies={currencies} />
-            <p className="mt-1 text-xs leading-snug text-text-muted">Money you can use after protected savings and commitments</p>
-          </div>
+            <AvailableAboveList positions={nativePositions} currencies={currencies} terms={terms} />
+                      </div>
         </div>
 
         <AllocationShortfallNote positions={nativePositions} currencies={currencies} />
@@ -166,7 +170,7 @@ function ReserveContext({
   if (rows.length === 0) return null;
 
   return (
-    <span className="max-w-full rounded bg-surface-strong px-2 py-1 text-[11px] font-semibold text-text-secondary">
+    <span className="max-w-full shrink-0 rounded bg-surface-strong px-2 py-1 text-[11px] font-semibold text-text-secondary">
       {rows.map((r, i) => (
         <span key={r.currencyCode}>
           {i > 0 ? " · " : ""}
@@ -212,36 +216,77 @@ function NativeAmountList({
   }
   return (
     <ul className="flex flex-col gap-0.5">
-      {positions.map((p) => (
-        <li
-          key={p.currencyCode}
-          className={`tabular-figures font-semibold text-text-primary ${compact ? "text-lg" : "text-[32px] font-bold leading-tight tracking-tight"}`}
-        >
-          {fmt(p[field], p.currencyCode, currencies)}
-        </li>
-      ))}
+      {positions.map((p, index) => {
+        // First currency keeps the headline size; further currencies are secondary (same exact values, smaller type).
+        const size = compact ? (index === 0 ? "text-[15px] leading-snug" : "text-sm") : index === 0 ? "text-[32px] font-bold leading-tight tracking-tight" : "text-xl font-semibold leading-snug";
+        return (
+          <li key={p.currencyCode} className={`tabular-figures break-words font-semibold text-text-primary ${size}`}>
+            {fmt(p[field], p.currencyCode, currencies)}
+          </li>
+        );
+      })}
     </ul>
   );
 }
 
-function SafeToDeployList({ positions, currencies }: { positions: NativeFinancialPosition[]; currencies: Map<string, Currency> }) {
+const DOT_CLASS: Record<StatusTone, string> = { positive: "bg-accent-primary", neutral: "bg-text-muted", attention: "bg-attention", danger: "bg-danger" };
+const TONE_RANK: StatusTone[] = ["positive", "neutral", "attention", "danger"];
+
+function statusOf(p: NativeFinancialPosition): CashStatusResult {
+  return cashStatus({ status: p.safeToDeployStatus, liquidCash: p.liquidCash, requiredRetainedCash: p.requiredRetainedCash, safeToDeploy: p.safeToDeploy, retainedDeficit: p.retainedDeficit });
+}
+
+/** The tile's dot follows the most serious status across currencies (a status signal, never wealth). */
+function worstTone(positions: NativeFinancialPosition[]): StatusTone {
+  const relevant = positions.filter((p) => p.safeToDeployStatus === "calculated" || p.safeToDeployStatus === "not_configured");
+  if (relevant.length === 0) return "attention";
+  return relevant.map((p) => statusOf(p).tone).sort((x, y) => TONE_RANK.indexOf(y) - TONE_RANK.indexOf(x))[0];
+}
+
+function AvailableAboveList({ positions, currencies, terms }: { positions: NativeFinancialPosition[]; currencies: Map<string, Currency>; terms: Terminology }) {
   const withRules = positions.filter((p) => p.safeToDeployStatus === "calculated" || p.safeToDeployStatus === "not_configured");
+  const fallback = cashStatus({ status: "not_configured", liquidCash: "0", requiredRetainedCash: null, safeToDeploy: null, retainedDeficit: null });
   if (withRules.length === 0) {
-    return <p className="text-xs text-text-muted">Not configured.</p>;
+    return (
+      <div>
+        <CashStatusBadge result={fallback} />
+        <p className="mt-1 text-xs text-text-muted">{cashStatusSentence(fallback, () => "", "default", terms.mode)}</p>
+        <Link href="/rules" className="relative inline-flex h-7 w-fit items-center text-xs font-semibold text-accent-primary before:absolute before:-inset-x-2 before:-inset-y-2.5 before:content-['']">
+          {terms.t("set_amount_action")}
+        </Link>
+      </div>
+    );
   }
   return (
-    <ul className="flex flex-col gap-0.5">
-      {withRules.map((p) =>
-        p.safeToDeployStatus === "calculated" && p.safeToDeploy !== null ? (
-          <li key={p.currencyCode} className="tabular-figures text-lg font-semibold text-attention">
-            {fmt(p.safeToDeploy, p.currencyCode, currencies)}
+    <ul className="flex flex-col">
+      {withRules.map((p, index) => {
+        const st = statusOf(p);
+        const fmtHere = (v: string) => fmt(v, p.currencyCode, currencies);
+        return (
+          <li key={p.currencyCode} className={`flex flex-col gap-1 ${index > 0 ? "mt-2 border-t border-border pt-2" : ""}`}>
+            {st.headroom !== null ? <p className={`tabular-figures break-words text-base font-semibold leading-tight ${TONE_TEXT_CLASS[st.tone]}`}>{fmtHere(st.headroom)}</p> : null}
+            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              {st.headroom === null ? <span className="text-[11px] font-semibold text-text-muted">{p.currencyCode}</span> : null}
+              <CashStatusBadge result={st} />
+            </span>
+            <p className="text-xs leading-snug text-text-muted">{cashStatusSentence(st, fmtHere, "home", terms.mode)}</p>
+            {st.state === "needs_setup" ? (
+              <Link href="/rules" className="relative inline-flex h-7 w-fit items-center text-xs font-semibold text-accent-primary before:absolute before:-inset-x-2 before:-inset-y-2.5 before:content-['']">
+                {terms.t("set_amount_action")}
+              </Link>
+            ) : p.requiredRetainedCash !== null && p.protectedCommitments !== null ? (
+              <AvailableExplanation
+                short
+                cash={fmtHere(p.liquidCash)}
+                moneyYouWantToKeep={p.minimumCashFloor !== null ? fmtHere(p.minimumCashFloor) : null}
+                setAside={fmtHere(p.protectedCommitments)}
+                protecting={fmtHere(p.requiredRetainedCash)}
+                available={fmtHere(p.safeToDeploy!)}
+              />
+            ) : null}
           </li>
-        ) : (
-          <li key={p.currencyCode} className="text-xs text-text-muted">
-            {p.currencyCode}: Not configured
-          </li>
-        ),
-      )}
+        );
+      })}
     </ul>
   );
 }

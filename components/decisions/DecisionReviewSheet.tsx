@@ -258,8 +258,8 @@ export function DecisionReviewSheet({ decision, currencies, buckets, liabilities
       rows.push({ label, value: fmt(magnitude, cur, currencies) });
     }
     if (primaryEvaluation.bucketBalanceAfter !== null) rows.push({ label: "Cash After", value: fmt(primaryEvaluation.bucketBalanceAfter, cur, currencies) });
-    if (primaryEvaluation.currencySafeToDeployBefore !== null) rows.push({ label: "Safe to Deploy Before", value: fmt(primaryEvaluation.currencySafeToDeployBefore, cur, currencies) });
-    if (primaryEvaluation.currencySafeToDeployAfter !== null) rows.push({ label: "Safe to Deploy After", value: fmt(primaryEvaluation.currencySafeToDeployAfter, cur, currencies) });
+    if (primaryEvaluation.currencySafeToDeployBefore !== null) rows.push({ label: "Available above that (before)", value: fmt(primaryEvaluation.currencySafeToDeployBefore, cur, currencies) });
+    if (primaryEvaluation.currencySafeToDeployAfter !== null) rows.push({ label: "Available above that (after)", value: fmt(primaryEvaluation.currencySafeToDeployAfter, cur, currencies) });
     if (presentation.showsProfitLoss) rows.push({ label: presentation.profitLossLabel, value: fmt(primaryEvaluation.projectedGrossProfitLoss, cur, currencies) });
     if (presentation.showsRepairFields) rows.push({ label: "Expected Final Amount Invested", value: fmt(primaryEvaluation.basisAfterCapitalizedImprovement, cur, currencies) });
     if (primaryEvaluation.hypotheticalLiabilityOutstandingAfter !== null) rows.push({ label: "Remaining Debt", value: fmt(primaryEvaluation.hypotheticalLiabilityOutstandingAfter, cur, currencies) });
@@ -459,7 +459,7 @@ export function DecisionReviewSheet({ decision, currencies, buckets, liabilities
                 <h4 className="text-[11px] font-semibold uppercase tracking-wide text-text-primary">Rules</h4>
                 <div className="flex flex-col gap-1.5">
                   <RuleRow
-                    label="Minimum Cash to Keep"
+                    label="Money you want to keep"
                     status={primaryEvaluation.minimumCashFloorStatus}
                     context={minimumCashFloor.configured && minimumCashFloor.amount !== null ? `Minimum: ${fmt(minimumCashFloor.amount, primaryEvaluation.currencyCode, currencies)}` : null}
                   />
@@ -490,7 +490,7 @@ export function DecisionReviewSheet({ decision, currencies, buckets, liabilities
                               <span className="text-right tabular-figures text-text-primary">{fmt(e.projectedGrossProfitLoss, e.currencyCode, currencies)}</span>
                             </>
                           ) : null}
-                          <span className="text-text-muted">Safe to Deploy after</span>
+                          <span className="text-text-muted">Available above that (after)</span>
                           <span className="text-right tabular-figures text-text-primary">{fmt(e.currencySafeToDeployAfter, e.currencyCode, currencies)}</span>
                         </div>
                       </div>
@@ -628,7 +628,7 @@ function CategoryBlock({ label, rows }: { label: string; rows: FieldRow[] }) {
 /**
  * `context` (P0-E4-S3B) is a real, already-canonical fact shown next to
  * the status — e.g. the user's own configured minimum-cash-to-keep
- * amount next to "Minimum Cash to Keep — Conflict" — never a computed
+ * amount next to "Money you want to keep — Conflict" — never a computed
  * "how far below" difference (see `buildDecisionCalculationExplanation
  * ()`'s doc comment for why: the figures needed for that subtraction
  * are scoped differently — one bucket vs. the whole currency — so

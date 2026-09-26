@@ -3,9 +3,11 @@ import { Decimal } from "decimal.js";
 import { formatCurrencyAmount } from "@/lib/domain/currency/format";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { AssetType } from "@/lib/domain/assets/types";
+import type { Terminology } from "@/lib/domain/language/terms";
 import type { CapitalDistributionCategory, CapitalDistributionResult } from "@/lib/domain/financial-position/capital-distribution";
 
 interface CapitalDistributionSectionProps {
+  terms: Terminology;
   distribution: CapitalDistributionResult;
   currencies: Map<string, Currency>;
   assetTypes: Map<string, AssetType>;
@@ -159,10 +161,12 @@ function LiquiditySummaryLine({
   categories,
   currencyCode,
   currencies,
+  terms,
 }: {
   categories: CapitalDistributionCategory[];
   currencyCode: string;
   currencies: Map<string, Currency>;
+  terms: Terminology;
 }) {
   const { cashAmount, cashPct, lockedAmount, lockedPct } = summarizeLiquidity(categories);
   const currency = currencies.get(currencyCode);
@@ -170,19 +174,19 @@ function LiquiditySummaryLine({
 
   return (
     <div className="flex items-center justify-between gap-3 text-[11px] font-semibold">
-      {lockedAmount.greaterThan(0) ? <span className="text-text-muted">{fmt(lockedAmount)} locked ({lockedPct.toFixed(1)}%)</span> : <span />}
-      {cashAmount.greaterThan(0) ? <span className="text-accent-primary">{fmt(cashAmount)} liquid ({cashPct.toFixed(1)}%)</span> : null}
+      {lockedAmount.greaterThan(0) ? <span className="text-text-muted">{terms.t("tied_up_summary")}: {fmt(lockedAmount)} ({lockedPct.toFixed(1)}%)</span> : <span />}
+      {cashAmount.greaterThan(0) ? <span className="text-text-secondary">{terms.t("cash_available")}: {fmt(cashAmount)} ({cashPct.toFixed(1)}%)</span> : null}
     </div>
   );
 }
 
-/** The "N% in illiquid assets" header badge — the sum of every already-computed non-cash category percentage, not a new percentage formula. Omitted when there's no non-cash capital (nothing "illiquid" to report). */
-function IlliquidBadge({ categories }: { categories: CapitalDistributionCategory[] }) {
+/** The "N% of your net worth is tied up in assets" header badge (an attention/concentration signal, so amber) — the sum of every already-computed non-cash category percentage, not a new percentage formula. Omitted when there's no non-cash capital (nothing tied up to report). */
+function IlliquidBadge({ categories, terms }: { categories: CapitalDistributionCategory[]; terms: Terminology }) {
   const { lockedPct } = summarizeLiquidity(categories);
   if (lockedPct.lessThanOrEqualTo(0)) return null;
   return (
-    <span className="shrink-0 whitespace-nowrap rounded-full bg-attention/15 px-2.5 py-1 text-[11px] font-semibold text-attention">
-      {lockedPct.toFixed(1)}% in illiquid assets
+    <span className="min-w-0 rounded-full bg-attention/15 px-2.5 py-1 text-[11px] font-semibold text-attention">
+      {terms.t("tied_up_badge").replace("{pct}", lockedPct.toFixed(1))}
     </span>
   );
 }
@@ -199,7 +203,7 @@ function IlliquidBadge({ categories }: { categories: CapitalDistributionCategory
  * without complete reporting FX sees one honest grouping per native
  * currency instead of an invalid blended chart.
  */
-export function CapitalDistributionSection({ distribution, currencies, assetTypes }: CapitalDistributionSectionProps) {
+export function CapitalDistributionSection({ distribution, currencies, assetTypes, terms }: CapitalDistributionSectionProps) {
   if (distribution.mode === "empty") {
     return <p className="text-text-muted">No assets, cash, or receivables recorded yet.</p>;
   }
@@ -212,13 +216,13 @@ export function CapitalDistributionSection({ distribution, currencies, assetType
         </p>
         {distribution.groups.map((group) => (
           <div key={group.currencyCode} className="rounded-xl bg-surface-raised p-4">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-text-primary">{group.currencyCode}</p>
-              <IlliquidBadge categories={group.categories} />
+              <IlliquidBadge categories={group.categories} terms={terms} />
             </div>
             <DistributionBar categories={group.categories} />
             <div className="mt-1.5">
-              <LiquiditySummaryLine categories={group.categories} currencyCode={group.currencyCode} currencies={currencies} />
+              <LiquiditySummaryLine categories={group.categories} currencyCode={group.currencyCode} currencies={currencies} terms={terms} />
             </div>
             <ul className="mt-1 flex flex-col">
               {group.categories.map((c) => (
@@ -235,13 +239,13 @@ export function CapitalDistributionSection({ distribution, currencies, assetType
 
   return (
     <div className="rounded-xl bg-surface-raised p-4">
-      <div className="mb-2 flex items-start justify-between gap-3">
+      <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
         <h3 className="text-lg font-semibold text-text-primary">Where Your Capital Lives</h3>
-        <IlliquidBadge categories={distribution.categories} />
+        <IlliquidBadge categories={distribution.categories} terms={terms} />
       </div>
       <DistributionBar categories={distribution.categories} />
       <div className="mt-1.5">
-        <LiquiditySummaryLine categories={distribution.categories} currencyCode={currencyCode} currencies={currencies} />
+        <LiquiditySummaryLine categories={distribution.categories} currencyCode={currencyCode} currencies={currencies} terms={terms} />
       </div>
       <ul className="mt-2 flex flex-col">
         {distribution.categories.map((c) => (

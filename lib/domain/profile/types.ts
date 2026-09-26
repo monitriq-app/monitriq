@@ -10,7 +10,7 @@ export type Profile = Database["public"]["Tables"]["profiles"]["Row"];
 /** Fields a user is ever allowed to write — matches the DB's column-level UPDATE grant. */
 export type ProfileUpdate = Pick<
   Database["public"]["Tables"]["profiles"]["Update"],
-  "first_name" | "preferred_name" | "preferred_currency" | "timezone"
+  "first_name" | "preferred_name" | "preferred_currency" | "timezone" | "financial_language_mode"
 >;
 
 export function isOnboardingComplete(profile: Pick<Profile, "onboarding_completed">): boolean {

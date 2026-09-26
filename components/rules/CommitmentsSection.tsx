@@ -6,6 +6,7 @@ import { formatCurrencyAmount } from "@/lib/domain/currency/format";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { ObligationSummary } from "@/lib/domain/obligations/types";
 import type { GoalSummary } from "@/lib/domain/goals/types";
+import { useTerms } from "@/components/language/LanguageProvider";
 import { AddCommitmentSheet } from "@/components/rules/AddCommitmentSheet";
 
 interface CommitmentsSectionProps {
@@ -33,13 +34,14 @@ function fmt(amount: string, currencyCode: string, currencies: Map<string, Curre
  */
 export function CommitmentsSection({ obligations, goals, currencies, currenciesByCode, defaultAdding = false }: CommitmentsSectionProps) {
   const [adding, setAdding] = useState(defaultAdding);
+  const terms = useTerms();
   const active = obligations.filter((o) => o.status === "active").sort((a, b) => (a.dueDate ?? "9999").localeCompare(b.dueDate ?? "9999"));
   const goalsById = new Map(goals.map((g) => [g.goalId, g.name]));
 
   return (
     <div className="flex flex-col gap-2.5">
       <div className="flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-text-primary">Upcoming Commitments</h2>
+        <h2 className="text-[15px] font-semibold text-text-primary">{terms.t("upcoming_payments")}</h2>
         <button
           type="button"
           onClick={() => setAdding(true)}
@@ -53,8 +55,8 @@ export function CommitmentsSection({ obligations, goals, currencies, currenciesB
       {active.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl bg-surface-raised p-6 text-center">
           <CalendarClock size={20} className="text-text-secondary" aria-hidden="true" />
-          <p className="text-[15px] font-semibold text-text-primary">No upcoming commitments</p>
-          <p className="max-w-xs text-sm text-text-muted">Add payments or obligations you already know are coming so Monitriq can include them when calculating Safe to Deploy.</p>
+          <p className="text-[15px] font-semibold text-text-primary">No {terms.t("upcoming_payments").toLowerCase()}</p>
+          <p className="max-w-xs text-sm text-text-muted">Add payments or obligations you already know are coming so Monitriq can set money aside for them.</p>
         </div>
       ) : (
         <div className="flex flex-col gap-2">
