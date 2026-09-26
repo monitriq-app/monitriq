@@ -199,7 +199,7 @@ async function main() {
       const rec = QUICK_ADD_GROUPS[0].options.map((o) => o.title).join();
       assert(rec === "Money Received,Money Spent,Move Money,Asset / Investment", rec);
       const plan = QUICK_ADD_GROUPS[1];
-      assert(plan.options.map((o) => o.title).join() === "Budget,Goal,Commitment" && plan.requiresBucket === false, "plan group");
+      assert(plan.options.map((o) => o.title).join() === "Budget,Goal,Commitment,Check a Purchase" && plan.requiresBucket === false, "plan group");
       const href = (k: string) => plan.options.find((o) => o.key === k)!.href;
       assert(href("budget") === "/budget?quick=1", "Quick Add -> Budget");
       assert(href("goal") === "/goals?new=1", "Quick Add -> Goal");

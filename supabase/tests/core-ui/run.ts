@@ -293,7 +293,7 @@ async function main() {
 
     await runner.run("Quick Add PLAN stays Budget / Goal / Commitment; Goal opens the new-goal sheet", async () => {
       const plan = QUICK_ADD_GROUPS[1].options;
-      assert(plan.map((o) => o.title).join() === "Budget,Goal,Commitment", "unchanged set");
+      assert(plan.map((o) => o.title).slice(0, 3).join() === "Budget,Goal,Commitment" && plan.length === 4, "Budget, Goal, Commitment unchanged; P0-E5-S3 adds Check a Purchase");
       assert(plan.find((o) => o.key === "goal")!.href === "/goals?new=1" && /openNew === "1"|new: openNew/.test(src("app/(app)/goals/page.tsx")), "goal deep link");
     });
 

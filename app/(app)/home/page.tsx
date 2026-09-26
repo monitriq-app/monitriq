@@ -18,6 +18,7 @@ import { GoalsSection } from "@/components/home/GoalsSection";
 import { ThisMonthSection } from "@/components/home/ThisMonthSection";
 import { RecentActivityPreview } from "@/components/home/RecentActivityPreview";
 import { UpcomingObligationsList } from "@/components/obligations/UpcomingObligationsList";
+import { SpendingCheckCard } from "@/components/home/SpendingCheckCard";
 import { BudgetHomeCard } from "@/components/home/BudgetHomeCard";
 import { getBudgetSummary, listBudgets } from "@/lib/domain/budget/repository";
 import { todayInTimezone } from "@/lib/domain/budget/presentation";
@@ -107,6 +108,10 @@ export default async function HomePage() {
               currencies={currenciesByCode}
               activeReserveCountByCurrency={activeReserveCountByCurrency}
             />
+          </section>
+
+          <section>
+            <SpendingCheckCard />
           </section>
 
           <section className="flex flex-col gap-2.5">

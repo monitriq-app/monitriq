@@ -4,12 +4,22 @@ import { createContext, useContext } from "react";
 
 export type QuickAddView = "hub" | "received" | "spent" | "move" | "asset";
 
+/** Values a caller (e.g. "Can I afford this?") pre-fills into the Money Spent form. The user still confirms and saves — nothing is recorded by opening it. */
+export interface SpentPrefill {
+  amount: string;
+  bucketId: string;
+  categoryCode: string | null;
+  description: string;
+}
+
 export interface QuickAddContextValue {
   isOpen: boolean;
   view: QuickAddView;
   open: () => void;
   close: () => void;
   goTo: (view: QuickAddView) => void;
+  /** Opens Money Spent with the fields pre-filled; the user must still press Save. */
+  openSpent: (prefill: SpentPrefill) => void;
   backToHub: () => void;
 }
 

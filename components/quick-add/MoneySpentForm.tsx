@@ -10,11 +10,13 @@ import type { CashBucket, MoneySpendingCategory } from "@/lib/domain/money/types
 import type { LiabilitySummary } from "@/lib/domain/liabilities/types";
 import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
+import type { SpentPrefill } from "@/components/quick-add/QuickAddContext";
 import { SuccessPanel } from "@/components/quick-add/SuccessPanel";
 
 interface MoneySpentFormProps {
   buckets: CashBucket[];
   categories: MoneySpendingCategory[];
+  prefill?: SpentPrefill | null;
   onBack: () => void;
   onClose: () => void;
 }
@@ -48,12 +50,12 @@ const GENERIC_CATEGORIES = [
 
 type Mode = "generic" | "debt_payment";
 
-export function MoneySpentForm({ buckets, categories, onBack, onClose }: MoneySpentFormProps) {
+export function MoneySpentForm({ buckets, categories, prefill, onBack, onClose }: MoneySpentFormProps) {
   const [mode, setMode] = useState<Mode>("generic");
-  const [categoryCode, setCategoryCode] = useState("");
-  const [bucketId, setBucketId] = useState(buckets[0]?.id ?? "");
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
+  const [categoryCode, setCategoryCode] = useState(prefill?.categoryCode && GENERIC_CATEGORIES.includes(prefill.categoryCode) ? prefill.categoryCode : "");
+  const [bucketId, setBucketId] = useState(prefill && buckets.some((b) => b.id === prefill.bucketId) ? prefill.bucketId : (buckets[0]?.id ?? ""));
+  const [amount, setAmount] = useState(prefill?.amount ?? "");
+  const [description, setDescription] = useState(prefill?.description ?? "");
   const [liabilityId, setLiabilityId] = useState("");
   const [principalAmount, setPrincipalAmount] = useState("");
   const [interestAmount, setInterestAmount] = useState("");

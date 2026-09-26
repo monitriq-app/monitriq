@@ -4,7 +4,7 @@
  * canonical screens — no duplicate Budget/Goal/Obligation implementation
  * lives here.
  */
-export type QuickAddIconKey = "received" | "spent" | "move" | "asset" | "budget" | "goal" | "commitment";
+export type QuickAddIconKey = "received" | "spent" | "move" | "asset" | "budget" | "goal" | "commitment" | "check";
 
 export interface QuickAddOptionConfig {
   key: string;
@@ -45,6 +45,7 @@ export const QUICK_ADD_GROUPS: QuickAddGroupConfig[] = [
       { key: "budget", title: "Budget", description: "Plan what you'll spend this month.", icon: "budget", href: "/budget?quick=1" },
       { key: "goal", title: "Goal", description: "Save toward something.", icon: "goal", href: "/goals?new=1" },
       { key: "commitment", title: "Commitment", description: "A payment you know is coming.", icon: "commitment", href: "/rules?add=commitment" },
+      { key: "check", title: "Check a Purchase", description: "Can I afford this?", icon: "check", href: "/spending-check" },
     ],
   },
 ];

@@ -1,0 +1,164 @@
+P0-E5-S3 — SPENDING DECISION ASSISTANT: "CAN I AFFORD THIS?"
+================================================================
+
+1. PHASE
+P0-E5-S3 — everyday immediate-purchase check.
+
+2. STATUS
+COMPLETE, pending one manual browser review. Nothing committed or pushed. No schema, migration, RLS or RPC change.
+
+3. OBJECTIVE
+A person with no financial knowledge enters what they want to buy, the amount, currency and account, and sees what spending it today would change plus one plain, explainable suggested next step.
+
+4. GIT PREFLIGHT
+Clean working tree at the start (HEAD b11a009, the Core UI checkpoint). No unrelated changes.
+
+5. EXISTING ENGINE AUDIT
+- evaluate_proposed_cash_use(bucket, amount) (Rules): a pure, non-persisted read built on the canonical safe_to_deploy_by_currency() formula with a hypothetical delta. Returns balance before/after, Safe to Deploy before/after, the recomputed protected-goal cash, uncovered protected obligations and protected commitments after, and neutral statuses (minimum cash floor, protected goal, protected obligation) plus retained deficit. It validates that the account belongs to the caller, rejects amounts <= 0, and does not reject amounts above the balance (balance can go negative).
+- safe_to_deploy_by_currency(): Safe to Deploy = max(liquid cash - max(minimum cash, protected goal cash + uncovered protected obligations), 0); status not_configured when no Minimum Cash to Keep exists for the currency.
+- budget_facts_for_date(currency, date, category) (Budget, P0-E5-S1): planned/spent/remaining for total and category; empty when no live budget covers the date; planned/remaining null when nothing is planned.
+- Decisions engine (Large Personal Purchase): evaluates a persisted Decision + Scenario; using it would create a record per check, which the brief prohibits.
+
+6. REUSE VS NEW APPLICATION-SERVICE DECISION
+Reused evaluate_proposed_cash_use as the cash/protection engine (no Decision/Scenario is created). Added the smallest read-only composition service, lib/domain/spending-check/, which calls three existing canonical reads and applies one suggestion policy. It reimplements no cash, Budget, Safe to Deploy, goal or commitment logic. Documented in SYSTEM_ARCHITECTURE.md.
+
+7. USER FLOW
+Home card or Quick Add > PLAN > Check a Purchase, or /spending-check. One short form -> result: your purchase, SUGGESTED NEXT STEP with Why, WHAT WOULD CHANGE (Cash, Budget, Protected money, Upcoming commitments), "How this was calculated", then Change amount / Record this purchase / Open Decisions.
+
+8. INPUTS
+What are you thinking about buying? (optional description), Amount (required, exact-decimal string validated against the currency's decimal places, greater than zero), Currency (all supported; profile preferred preselected; currencies you already track cash in are listed first), Which account would you pay from? (required; only your own, non-archived, same-currency accounts; auto-selected when there is one; if none: "No cash account in this currency is being tracked." + Add cash account), Spending category (optional; canonical Money spending categories, excluding debt payments which have their own flow).
+
+9. CASH IMPACT
+Cash before/after are read from evaluate_proposed_cash_use (currentBalance, postUseBalance). Cannot cover = the canonical post-use balance is negative; shortfall shown. An exact-balance purchase can be covered. No overdraft or credit is assumed.
+
+10. BUDGET IMPACT
+From budget_facts_for_date for today (profile timezone, resolved by the database). Remaining after = canonical remaining minus the purchase, computed once in the domain policy with Decimal (never in JSX). Over-plan is shown as "Over budget by". Money transfers and received money do not affect it (they are excluded by the Budget read model; tested).
+
+11. CATEGORY IMPACT
+If a category is chosen and budgeted: left now, left after, or "Over category budget by". If the category has no allocation: "This category isn't in your budget." (never auto-added, no judgement). If none chosen: "Category budget impact was not checked."
+
+12. SAFE TO DEPLOY INTEGRATION
+Safe to Deploy before/after and the minimum cash are read verbatim from the Rules engine. If no Minimum Cash to Keep exists the protection check is shown as "Needs setup / Not fully configured" with a Set minimum cash action; zero is never assumed. Goal/commitment statuses are still reported without it because the engine computes them independently.
+
+13. PROTECTED GOALS
+When the purchase would eat into cash backing a protected goal, the engine's protected-goal status is "conflict" and the amount used is the increase in that account's allocation shortfall (post minus current, both canonical). Shown as "This would use X currently protected for your goals." Nothing is moved or released.
+
+14. COMMITMENTS
+Protected obligations are read from the engine's uncovered-obligation figures. If the purchase leaves a protected commitment less backed, the shortfall (canonical after minus before) is shown: "This would leave X less than the amount currently protected for known commitments." Where money is simply required to stay protected for the minimum/goals/commitments and would be crossed without a specific driver, a factual line states the protected amount, cash left and the gap. Expected income is never counted as cash.
+
+15. MULTI-CURRENCY
+A check runs in the selected account's currency only: that currency's account, Budget, minimum cash, goals and commitments. Tested: an NGN check ignores a USD Budget and USD/GBP/EUR protections; a USD result contains no NGN; there is no FX or conversion anywhere in the feature.
+
+16. SUGGESTION POLICY
+One deterministic function (decideSuggestion) over the three composed checks; five states: Proceed within your plan, Reduce the amount, Wait, Review first, More setup needed. No score, rank, risk rating or AI. Same input gives the same output (tested).
+
+17. SUGGESTION PRECEDENCE
+1 insufficient tracked cash -> Reduce the amount. 2 protected cash / commitments crossed (minimum cash, protected goal money, protected commitments, or retained-cash requirement) -> Wait, naming exactly what is crossed. 3 Budget conflict -> Reduce the amount if the overall Budget goes negative; Review first if only the selected category exceeds its plan. 4 protection check incomplete (no minimum cash) and/or 5 no Budget (or a Budget with nothing planned) -> Review first. 6 all relevant configured checks clear -> Proceed within your plan. "More setup needed" is the state for having nothing to check against (no cash account in the currency); the form shows the honest message instead of running a check. Rule for tier 3 chosen by me: overall Budget over = Reduce (reducing the amount can fix it); category-only over = Review first (other categories may have room).
+
+18. PARTIAL-INFORMATION BEHAVIOR
+Each check is labelled Checked / Needs setup / Not available. A missing Budget or minimum cash never blocks the other results and is never assumed to pass; setup gaps are always disclosed (as the reasons when they decide Review first, otherwise as caveats under a stronger reason). Proceed within your plan appears only when every relevant configured check is clear. With no Budget and no minimum cash the result is Review first with both gaps stated.
+
+19. CALCULATION TRANSPARENCY
+"How this was calculated" (MoreDetails, aria-expanded) lists TRACKED / YOUR PURCHASE / CALCULATED lines (cash before, purchase, cash after, Budget left before/after, minimum cash, tracked cash after, Safe to Deploy after), following the S3B/S3C convention. Missing-information messages are not duplicated there.
+
+20. NO-SIDE-EFFECT GUARANTEE
+The service performs reads only. Tested by snapshotting financial events, cash balances, the Budget summary, goals, obligations, rules, Safe to Deploy, decisions and goal allocations before and after multiple checks: identical. No Decision is created. The feature source contains no recordMoneySpent call.
+
+21. MONEY HANDOFF
+"Record this purchase" opens the existing Money Spent form pre-filled (amount, account, category if it is a generic category, description) through a small openSpent prefill added to Quick Add's context and MoneySpentForm (optional prop; existing behavior unchanged when absent). Nothing is recorded until the user presses Save there. Verified in the browser: no financial event was created by opening it.
+
+22. HOME INTEGRATION
+A compact "Can I afford this? / Check a purchase before you spend." card (components/home/SpendingCheckCard.tsx) after the position section; a link only, no figures; no Home redesign.
+
+23. QUICK ADD INTEGRATION
+PLAN is now Budget, Goal, Commitment, Check a Purchase ("Can I afford this?"); RECORD unchanged. At 320 px the modal has zero horizontal overflow and 48px rows. Two existing test assertions that pinned PLAN to exactly three items (budget-ui, core-ui) were updated to the new spec, keeping the original three as the prefix.
+
+24. ADVANCED DECISIONS INTEGRATION
+Subtle "Need a more detailed comparison? Open Decisions" link. /decisions is unchanged.
+
+25. DYNAMIC-USER AUDIT
+Test scans the feature for Victor/Vee/BMW/Lakowe/Autodrip/Nigeria and any hardcoded NGN literal and for scoring/AI language: none. Everything derives from the signed-in user's records and profile.
+
+26. SECURITY
+No schema or RLS change. Account ownership is enforced by evaluate_proposed_cash_use (tested: User B cannot check against User A's account); category is a read-only filter; anonymous callers are denied the underlying RPCs; the page sits behind the (app) session/onboarding redirect and a getCurrentUser guard. No service role.
+
+27. MOBILE
+Headless Chrome, local scratch build, real seeded user: input screen, result (proceed / budget conflict / protected-cash conflict / category over / cash short / incomplete setup) at 393 and 320 px in dark and light; result page at 320, 360, 375, 412, 430, 768 and 1024: no horizontal overflow. Currency values wrap. Not verified on a physical device.
+
+28. LIGHT / DARK
+Shared tokens only (no hex, no dark: forks); both themes checked.
+
+29. ACCESSIBILITY
+Labelled fields, 48px targets (buttons, links, disclosure), the disclosure has aria-expanded (verified false -> true), the suggestion is conveyed by text plus an icon (not color alone), each check carries a text status, focus ring from the global style.
+
+30. TESTS
+New supabase/tests/spending-check/run.ts (npm run test:spending-check), 27 checks against the real local database covering matrix items 1-45 (several grouped per check): enough/insufficient/exact cash, zero/invalid amounts, no Budget, within/over overall Budget, category within/over/unbudgeted/none, transfers irrelevant, minimum cash configured/not configured, protected goal effect, funded-commitment effect, all suggestion states and their precedence, determinism, factual reasons, no score, NGN/USD/GBP/EUR isolation, no FX, Home CTA, Quick Add route, Decisions link, no side effects (Money, Budget, Goals, obligations, rules, Decisions), record-purchase requires explicit save, cross-user and anonymous denial, no hardcoded data, theme/mobile source checks. Items 46-50 (320/393/430 overflow, light, dark) were verified in the browser rather than by a rendered-DOM test, as the repo has none.
+
+31. REGRESSION
+All existing suites unchanged and passing (20/48/11/114/27/25/56/86/90/33/30/31), Budget 30, Budget UI 22, Core UI 28, Spending check 27.
+
+32. LINT / TYPECHECK / BUILD
+Lint clean; app and harness typecheck clean; production build clean (/spending-check built).
+
+33. SCHEMA / MIGRATION STATUS
+No migration, table, RPC, RLS or grant change. Nothing under supabase/migrations changed. The Budget migration (20261002090000) is still unconfirmed on Monitriq Dev from earlier phases; this feature's Budget check needs it there.
+
+34. FILES CREATED
+lib/domain/spending-check/{types,policy,service,presentation}.ts; components/spending-check/SpendingCheckWorkspace.tsx; app/(app)/spending-check/page.tsx; components/home/SpendingCheckCard.tsx; supabase/tests/spending-check/run.ts; this report.
+
+35. FILES MODIFIED
+components/quick-add/{options.ts,QuickAddContext.tsx,QuickAddProvider.tsx,MoneySpentForm.tsx}; app/(app)/home/page.tsx; package.json (test:spending-check); supabase/tests/{budget-ui,core-ui}/run.ts (PLAN assertions); docs/product/PRODUCT_DEFINITION.md, docs/architecture/SYSTEM_ARCHITECTURE.md, docs/project/BUILD_STATE.md.
+
+36. OPEN ISSUES
+- The minimum-cash rule applies to all tracked cash in the currency, while cash before/after shows the selected account; the explanation states which number each line refers to, but a user with several accounts could find the two figures different.
+- Only immediate purchases are evaluated (by design); no scheduling or future income.
+- The "Reduce the amount" state does not suggest a specific amount; it states the gap (e.g. over by X).
+- Budget being closed vs active is not distinguished (a closed budget covering today is still used).
+- A category-specific suggestion cannot pick a Debt Payment category (excluded on purpose).
+- Prefill does not carry a category that the Money Spent form lists as a special flow.
+
+37. RISKS
+No rendered-DOM automated tests; suggestion wording is plain but should be reviewed by a real novice; the composition makes three reads per check (fine at V1 scale).
+
+38. GIT STATUS
+Uncommitted; nothing staged or pushed.
+
+39. RECOMMENDED NEXT PHASE
+One manual browser review of the check (all five suggestion states), then confirm/apply the Budget migration to Monitriq Dev, then the planned onboarding / mobile packaging work.
+
+
+================================================================
+P0-E5-S3A — ACTIVE BUDGET CORRECTNESS HARDENING
+================================================================
+
+STATUS
+COMPLETE. One correctness fix; the Spending Check design and suggestion hierarchy are unchanged. Nothing committed or pushed.
+
+ROOT CAUSE
+budget_facts_for_date() (the Budget boundary built in P0-E5-S1 for future Decisions) returns the non-archived Budget covering the date, preferring an active one, and does not expose the Budget's status. The Spending Check service treated any row it returned as the current plan, so a CLOSED Budget whose month includes today could produce Budget results (including a Budget conflict) even though a closed Budget is not the user's current plan. Archived Budgets were already excluded by the function itself.
+
+CANONICAL FIX
+Only lib/domain/spending-check/service.ts (plus small type/presentation follow-ups) changed. The service now also reads the existing canonical Budget repository (listBudgets, RLS-scoped) and uses the returned facts only when the Budget they belong to is active; otherwise the facts are discarded and the closed Budget is recorded so the UI can point at it. It also resolves "today" explicitly in the profile timezone (getProfile + todayInTimezone) and passes it to budget_facts_for_date, so both reads agree on the date. No second Budget engine, no Money events re-summed or read, no schema, migration, RLS or RPC change, and budget_facts_for_date itself is untouched.
+
+ACTIVE / CLOSED / ARCHIVED BEHAVIOR
+- Active: used as before (planned, remaining, category impact, conflicts).
+- Closed: ignored completely; neither passing nor failing. Budget shows "Not available - You don't have an active budget for this month, so the Budget check isn't available." The action is "Open budget" (to /budget?b=<id>) because a new Budget cannot be created for a month/currency that already has a closed one (the one-live-budget-per-month rule), and Reopen is on that page.
+- Archived: ignored; behaves as no Budget with the "Create budget" action (archiving frees the month).
+- No Budget: unchanged (Create budget).
+Copy change: the unavailable-Budget sentence now reads "You don't have an active budget for this month" for all three cases (previously "You haven't created a budget...", which was inaccurate for a closed Budget).
+
+SUGGESTION BEHAVIOR
+Unchanged policy. A closed or archived Budget is exactly "no active Budget": no Budget conflict can arise, cash and protection are still evaluated, and when they are clear the result is Review first with the reason that the Budget was not checked (never "Proceed within your plan"). Higher-precedence results (cash, protected money) are unaffected. No silent fallback to historical Budget data.
+
+TESTS
+supabase/tests/spending-check/run.ts is now 34 checks (7 added): active Budget used and a real over-plan conflict; closed Budget ignored with no Budget conflict, correct partial-information state, "Not available" row, Open budget action and no Budget lines in the calculation; archived Budget ignored with Create budget; closed CAD does not affect active AUD, and a closed NGN Budget does not affect the USD check; reopening restores the Budget check (no historical fallback); no side effects (Money, balances, Budget summaries and statuses, allocations, Decisions) across active/closed/archived; the service uses only canonical Budget reads. Mutation check: with the fix temporarily disabled, the closed-Budget tests fail (32/34); restored, 34/34.
+Browser check (headless Chrome, real closed Budget, 393 px): Review first, Budget "Not available", cash and Safe to Deploy still shown, Open budget link correct, no overflow, no hydration errors.
+
+VALIDATION
+npm run test:spending-check 34/34. npm run test: all 16 suites pass (20/48/11/114/27/25/56/86/90/33/30/31 + Budget 30 + Budget UI 22 + Core UI 28 + Spending check 34), exit 0. Lint clean. App and harness typecheck clean. Production build clean.
+
+CONFIRMATIONS
+No schema, migration, RLS, RPC or grant change (nothing under supabase/migrations). No Budget or Money calculation duplicated; no change to Safe to Deploy, Goals, Rules, Money or Decisions.
+
+FILES CHANGED IN S3A
+lib/domain/spending-check/{service,types,policy,presentation}.ts; supabase/tests/spending-check/run.ts; this report.

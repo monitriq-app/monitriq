@@ -355,3 +355,7 @@ open/close interaction (`AccountMenu`), active-link highlighting
 (`DesktopNav`/`MobileBottomNav`, which need `usePathname()`), and form
 interactivity already established in prior phases. No financial
 calculation exists in any client component.
+
+## Spending check application service (P0-E5-S3)
+
+`lib/domain/spending-check/` is a thin, read-only composition layer, not a new engine. `service.ts` calls three existing canonical reads: `evaluate_proposed_cash_use()` (hypothetical cash, Safe to Deploy, protected-goal and commitment statuses; validates account ownership; writes nothing), `safe_to_deploy_by_currency()` (the "before" state) and `budget_facts_for_date()` (Budget planned/spent/remaining, total and per category). `policy.ts` composes them and applies the single deterministic suggestion policy (precedence: insufficient cash, protected-cash/commitment conflict, Budget conflict, incomplete protection check, no Budget, all clear); its only arithmetic is exact-decimal "remaining minus purchase" and differences between two canonical figures. `presentation.ts` formats. No table, RPC or migration was added; no Decision record is created by a check.

@@ -2,9 +2,9 @@
 
 import { useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Gem, X, ChevronRight, Info, PiggyBank, Target, CalendarClock } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ArrowLeftRight, Gem, X, ChevronRight, Info, PiggyBank, Target, CalendarClock, ShoppingBag } from "lucide-react";
 import type { CashBucket, BucketBalance, MoneyReceivedCategory, MoneySpendingCategory } from "@/lib/domain/money/types";
-import { QuickAddContext, type QuickAddView } from "@/components/quick-add/QuickAddContext";
+import { QuickAddContext, type QuickAddView, type SpentPrefill } from "@/components/quick-add/QuickAddContext";
 import { MoneyReceivedForm } from "@/components/quick-add/MoneyReceivedForm";
 import { MoneySpentForm } from "@/components/quick-add/MoneySpentForm";
 import { MoveMoneyForm } from "@/components/quick-add/MoveMoneyForm";
@@ -26,6 +26,7 @@ const ICONS: Record<QuickAddIconKey, { icon: ReactNode; tint: string }> = {
   budget: { icon: <PiggyBank size={20} aria-hidden="true" />, tint: "bg-accent-primary/10 text-accent-primary" },
   goal: { icon: <Target size={20} aria-hidden="true" />, tint: "bg-focus/10 text-focus" },
   commitment: { icon: <CalendarClock size={20} aria-hidden="true" />, tint: "bg-attention/10 text-attention" },
+  check: { icon: <ShoppingBag size={20} aria-hidden="true" />, tint: "bg-accent-primary/10 text-accent-primary" },
 };
 
 /**
@@ -82,9 +83,16 @@ function HubRow({ option, onSelect, onNavigate }: { option: QuickAddOptionConfig
 export function QuickAddProvider({ children, buckets, balances, receivedCategories, spendingCategories }: QuickAddProviderProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [view, setView] = useState<QuickAddView>("hub");
+  const [prefill, setPrefill] = useState<SpentPrefill | null>(null);
 
   function open() {
+    setPrefill(null);
     setView("hub");
+    setIsOpen(true);
+  }
+  function openSpent(values: SpentPrefill) {
+    setPrefill(values);
+    setView("spent");
     setIsOpen(true);
   }
   function close() {
@@ -98,7 +106,7 @@ export function QuickAddProvider({ children, buckets, balances, receivedCategori
   }
 
   return (
-    <QuickAddContext.Provider value={{ isOpen, view, open, close, goTo, backToHub }}>
+    <QuickAddContext.Provider value={{ isOpen, view, open, close, goTo, openSpent, backToHub }}>
       {children}
 
       {isOpen && view === "hub" ? (
@@ -166,7 +174,7 @@ export function QuickAddProvider({ children, buckets, balances, receivedCategori
             <div className="mx-auto -mt-1 mb-2 h-1 w-12 rounded-full bg-surface-strong" aria-hidden="true" />
 
             {view === "received" ? <MoneyReceivedForm buckets={buckets.filter((b) => !b.is_archived)} categories={receivedCategories} onBack={backToHub} onClose={close} /> : null}
-            {view === "spent" ? <MoneySpentForm buckets={buckets.filter((b) => !b.is_archived)} categories={spendingCategories} onBack={backToHub} onClose={close} /> : null}
+            {view === "spent" ? <MoneySpentForm buckets={buckets.filter((b) => !b.is_archived)} categories={spendingCategories} prefill={prefill} onBack={backToHub} onClose={close} /> : null}
             {view === "move" ? <MoveMoneyForm buckets={buckets.filter((b) => !b.is_archived)} balances={balances} onBack={backToHub} onClose={close} /> : null}
           </div>
         </div>

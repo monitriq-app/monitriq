@@ -1352,3 +1352,7 @@ Local-only migration `20261002090000_create_budget_domain.sql` (NOT pushed to Mo
 ## P0-E5-S2B — Core UI completion: Goals, Debts, Money Owed (awaiting review)
 
 Production Goals / Debts (/liabilities) / Money Owed to You (/receivables) with sheets for create/set-aside/pay/recover; shared Sheet primitive; no schema change. Tests: core-ui 26. Report: docs/reports/P0-E5-S2B-core-ui-completion.txt. Nothing committed.
+
+## P0-E5-S3 — Spending Decision Assistant "Can I afford this?" (awaiting review)
+
+/spending-check: hypothetical immediate-purchase check composed from existing canonical reads (evaluate_proposed_cash_use, safe_to_deploy_by_currency, budget_facts_for_date); deterministic suggestion policy; Home CTA; Quick Add PLAN "Check a Purchase"; Money Spent prefill handoff. No schema/migration/RLS change. Tests: spending-check 27. Report: docs/reports/P0-E5-S3-spending-decision-assistant.txt. Nothing committed.
