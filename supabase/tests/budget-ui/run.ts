@@ -202,12 +202,12 @@ async function main() {
       assert(plan.options.map((o) => o.title).join() === "Budget,Goal,Commitment" && plan.requiresBucket === false, "plan group");
       const href = (k: string) => plan.options.find((o) => o.key === k)!.href;
       assert(href("budget") === "/budget?quick=1", "Quick Add -> Budget");
-      assert(href("goal") === "/goals#add-goal", "Quick Add -> Goal");
+      assert(href("goal") === "/goals?new=1", "Quick Add -> Goal");
       assert(href("commitment") === "/rules?add=commitment", "Quick Add -> Commitment");
     });
 
     await runner.run("Quick Add destinations are real: goals anchor, rules param, budget quick flag", async () => {
-      assert(readFileSync("app/(app)/goals/page.tsx", "utf8").includes('id="add-goal"'), "goals anchor");
+      assert(readFileSync("app/(app)/goals/page.tsx", "utf8").includes("openNew"), "goals new-goal param");
       const rules = readFileSync("app/(app)/rules/page.tsx", "utf8");
       assert(rules.includes('add === "commitment"'), "rules param");
       assert(readFileSync("app/(app)/budget/page.tsx", "utf8").includes('quick === "1"'), "budget quick");

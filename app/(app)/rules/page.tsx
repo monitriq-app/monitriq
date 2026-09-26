@@ -10,6 +10,7 @@ import { MinimumCashSection } from "@/components/rules/MinimumCashSection";
 import { CommitmentsSection } from "@/components/rules/CommitmentsSection";
 import { CashUseEvaluatorForm } from "@/components/rules/CashUseEvaluatorForm";
 import { ShortfallBanner } from "@/components/goals/ShortfallBanner";
+import { BackLink } from "@/components/layout/BackLink";
 import { MoreDetails } from "@/components/ui/MoreDetails";
 
 /**
@@ -49,6 +50,7 @@ export default async function RulesPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="flex flex-col gap-3.5">
+      <BackLink />
       <div>
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
           <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-primary" aria-hidden="true" />

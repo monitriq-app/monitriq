@@ -43,7 +43,7 @@ export const QUICK_ADD_GROUPS: QuickAddGroupConfig[] = [
     requiresBucket: false,
     options: [
       { key: "budget", title: "Budget", description: "Plan what you'll spend this month.", icon: "budget", href: "/budget?quick=1" },
-      { key: "goal", title: "Goal", description: "Save toward something.", icon: "goal", href: "/goals#add-goal" },
+      { key: "goal", title: "Goal", description: "Save toward something.", icon: "goal", href: "/goals?new=1" },
       { key: "commitment", title: "Commitment", description: "A payment you know is coming.", icon: "commitment", href: "/rules?add=commitment" },
     ],
   },

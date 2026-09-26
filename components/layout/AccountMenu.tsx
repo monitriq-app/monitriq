@@ -14,8 +14,8 @@ const FOUNDATION_ROUTES = [
   { href: "/budget", label: "Budget" },
   { href: "/financial-position", label: "Financial Position" },
   { href: "/rules", label: "Rules & Obligations" },
-  { href: "/receivables", label: "Receivables" },
-  { href: "/liabilities", label: "Liabilities" },
+  { href: "/receivables", label: "Money Owed to You" },
+  { href: "/liabilities", label: "Debts" },
 ] as const;
 
 /**

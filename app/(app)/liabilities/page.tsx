@@ -1,60 +1,48 @@
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
+import { getCurrentProfile } from "@/lib/supabase/get-current-profile";
 import { listCurrencies } from "@/lib/domain/currency/repository";
-import { listLiabilityTypes, getLiabilitySummaries } from "@/lib/domain/liabilities/repository";
+import { listLiabilityTypes, getLiabilitySummaries, getLiabilityNativeCurrencyTotals, listLiabilities } from "@/lib/domain/liabilities/repository";
 import { listBuckets } from "@/lib/domain/money/repository";
-import { LiabilityList } from "@/components/liabilities/LiabilityList";
-import { CreateLiabilityForm } from "@/components/liabilities/CreateLiabilityForm";
-import { DebtPaymentForm } from "@/components/liabilities/DebtPaymentForm";
+import { buildDebtsView } from "@/lib/domain/liabilities/presentation";
+import { DebtsWorkspace } from "@/components/liabilities/DebtsWorkspace";
 
 /**
- * Foundation-level Liabilities screen (P0-E2-S4) — proves the domain, not
- * the final Stitch design. No fake data: a brand-new user sees "No
- * liabilities yet."
+ * Monitriq's Debts screen (P0-E5-S2B; route and domain stay "liabilities").
+ * Outstanding amounts and per-currency totals come from liability_summary()
+ * and liability_native_currency_totals(); currencies are never combined.
  */
-export default async function LiabilitiesPage() {
+export default async function LiabilitiesPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
   const user = await getCurrentUser();
-  if (!user) {
-    return null;
-  }
+  if (!user) return null;
 
+  const { add } = await searchParams;
   const supabase = await createClient();
+  const profile = await getCurrentProfile();
 
-  const [currencies, liabilityTypes, liabilities, buckets] = await Promise.all([
+  const [currencies, liabilityTypes, liabilities, totals, rows, buckets] = await Promise.all([
     listCurrencies(supabase),
     listLiabilityTypes(supabase),
     getLiabilitySummaries(supabase),
+    getLiabilityNativeCurrencyTotals(supabase),
+    listLiabilities(supabase),
     listBuckets(supabase),
   ]);
 
-  const currenciesByCode = new Map(currencies.map((currency) => [currency.code, currency]));
-  const liabilityTypesByCode = new Map(liabilityTypes.map((type) => [type.code, type]));
-  const activeBuckets = buckets.filter((bucket) => !bucket.is_archived);
-  const activeLiabilities = liabilities.filter((l) => !l.isArchived);
+  const currenciesByCode = new Map(currencies.map((c) => [c.code, c]));
+  const typeLabels = new Map(liabilityTypes.map((t) => [t.code, t.display_name]));
+  const counterparties = new Map(rows.map((r) => [r.id, r.counterparty]));
+  const view = buildDebtsView(liabilities, totals, typeLabels, counterparties, currenciesByCode);
 
   return (
-    <div className="flex flex-col gap-10">
-      <div>
-        <h1 className="text-xl font-semibold text-text-primary">Liabilities</h1>
-        <p className="text-text-secondary">Foundation-level view — not the final design.</p>
-      </div>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-text-secondary">Tracked Liabilities</h2>
-        <LiabilityList liabilities={liabilities} liabilityTypes={liabilityTypesByCode} currencies={currenciesByCode} />
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-text-secondary">Add Liability</h2>
-        <CreateLiabilityForm liabilityTypes={liabilityTypes} currencies={currencies} />
-      </section>
-
-      {activeLiabilities.length > 0 && activeBuckets.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-text-secondary">Record Debt Payment</h2>
-          <DebtPaymentForm liabilities={activeLiabilities} buckets={activeBuckets} />
-        </section>
-      ) : null}
-    </div>
+    <DebtsWorkspace
+      view={view}
+      liabilities={liabilities.filter((l) => !l.isArchived)}
+      liabilityTypes={liabilityTypes}
+      currencies={currencies}
+      buckets={buckets}
+      defaultCurrencyCode={profile?.preferred_currency ?? null}
+      openAdd={add === "1"}
+    />
   );
 }

@@ -1,0 +1,143 @@
+P0-E5-S2B — CORE UI COMPLETION: GOALS + DEBTS + MONEY OWED TO YOU
+================================================================
+
+1. PHASE
+P0-E5-S2B — production UI for Goals, Liabilities (user-facing "Debts") and Receivables (user-facing "Money Owed to You").
+
+2. STATUS
+COMPLETE, pending one manual browser review. Nothing committed or pushed. No schema, migration, RLS or calculation change.
+
+3. OBJECTIVE
+Replace the three foundation-level screens with production screens a non-financial user can understand, using the existing canonical domains only.
+
+4. GIT PREFLIGHT
+`git status` was clean at start (the Budget/Decisions checkpoint 66b85e8 was already committed). No unrelated changes. All changes below are from this phase.
+
+5. REFERENCES INSPECTED
+PRODUCT_DEFINITION, FINANCIAL_DOMAIN_MODEL, MULTI_CURRENCY_MODEL, VISUAL_CONSTITUTION and BUILD_STATE conventions (via prior phases), docs/reference/06-goals (screen.png viewed; code.html/DESIGN.md secondary), and the current Home, Money, Assets, Decisions, Rules, Budget and Quick Add patterns. All existing Goals/Liabilities/Receivables pages, components, repositories, types, RPCs and tests were read.
+
+6. GOALS EXISTING-DOMAIN AUDIT
+Canonical: goal_summary (allocated, remaining, percentage, debt progress, required pace status/amount/periods, milestone counts), goal_native_currency_totals, goal_protected_allocation_totals, goal_bucket_shortfalls, create_goal, record_goal_target, record_goal_allocation/release/reallocation, goal milestones, updateGoal. 13 canonical goal types (Home / Property, Emergency Reserve, Savings Target, Relocation, Recurring Income, Debt Payoff, Business Capital, Education, Vehicle, Event, Retirement, Travel, Custom). 4 measurement types (cash target, debt balance target, monthly income target, milestone). Allocation only assigns purpose to existing cash; it never moves money.
+
+7. GOALS VISUAL REFERENCE USE
+A genuine screen.png exists. Followed: "Goals" header, summary tiles (Active Goals, Next Target Date, Set aside, Protected), Create Goal primary action, first-goal empty state ("What are you saving for?"), goal cards, protected explanation. Deliberately NOT built (not canonical / fake data): "Suggested Goals", "View Demo Example", "Focus Goal Not Set" prompt, All/Focus/Protected/Paused filter chips, notification bell. Theme and layout use the established Monitriq tokens rather than the reference's own dark-only "Capital Compass" chrome.
+
+8. GOALS OVERVIEW
+GoalsWorkspace: title "Goals", "Save toward what matters."; summary tiles from canonical data (active count, next target date derived from goal dates only when one exists, set aside per currency, protected count and protected set-aside per currency); goal cards with name, type, Protected chip, "X of Y" headline, rail or "Not funded yet", target date (Mon YYYY), Required pace, and a Set Money Aside button. Shortfall banner retained.
+
+9. GOAL CREATION
+CreateGoalSheet (bottom sheet; "New Goal"/"Create Goal"; Quick Add > Goal now opens /goals?new=1 with the sheet open). Plain fields: name, kind of goal (canonical types), currency (preferred preselected), amount, date, "Protect this goal" with the required plain explanation. Measurement type follows the goal type's canonical default; "How do you want to track it?" (More details) shows the four measurement options in plain words. Debt-payoff goals pick from existing debts and point to the Debts page if none exist. No permanent form on the page.
+
+10. GOAL DETAIL
+GoalDetailSheet (tap a card): headline, progress, facts, target date, Required pace, protection, Set Money Aside, and "Manage this goal".
+
+11. GOAL FUNDING / ALLOCATION
+User-facing wording is "Set Money Aside" (not "Add Money"): the canonical operation marks cash already in one of the user's own accounts for a goal and moves/spends nothing; the sheet says so. Only the user's same-currency, non-archived accounts are offered. Verified: allocating changes goal totals, not cash balances.
+
+12. GOAL ADVANCED CONTROLS
+Inside Manage: protect toggle, change target amount/date (append-only recordGoalTarget), and "Release or move money" (release / move to another same-currency goal, canonical functions) — shown only when money is set aside. Milestone goals show a small steps list (add step, mark done) so Relocation-type goals are usable. Pause/archive/focus controls were not added (out of scope).
+
+13. LIABILITIES EXISTING-DOMAIN AUDIT
+liability_summary (outstanding principal, repaid, interest, opened, maturity), liability_native_currency_totals, create_liability, record_debt_payment (principal/interest/fees, real cash event), liability types (Loan, Credit Facility, Mortgage, Personal Debt, Business Debt, Other). Counterparty is on the liabilities row, not in the summary, so it is read from listLiabilities for "More details".
+
+14. DEBTS UI
+"Debts" / "What you owe." Total owed per currency (canonical native totals, never combined), debt cards (name, type, interest only if entered, still owed, final payment date only if entered), More details (owed to, paid back so far, started), Record Payment sheet (paid from same-currency account; toward the debt / interest / fees).
+
+15. ADD DEBT
+AddDebtSheet: Name, Type of debt, Currency, "Starting amount owed" (states it does not add money), and More details: "Who do you owe?", interest %, final payment date. Uses createLiability unchanged. Empty state: "No debts tracked yet." + the requested body copy + Add Debt.
+
+16. DECISIONS DEBT HANDOFF
+Decisions' link to /liabilities is unchanged; the page is now the production Debts screen with the Add Debt empty state. Decisions code/calculations untouched.
+
+17. RECEIVABLES EXISTING-DOMAIN AUDIT
+receivable_summary (face, recovered, outstanding, estimate, expected date, last follow-up), receivable_native_currency_totals (outstanding), create_receivable, record_receivable_recovery (cash into an account and outstanding down, atomic), updateReceivable (follow-up). No canonical per-currency "recovered" total exists, so it is shown per card only.
+
+18. MONEY OWED UI
+"Money Owed to You" / "Track money you expect to receive." Per-currency "Still to be paid" totals with the note "Money owed to you is not cash you can spend until it is paid." Cards: name, expected date, still owed, paid back so far, estimate (labelled an estimate), last follow-up, settled state, More details ("Amount owed in total" instead of "Face amount"). Empty: "No money owed to you is being tracked."
+
+19. ADD MONEY OWED
+AddMoneyOwedSheet: name/person/company, currency, "Amount owed" (states it is not cash until paid); More details: expected payment date, "Estimated amount you expect to recover" (your own estimate, not guaranteed). Uses createReceivable unchanged.
+
+20. RECOVERY FLOW
+Per-card "Record Recovery" sheet calls the canonical recordRecovery: cash comes into the chosen account, amount owed goes down. Settled receivables show "Fully paid back" and hide the action. The Assets page's existing "Money You're Owed" section and its Quick Add recovery route are unchanged.
+
+21. MULTI-CURRENCY
+Every total and summary is per currency (NGN and USD shown separately); no combined Total Goals / Debt / Money Owed anywhere. Verified with NGN and USD data in tests and in the browser.
+
+22. DYNAMIC-USER AUDIT
+Test scans all new surfaces for Victor/Vee/BMW/Lakowe/Autodrip/Nigeria and any hardcoded "NGN" literal: none. Currency defaults come from the profile's preferred currency, and any supported currency can be chosen.
+
+23. MOBILE
+Headless Chrome against a local scratch build, populated and empty states, /goals /liabilities /receivables at 320, 360, 375, 393, 412, 430, 768, 1280: no horizontal overflow (dark and light). All seven sheets checked at 320, 393, 430: no overflow. A long debt name wraps. Sheets use safe-area padding. Not verified on physical devices.
+
+24. LIGHT / DARK
+Shared tokens only; both themes checked at every width above; screenshots reviewed (goals dark, money owed light).
+
+25. ACCESSIBILITY
+Labelled dialogs with Escape to close and 48px close target, form labels on every field, progressbar role with label/values on rails, aria-pressed on the release/move toggle, aria-expanded via the shared MoreDetails, meaning carried by text ("Not funded yet", "Protected", "Fully paid back") not color alone. Checkbox and disclosure visible boxes are smaller than 48px but sit inside 48px labels/hit-areas. No screen-reader pass was run.
+
+26. TESTS
+New supabase/tests/core-ui/run.ts (npm run test:core-ui), 26 checks against the real local database and the presentation layer, covering matrix items 1-40 (several items grouped per check): goals (empty, one, multiple, protected, zero and nonzero progress, pace calculable/unavailable, create, set aside, release/move secondary but working, NGN, USD, no cross-currency total), debts (empty, one, multiple, outstanding, interest/maturity absent and present, create, currency separation, Pay Down Debt handoff), money owed (empty, one, multiple, outstanding, recovered, optional date/estimate, create, recovery preserved, not cash, currency separation), and global (no build-stage copy, no hardcoded user data, theme tokens only, mobile-safety source checks, Quick Add PLAN unchanged). Layout no-overflow and light/dark rendering (36, 39, 40) were verified in the browser rather than by a rendered-DOM test (the repo has none). budget-ui's Quick Add > Goal assertion was updated to the new route (/goals?new=1); no financial assertion was changed.
+
+27. REGRESSION
+All 15 suites pass: 20/48/11/114/27/25/56/86/90/33/30/31 (existing, unchanged) + Budget 30 + Budget UI 22 + Core UI 26.
+
+28. LINT / TYPECHECK / BUILD
+Lint clean; app and harness typecheck clean; production build clean (/goals, /liabilities, /receivables built).
+
+29. SCHEMA / RLS / MIGRATION CONFIRMATION
+No migration created or modified, no RLS or table change, no new RPC, no calculation change. (git status shows nothing under supabase/migrations.)
+
+30. FILES CHANGED
+New: components/ui/Sheet.tsx; components/goals/{GoalsWorkspace,CreateGoalSheet,GoalDetailSheet,SetAsideSheet,ReleaseMoveSheet}.tsx; components/liabilities/{DebtsWorkspace,AddDebtSheet,RecordPaymentSheet}.tsx; components/receivables/{MoneyOwedWorkspace,AddMoneyOwedSheet,RecordRecoverySheet}.tsx; lib/domain/{common,goals,liabilities,receivables}/presentation.ts; supabase/tests/core-ui/run.ts; this report.
+Rewritten: app/(app)/{goals,liabilities,receivables}/page.tsx.
+Deleted (replaced): GoalList, CreateGoalForm, AllocateCashForm, ReleaseReallocateForm; LiabilityList, CreateLiabilityForm, DebtPaymentForm; ReceivableList, CreateReceivableForm, RecordRecoveryForm.
+Modified: components/quick-add/options.ts (Goal route), components/layout/AccountMenu.tsx ("Debts", "Money Owed to You"), package.json (test:core-ui), supabase/tests/budget-ui/run.ts (route assertion).
+Untouched: Budget, Decisions, Home, bottom nav, Quick Add structure.
+
+31. OPEN ISSUES
+- Set-aside tiles can show a "NGN 0" line for a currency that has goals but nothing set aside (canonical totals return it); truthful but slightly noisy.
+- No pause/archive/focus/milestone-edit controls on goals; goals cannot be deleted.
+- Last follow-up and started dates use the UTC calendar date of the stored timestamp.
+- A debt goal needs an existing debt first (the sheet says so).
+- Debt "Record Payment" and receivable "Log Follow-Up" are the only edit actions; debts and money owed cannot yet be edited or archived from the UI.
+- Assets' older "Money You're Owed" section still uses its own wording and a Map that keeps only the last outstanding per currency for its header (pre-existing; not touched because Assets is approved).
+
+32. RISKS
+No rendered-DOM automated tests; two Quick Add-adjacent behaviors (goal sheet auto-open, commitment sheet) rely on query params. Visual match to the Goals reference is intentionally partial (unsupported reference features omitted).
+
+33. GIT STATUS
+34 changed/untracked entries (this phase only); nothing staged, committed or pushed.
+
+34. RECOMMENDED NEXT PHASE
+One manual browser review of Goals, Debts and Money Owed (including the sheets), then decide on debt/receivable edit-archive actions, and confirm/apply the Budget migration to Monitriq Dev before P0-E5-S3 (Spending Decision Assistant).
+
+
+================================================================
+P0-E5-S2C — FINAL CORE UI POLISH
+================================================================
+
+STATUS
+COMPLETE. Two browser-QA corrections only. Nothing committed or pushed.
+
+1. SECONDARY PAGE NAVIGATION
+Problem: /liabilities and /receivables (secondary routes, deliberately not in the primary nav) had no in-app way back.
+Fix: one shared component, components/layout/BackLink.tsx, placed at the top of Debts, Money Owed to You and Rules (Rules had the same problem). It is a labelled button ("Back to previous screen"), 48px high, with the global visible focus ring. If the visitor arrived from another page of this site (same-origin referrer and history), it calls router.back(); otherwise it goes to Home, so a page opened directly (new tab, bookmark) never dead-ends. The app shell, header, branding and bottom/desktop navigation are unchanged, and these pages were not added to primary navigation.
+Verified in headless Chrome (dark and light): Goals -> Debts -> Back returns to Goals; Money -> Money Owed -> Back returns to Money; Assets -> Rules -> Back returns to Assets; a directly opened /liabilities goes Back to Home. Control height 48px on all three pages; focus outline visible; no horizontal overflow at 320, 360, 393, 430 and 768 px on Debts, Money Owed, Rules and Goals.
+Observation, not changed: Financial Position (also an account-menu route) has the same missing-Back situation; it was outside the requested scope and can reuse BackLink in one line.
+
+2. GOALS PROTECTED SUMMARY
+Problem: with a protected goal and nothing set aside, both tiles showed a zero amount ("NGN 0" twice).
+Fix (presentation only, lib/domain/goals/presentation.ts and the tile in GoalsWorkspace): the Protected tile now lists per-currency protected amounts only where money genuinely exists; when protected goals exist but no protected money is set aside it shows the goal count plus "No money set aside". Currencies are still never combined. Verified in the browser: zero state reads "PROTECTED | 1 goal | No money set aside"; after setting aside NGN 100,000 it reads "PROTECTED | 1 goal | NGN 100,000". The Set Aside tile is unchanged.
+
+3. NO DOMAIN / SCHEMA / CALCULATION CHANGES
+No file under supabase/migrations, no RLS, RPC, repository, calculation or domain behavior changed. The Protected refinement filters and labels already-computed canonical totals (goal_protected_allocation_totals) for display; Goals cards, Create Goal, Set Money Aside, Required pace, protection behavior, Add Debt, Add Money Owed, recovery, debt payment and multi-currency behavior are untouched.
+
+4. TESTS
+supabase/tests/core-ui/run.ts is now 28 checks (two added): Protected tile behavior in both states (count + note with zero money; per-currency amount, no note, once money is set aside), and the shared Back control (48px, labelled, history + Home fallback, present on Debts, Money Owed and Rules, primary navigation files unchanged).
+
+5. VALIDATION
+npm run test:core-ui 28/28. npm run test: all 15 suites pass (20/48/11/114/27/25/56/86/90/33/30/31 + Budget 30 + Budget UI 22 + Core UI 28), exit 0. Lint clean. App and harness typecheck clean. Production build clean. Dev log showed no hydration errors.
+
+6. FILES CHANGED IN S2C
+New: components/layout/BackLink.tsx. Modified: components/liabilities/DebtsWorkspace.tsx, components/receivables/MoneyOwedWorkspace.tsx, app/(app)/rules/page.tsx, components/goals/GoalsWorkspace.tsx, lib/domain/goals/presentation.ts, supabase/tests/core-ui/run.ts, this report.

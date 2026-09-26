@@ -1348,3 +1348,7 @@ Local-only migration `20261002090000_create_budget_domain.sql` (NOT pushed to Mo
 ## P0-E5-S2 — Budget production UI + Quick Add (awaiting review)
 
 /budget screen, Quick Add regrouped into Record/Plan (Budget, Goal, Commitment), Home budget card, account-menu entry. No schema change. Budget migration must be applied to Monitriq Dev (unconfirmed). Tests: budget 30, budget-ui 20. Report: docs/reports/P0-E5-S2-budget-production-ui.txt. Nothing committed.
+
+## P0-E5-S2B — Core UI completion: Goals, Debts, Money Owed (awaiting review)
+
+Production Goals / Debts (/liabilities) / Money Owed to You (/receivables) with sheets for create/set-aside/pay/recover; shared Sheet primitive; no schema change. Tests: core-ui 26. Report: docs/reports/P0-E5-S2B-core-ui-completion.txt. Nothing committed.
