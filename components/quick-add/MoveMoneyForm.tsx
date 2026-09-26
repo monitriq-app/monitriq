@@ -19,7 +19,7 @@ interface MoveMoneyFormProps {
 /**
  * Same-currency transfers use record_transfer(); cross-currency ones use
  * record_fx_transfer(), which requires the user's own two real amounts
- * (what left the source, what arrived at the destination) — Monatriq
+ * (what left the source, what arrived at the destination) — Monitriq
  * never invents or fetches a market exchange rate and applies it
  * automatically (P0-E3-S3, "no exchange engine in the UI").
  */
@@ -157,7 +157,7 @@ export function MoveMoneyForm({ buckets, balances, onBack, onClose }: MoveMoneyF
             <Input required inputMode="decimal" pattern="^\d+(\.\d+)?$" value={destinationAmount} onChange={(e) => setDestinationAmount(e.target.value)} placeholder="0.00" className="h-14 text-lg font-bold" />
             <p className="mt-1 flex items-start gap-1.5 text-xs text-text-muted">
               <Info size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
-              Enter the real amount that arrived — Monatriq never applies an exchange rate for you.
+              Enter the real amount that arrived — Monitriq never applies an exchange rate for you.
             </p>
           </div>
         ) : null}

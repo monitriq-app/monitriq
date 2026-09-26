@@ -1,4 +1,4 @@
-# Monatriq — Visual Constitution
+# Monitriq — Visual Constitution
 
 Status: Canonical. Established P0-E1-S1. Governs future UI implementation
 phases. No screens were built in that phase.
@@ -11,7 +11,7 @@ this document's own color/typography/surface/motion rules were not
 changed to build it, only wired into a token layer as §10 already
 anticipated. The approved design reference for Home lives at
 `docs/reference/01-home/` — see the P0-E3-S2 report for how it was
-audited against Stitch-vs-Monatriq authority (functional architecture
+audited against Stitch-vs-Monitriq authority (functional architecture
 wins, then the approved PNG, then the HTML/MD as structural/supporting
 reference only).
 
@@ -19,7 +19,7 @@ reference only).
 
 Expressive identity. Quiet interface.
 
-Monatriq must not look like a generic AI-generated fintech app. Stitch
+Monitriq must not look like a generic AI-generated fintech app. Stitch
 mockups (when supplied later) are a visual reference for layout, hierarchy,
 component behavior, information density, and interaction intent only —
 they are never production HTML and must never be pasted directly into the
@@ -46,7 +46,7 @@ palette (from the brand pack, for reference — the CSS variables in
 | Mist Grey | `#D8DEE4` |
 | Ink | `#0B172A` |
 
-The brand gradient (`--monatriq-gradient-mark`) belongs to the logo mark,
+The brand gradient (`--monitriq-gradient-mark`) belongs to the logo mark,
 app icon, and occasional brand moments — it is not a default UI treatment
 (see §5).
 

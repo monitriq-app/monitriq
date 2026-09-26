@@ -1,0 +1,232 @@
+P0-E3-S1B — CONTROLLED PRODUCT REBRAND: MONATRIQ → MONITRIQ
+================================================================
+
+1. PHASE
+P0-E3-S1B — Controlled Product Rebrand (identity-only).
+
+2. STATUS
+COMPLETE. Every completion-gate condition in the brief is satisfied (see
+sections 21-34). Nothing was committed or pushed.
+
+3. OBJECTIVE
+Change the product identity from Monatriq to Monitriq — name, approved
+brand artwork, metadata, package identity, current documentation — while
+preserving all financial architecture, schema, RLS, calculations, user
+data, and historical evidence.
+
+4. REPO STATE BEFORE WORK
+`git rev-parse --show-toplevel` = /Users/datamatics/Monatriq. The working
+tree held legitimate uncommitted work from the Decisions/Rules phases
+(P0-E4-S3 → S3C: new decisions/rules components, deleted foundation-level
+components, presentation.ts, tests, docs) plus the newly supplied,
+untracked pack `docs/reference/monitriq brand/`. All of it was preserved
+(no reset/stash/checkout/commit/push).
+
+5. BASELINE REGRESSION (before any edit, fresh local `supabase db reset`)
+RLS/Profile 20, Money 48, Currency 11, Assets 114, Receivables 27,
+Liabilities 25, Goals 56, Rules/Obligations 86, Decisions 90, Financial
+Position 33, Home-readiness 30, Home 31 = 571/571. Lint, app typecheck,
+harness typecheck, production build: all clean.
+
+6. TOTAL OLD-NAME OCCURRENCES FOUND
+101 files / 392 matching lines (content) + 24 filenames (10 under
+public/brand, 14 under docs/reference/brand/png|svg). Audit created BEFORE
+edits: docs/rebrand/MONATRIQ_TO_MONITRIQ_AUDIT.md.
+
+7. AUDIT CLASSIFICATION TOTALS (lines)
+A rename current identity: app/components/site 45 (+ presentation.ts copy
+1), living docs 29, BRAND.md 11, .env.example prose 1.
+B rename technical identifier: CSS token prefix 36 (3 files), package
+identity 3, public/brand asset files 10.
+C preserve historical: docs/reports 175 (21 reports), brand archive
+manifest 17, BUILD_STATE phase narratives, test comments.
+D preserve infrastructure/path: migrations 21, supabase/config.toml 1,
+fixture email domain, "Monatriq Dev", repo path mentions.
+E review required: 0 outstanding.
+
+8. APPROVED BRAND-PACK LOCATION
+`docs/reference/monitriq brand/` — the supplied pack, untouched (16
+files; every production copy verified byte-identical with `cmp`).
+
+9. PRODUCTION BRAND ASSETS INSTALLED (public/brand/)
+monitriq-logo-primary-transparent.svg, monitriq-logo-white-transparent.svg,
+monitriq-logo-horizontal-transparent.svg,
+monitriq-logo-horizontal-white-transparent.svg,
+monitriq-mark-transparent.svg, monitriq-app-icon-192.png,
+monitriq-app-icon-512.png, favicon-32.png, favicon-64.png.
+Pack variants NOT copied to public (remain in the reference directory):
+PNG logo equivalents, monitriq-app-icon-1024.png, README.txt.
+
+10. FILES RENAMED
+public/brand/monatriq-* (8 files), favicon.svg and apple-touch-icon.png
+were REMOVED (old artwork) and replaced by the pack files above; git
+history and docs/reference/brand/ (archive) retain the old artwork. No
+source file was renamed. The old-name artwork under docs/reference/brand/
+png|svg keeps its filenames as an archived record.
+
+11. FILES MODIFIED
+Code/config: lib/config/site.ts, app/layout.tsx, app/manifest.ts,
+components/brand/BrandLogo.tsx, components/layout/{HeaderBrand,
+ConfigurationNotice}.tsx, app/(auth)/{login,signup}/page.tsx,
+app/(app)/{money,home,assets,rules,decisions}/page.tsx, components/home/*
+(7), components/quick-add/* (2), components/rules/* (3),
+components/decisions/DecisionReviewSheet.tsx, components/assets/* (2),
+components/ui/MoreDetails.tsx, app/globals.css, lib/styles/tokens.css,
+package.json, package-lock.json, .env.example (line 1 only),
+lib/domain/decisions/presentation.ts (1 copy string),
+supabase/tests/decisions/run.ts (1 pinned copy string).
+Docs: PRODUCT_DEFINITION, FINANCIAL_DOMAIN_MODEL, MULTI_CURRENCY_MODEL,
+SECURITY_AND_RLS_PRINCIPLES, SYSTEM_ARCHITECTURE, VISUAL_CONSTITUTION,
+BUILD_STATE, reference/brand/{BRAND.md, brand-tokens.css}.
+New: docs/rebrand/MONATRIQ_TO_MONITRIQ_AUDIT.md, this report,
+public/brand pack files.
+
+12. HISTORICAL FILES DELIBERATELY PRESERVED
+All 21 files under docs/reports/ (including the in-progress
+P0-E4-S3-decisions-production-ui.txt, authored under the former name);
+BUILD_STATE.md phase narratives; docs/reference/brand/manifest.json and
+the archived former-name png/svg artwork; migration comments; test
+comments/descriptions.
+
+13. PACKAGE METADATA CHANGES
+package.json `name` and package-lock.json's two `name` fields:
+monatriq → monitriq. Full `git diff` of both files is exactly those 3
+lines. No dependency, version, or lockfile-graph change.
+
+14. MANIFEST CHANGES
+Built manifest verified over HTTP: name "Monitriq", short_name
+"Monitriq", description unchanged ("Know today. Go further."), icons
+/brand/monitriq-app-icon-192.png and -512.png.
+
+15. ROOT/SITE METADATA CHANGES
+siteConfig.name = "Monitriq" (drives <title> default, "%s · Monitriq"
+template, manifest). Verified served <title>Monitriq</title>. Favicons:
+favicon-32.png/favicon-64.png; apple-touch-icon → monitriq-app-icon-192.png
+(the pack ships no favicon.svg and no apple-touch-icon file; supplied
+files were used as-is, nothing resized or derived).
+
+16. AUTH BRANDING CHANGES
+Login "Sign in to your Monitriq workspace"; signup "Set up your Monitriq
+workspace." Auth layout logo renders the supplied horizontal logo.
+Verified in served /login HTML.
+
+17. BRANDLOGO CHANGES
+Old version rendered the gradient mark plus the wordmark TYPED AS TEXT
+("Monatriq" in a span). The brief forbids typing the wordmark, so the
+wordmark variant now renders the supplied horizontal logo files: the
+white-wordmark SVG on the dark theme and the dark-wordmark SVG on the
+light theme, switched purely with CSS on the existing `data-theme`
+attribute (generated rules verified in the built CSS). Mark variant uses
+monitriq-mark-transparent.svg. alt text "Monitriq". No artwork was
+recreated or altered.
+
+18. FAVICON / APP-ICON CHANGES
+See 15. App icons 192/512 in manifest and Apple touch icon are supplied
+pack files. Assets served 200 from the built app.
+
+19. REPOSITORY-PATH STATUS
+/Users/datamatics/Monatriq — NOT renamed (deferred operational task).
+
+20. SUPABASE-PROJECT STATUS
+Ref mvnwrkfcszazqqccmmxq unchanged, not touched, no remote command run.
+Dashboard name "Monatriq Dev" and supabase/config.toml project_id
+("Monatriq", local Docker identity) unchanged — deferred.
+
+21. MIGRATIONS MODIFIED: 0 (SHA-1 of all 16 files identical to the
+pre-edit capture; `git status supabase/migrations` empty).
+22. MIGRATIONS CREATED: 0.
+23. SCHEMA CHANGES: 0.
+24. RLS CHANGES: 0.
+
+25. FINANCIAL-CODE CHANGES
+lib/domain: exactly one string in lib/domain/decisions/presentation.ts
+(a user-facing "Set your Minimum Cash to Keep … before Monitriq can
+calculate this." message). No formula, repository, aggregate, or type
+changed. Three lib/domain comments (rules/types.ts, assets/
+category-meta.ts, assets/capabilities.ts) still say Monatriq and were
+deliberately left to keep financial-domain invariance. The one test
+assertion that pins the presentation string was updated with it (a copy
+expectation, not a financial value).
+
+26. FINANCIAL CALCULATION CHANGES: 0.
+27. USER-DATA CHANGES: 0 rows (no UPDATE/INSERT/DELETE over product data;
+only the two local `supabase db reset` runs, which rebuild the LOCAL
+disposable test database from migrations).
+
+28. REMAINING "MONATRIQ" MATCHES AND JUSTIFICATION
+After implementation (excluding the new pack): 65 files / 295 lines.
+- docs/reports/* (21 files), supabase/migrations/* (16 files, 20 SQL
+  comments + 1 catalog COMMENT ON string), supabase/tests/* (comments,
+  fixture domain monatriq.test): historical / immutable / test identity.
+- docs/project/BUILD_STATE.md (35): historical phase narratives, "Monatriq
+  Dev"/`supabase_db_Monatriq` infrastructure names, and the new rebrand
+  entry naming the former name.
+- docs/reference/brand/manifest.json (17) + png|svg filenames: archived
+  former-name artwork pack.
+- docs/rebrand/… audit (17), PRODUCT_DEFINITION (4), BRAND.md (2):
+  deliberate historical-note text.
+- supabase/config.toml, next.config.ts comment, SECURITY doc line 106,
+  SYSTEM_ARCHITECTURE tree root, .env.example line 9 ("Monatriq Dev"):
+  filesystem path / Docker identity / dashboard project name.
+- lib/domain (3 comments): invariance.
+- .next build sourcemaps (4): embed only those same 3 preserved
+  lib/domain comments (generated content).
+No unexplained match remains. The old public/brand artwork files no
+longer exist on disk.
+NOTE (schema metadata): migration 20260924100000 line 425 stores
+"…What information did Monatriq use…" in a `COMMENT ON` string in the
+database catalog. It is not rendered by any product surface, so it does
+not affect product presentation (not a §5 stop condition); changing it
+needs a migration, which is prohibited — deferred.
+
+29. REGRESSION-TEST RESULTS
+Fresh local reset → 571/571, output IDENTICAL to baseline (20/48/11/114/
+27/25/56/86/90/33/30/31). Zero expected-value updates.
+
+30. RLS / ADVERSARIAL-TEST RESULTS
+RLS/Profile 20/20 and every domain suite's cross-tenant/anonymous tests
+pass unchanged.
+
+31. LINT: clean.
+32. APP TYPECHECK: clean.
+33. TEST-HARNESS TYPECHECK: clean.
+34. PRODUCTION BUILD: clean (Next 16.3.6 Turbopack, 19 static pages,
+    routes unchanged). Served build verified: <title>, manifest, icons,
+    logo <img> sources, and asset URLs all Monitriq/200.
+
+35. GIT DIFF SUMMARY
+Rebrand changes are limited to the files in section 11. The overall
+working-tree diff also still contains the uncommitted prior-phase work
+(Decisions/Rules UI). Migrations and lib/domain (except the one string)
+untouched; no dependency change.
+
+36. GIT STATUS
+Uncommitted, nothing staged, nothing pushed. Deleted: 10 old
+public/brand files. New (untracked): docs/rebrand/, docs/reference/
+monitriq brand/, public/brand pack files, this report.
+
+37. RISKS
+- No browser/visual verification was possible in this session; logo
+  sizing was left at the previous class sizes (h-7 auth, h-8 landing,
+  h-5 header mark). The supplied horizontal logo includes the mark, so it
+  may read smaller than the old typed lockup — check visually.
+- The supplied SVGs are image-preserving wrappers (0.16–0.88 MB each).
+  The header mark SVG is ~424 KB loaded on every page (cacheable);
+  consider using the pack's PNG mark if page weight matters.
+- The pack has no favicon.svg / apple-touch-icon; 32/64 PNG favicons and
+  the 192 app icon are used instead (no derived files created).
+- CSS token prefix rename touched docs/reference/brand/brand-tokens.css
+  (values unchanged); verified no undefined variable.
+- Anyone with an old installed PWA will see the old name/icon until it is
+  reinstalled or updated.
+
+38. DEFERRED INFRASTRUCTURE CLEANUP
+Rename repo directory; rename Supabase dashboard project "Monatriq Dev";
+consider local `project_id`/Docker names; fixture email domain; DB
+catalog COMMENT string (needs its own reviewed migration if ever wanted);
+three lib/domain comments.
+
+39. RECOMMENDED NEXT PHASE
+Manual browser/PWA review of the rebrand (auth, header, favicon, install
+metadata, Light/Dark logo swap), then the next product phase the user
+selects. No product work was started here.

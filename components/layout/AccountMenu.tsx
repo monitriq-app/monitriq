@@ -11,6 +11,7 @@ interface AccountMenuProps {
 }
 
 const FOUNDATION_ROUTES = [
+  { href: "/budget", label: "Budget" },
   { href: "/financial-position", label: "Financial Position" },
   { href: "/rules", label: "Rules & Obligations" },
   { href: "/receivables", label: "Receivables" },

@@ -13,7 +13,7 @@ interface GreetingHeaderProps {
  * duplicated brand-name pill next to the subtitle (would triple the
  * brand name on one screen with no real data behind the third instance);
  * see the P0-E3-S2 report's strict-replication addendum for the full list
- * of reference elements without a real Monatriq equivalent. The ambient
+ * of reference elements without a real Monitriq equivalent. The ambient
  * corner glow (P0-E3-S2 gap-audit item [2]) is purely decorative — a
  * static, very low-opacity (5%) accent-colored blur, never animated,
  * never a glass/backdrop-blur effect — kept subtle enough to read
@@ -30,7 +30,7 @@ export function GreetingHeader({ preferredName, timeOfDay }: GreetingHeaderProps
         <div>
           <div className="flex items-center gap-1.5">
             <span className="inline-block h-1.5 w-1.5 rounded-full bg-accent-primary" aria-hidden="true" />
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Monatriq</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Monitriq</span>
           </div>
           <h1 className="mt-0.5 text-[22px] font-semibold tracking-tight text-text-primary">
             {salutation}

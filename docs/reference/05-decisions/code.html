@@ -1,0 +1,729 @@
+<!DOCTYPE html><html class="dark" lang="en"><head><meta charset="utf-8"><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"><meta content="mobile_tab" name="shell-type"><link href="https://fonts.googleapis.com" rel="preconnect"><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@500;600;700;800&amp;family=JetBrains+Mono:wght@500;700&amp;display=swap" rel="stylesheet"><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#0f131c;color:#dfe2ee;}body{overscroll-behavior:none;-webkit-tap-highlight-color:transparent;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-container-low": "#181c24", "secondary-container": "#ee9800", "error": "#ffb4ab", "on-tertiary-fixed": "#001f26", "primary-fixed-dim": "#4edea3", "inverse-surface": "#dfe2ee", "tertiary-fixed-dim": "#4cd7f6", "tertiary-container": "#00b2d0", "outline": "#86948a", "surface-bright": "#353942", "on-secondary-fixed": "#2a1700", "tertiary": "#4cd7f6", "surface-container-lowest": "#0a0e16", "outline-variant": "#3c4a42", "secondary": "#ffb95f", "surface-variant": "#31353e", "background": "#0f131c", "surface-dim": "#0f131c", "on-error": "#690005", "error-container": "#93000a", "on-surface-variant": "#bbcabf", "on-background": "#dfe2ee", "primary": "#4edea3", "on-surface": "#dfe2ee", "surface-tint": "#4edea3", "surface-container": "#1c2028", "on-primary-fixed": "#002113", "surface-container-highest": "#31353e", "surface-container-high": "#262a33", "inverse-on-surface": "#2c3039", "inverse-primary": "#006c49", "on-primary-fixed-variant": "#005236", "primary-fixed": "#6ffbbe", "secondary-fixed-dim": "#ffb95f", "on-error-container": "#ffdad6", "on-tertiary-container": "#003f4b", "on-tertiary-fixed-variant": "#004e5c", "on-secondary-fixed-variant": "#653e00", "on-primary-container": "#00422b", "primary-container": "#10b981", "on-secondary": "#472a00", "on-tertiary": "#003640", "on-primary": "#003824", "secondary-fixed": "#ffddb8", "surface": "#0f131c", "on-secondary-container": "#5b3800", "tertiary-fixed": "#acedff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "space-xs": "0.25rem", "margin": "1rem", "space-sm": "0.5rem", "gutter": "1rem", "space-xl": "2rem", "space-lg": "1.5rem", "space-md": "1rem" }, "fontFamily": { "display-lg-mobile": ["Plus Jakarta Sans"], "metric-body": ["Inter"], "label-lg": ["Inter"], "body-md": ["Inter"], "title-md": ["Inter"], "headline-md": ["Plus Jakarta Sans"], "body-lg": ["Inter"], "metric-headline": ["Inter"], "headline-lg": ["Plus Jakarta Sans"], "headline-sm": ["Plus Jakarta Sans"], "display-lg": ["Plus Jakarta Sans"], "label-sm": ["Inter"], "body-sm": ["Inter"] }, "fontSize": { "display-lg-mobile": ["32px", {"lineHeight": "38px", "letterSpacing": "-0.025em", "fontWeight": "700"}], "metric-body": ["15px", {"lineHeight": "20px", "letterSpacing": "-0.01em", "fontWeight": "500"}], "label-lg": ["13px", {"lineHeight": "16px", "letterSpacing": "0.02em", "fontWeight": "600"}], "body-md": ["14px", {"lineHeight": "20px", "letterSpacing": "0em", "fontWeight": "400"}], "title-md": ["16px", {"lineHeight": "22px", "letterSpacing": "-0.01em", "fontWeight": "600"}], "headline-md": ["22px", {"lineHeight": "28px", "letterSpacing": "-0.015em", "fontWeight": "600"}], "body-lg": ["16px", {"lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "400"}], "metric-headline": ["28px", {"lineHeight": "32px", "letterSpacing": "-0.02em", "fontWeight": "600"}], "headline-lg": ["28px", {"lineHeight": "34px", "letterSpacing": "-0.02em", "fontWeight": "600"}], "headline-sm": ["18px", {"lineHeight": "24px", "letterSpacing": "-0.01em", "fontWeight": "600"}], "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.03em", "fontWeight": "700"}], "label-sm": ["11px", {"lineHeight": "14px", "letterSpacing": "0.04em", "fontWeight": "600"}], "body-sm": ["12px", {"lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "400"}] } } } }</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head><body class="bg-surface font-body-md text-on-surface antialiased flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 pt-safe bg-surface/85 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.18)]"><div class="h-20 px-margin flex items-center justify-between"><div class="flex flex-col justify-center"><div class="flex items-center gap-1.5 mb-0.5"><div class="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></div><span class="font-['JetBrains_Mono'] text-[10px] tracking-[0.2em] uppercase text-primary font-bold">CAPITAL COMPASS</span></div><h1 class="font-headline-md text-headline-md font-bold tracking-tight text-on-surface leading-tight">Decisions</h1><p class="font-body-sm text-body-sm text-on-surface-variant font-medium leading-none mt-0.5">See the impact before you commit.</p></div><div class="flex items-center gap-space-sm"><button aria-label="Notifications" class="relative w-11 h-11 rounded-full flex items-center justify-center text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-colors"><span class="material-symbols-outlined text-[22px]">notifications</span><span class="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-primary ring-2 ring-surface"></span></button><button aria-label="Account profile" class="w-11 h-11 flex items-center justify-center"><div class="w-8 h-8 rounded-full bg-primary flex items-center justify-center"><span class="material-symbols-outlined text-on-primary text-[18px]">person</span></div></button></div></div></header><main class="flex-1 flex flex-col relative w-full pt-20 pb-24 bg-surface"><div class="flex flex-col w-full px-margin space-y-space-md">
+<!-- DECISION POSITION SNAPSHOT -->
+<section class="bg-surface-container rounded-xl p-space-md shadow-md space-y-space-sm">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<h2 class="font-headline-sm text-headline-sm text-on-surface">DECISION POSITION</h2>
+<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-surface-container-high text-tertiary font-label-sm text-label-sm">
+          Based on Tracked Data
+        </span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Base Currency: NGN</span>
+</div>
+<!-- 4-Card Context Grid -->
+<div class="grid grid-cols-2 gap-space-sm pt-1">
+<!-- Card 1 -->
+<div class="bg-surface-container-low rounded-lg p-space-sm flex flex-col justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Liquid Cash</span>
+<div class="mt-1">
+<span class="font-metric-headline text-metric-headline text-on-surface tracking-tight">₦840,000</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Across tracked cash</p>
+</div>
+</div>
+<!-- Card 2 -->
+<div class="bg-surface-container-low rounded-lg p-space-sm flex flex-col justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Protected Cash</span>
+<div class="mt-1">
+<span class="font-title-md text-title-md text-on-surface-variant font-semibold tracking-tight">Not configured</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Set your protected cash rules</p>
+</div>
+</div>
+<!-- Card 3 -->
+<div class="bg-surface-container-low rounded-lg p-space-sm flex flex-col justify-between">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Safe to Deploy</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[14px]">shield</span>
+</div>
+<div class="mt-1">
+<span class="font-title-md text-title-md text-on-surface-variant font-semibold tracking-tight">Not calculated</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Set your protected cash rules to calculate this</p>
+</div>
+</div>
+<!-- Card 4 -->
+<div class="bg-surface-container-low rounded-lg p-space-sm flex flex-col justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Upcoming Obligations</span>
+<div class="mt-1">
+<span class="font-title-md text-title-md text-on-surface-variant font-semibold tracking-tight">Not set</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">No upcoming obligations recorded</p>
+</div>
+</div>
+</div>
+<!-- Explanatory Micro-note with Settings link -->
+<div class="flex items-center justify-between pt-1 text-on-surface-variant font-body-sm text-body-sm">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary">info</span>
+<span>Establishes financial room before deploying capital.</span>
+</div>
+<button class="text-primary hover:underline font-label-sm text-label-sm flex items-center gap-1" onclick="switchTab('rules')">
+<span>Set Financial Rules</span>
+<span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+</button>
+</div>
+</section>
+<!-- TAB CONTROLLER -->
+<div class="w-full overflow-x-auto no-scrollbar py-0.5">
+<div class="flex items-center gap-2 min-w-max bg-surface-container-lowest p-1 rounded-full">
+<button class="px-3.5 py-1.5 rounded-full font-label-lg text-label-lg transition-all bg-primary text-on-primary font-bold shadow-sm" id="tab-btn-active" onclick="switchTab('active')">
+        Active (0)
+      </button>
+<button class="px-3.5 py-1.5 rounded-full font-label-lg text-label-lg transition-all text-on-surface-variant hover:text-on-surface" id="tab-btn-test" onclick="switchTab('test')">
+        Test New
+      </button>
+<button class="px-3.5 py-1.5 rounded-full font-label-lg text-label-lg transition-all text-on-surface-variant hover:text-on-surface" id="tab-btn-compare" onclick="switchTab('compare')">
+        Compare Scenarios
+      </button>
+<button class="px-3.5 py-1.5 rounded-full font-label-lg text-label-lg transition-all text-on-surface-variant hover:text-on-surface" id="tab-btn-journal" onclick="switchTab('journal')">
+        Journal (0)
+      </button>
+<button class="px-3.5 py-1.5 rounded-full font-label-lg text-label-lg transition-all text-on-surface-variant hover:text-on-surface" id="tab-btn-rules" onclick="switchTab('rules')">
+        Financial Constitution
+      </button>
+</div>
+</div>
+<!-- PRIMARY TEST CTA BUTTON -->
+<button class="w-full bg-surface-container-high hover:bg-surface-bright active:scale-[0.99] transition-all p-space-md rounded-xl flex items-center justify-between text-left group shadow-lg" onclick="switchTab('test')">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center shrink-0 shadow-md">
+<span class="material-symbols-outlined text-[24px]">tune</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface group-hover:text-primary transition-colors flex items-center gap-1.5">
+          Test a Decision
+          <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Model capital, liquidity &amp; goal impact before committing.</p>
+</div>
+</div>
+</button>
+<!-- TAB PANE: ACTIVE DECISIONS & FROM YOUR ASSETS -->
+<div class="space-y-space-md" id="pane-active">
+<!-- Active Decisions Header & Truthful Empty State -->
+<div class="space-y-space-sm">
+<div class="flex items-center justify-between">
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Active Decisions</h3>
+<span class="font-label-sm text-label-sm text-on-surface-variant">0 active</span>
+</div>
+<div class="bg-surface-container rounded-xl p-space-lg text-center space-y-3 border border-outline-variant/30">
+<div class="w-10 h-10 rounded-full bg-surface-container-high mx-auto flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[22px]">inbox</span>
+</div>
+<div class="space-y-1">
+<p class="font-title-md text-title-md text-on-surface font-semibold">Nothing under review</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant max-w-xs mx-auto">Start a decision when you want to compare a purchase, investment, repair, sale or major expense.</p>
+</div>
+<button class="px-4 py-2 rounded-full bg-primary text-on-primary font-label-lg text-label-lg font-bold shadow hover:scale-[1.02] active:scale-95 transition-all inline-flex items-center gap-1.5" onclick="switchTab('test')">
+<span class="material-symbols-outlined text-[16px]">add</span>
+<span>Test a Decision</span>
+</button>
+</div>
+</div>
+<!-- SECTION: FROM YOUR ASSETS -->
+<div class="space-y-space-sm pt-2">
+<div class="flex items-center justify-between">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">From Your Assets</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Candidates ready for review based on tracked assets</p>
+</div>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-tertiary font-label-sm text-label-sm">2 Identified</span>
+</div>
+<!-- Asset Candidate 1: Audi A5 -->
+<div class="bg-surface-container rounded-xl p-space-md space-y-space-sm shadow-md transition-all">
+<div class="flex items-start justify-between">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-tertiary font-label-sm text-label-sm">Tracked Vehicle</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm">Ready for Review</span>
+</div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Audi A5 Coupe</h4>
+<p class="font-body-sm text-body-sm text-secondary font-medium">Evaluate Repair Impact</p>
+</div>
+<button class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-primary" onclick="openModal()">
+<span class="material-symbols-outlined text-[20px]">fullscreen</span>
+</button>
+</div>
+<!-- Financial Metrics Pill Matrix -->
+<div class="grid grid-cols-3 gap-2 bg-surface-container-low p-space-sm rounded-lg text-center">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Capital Required</span>
+<span class="font-metric-body text-metric-body text-on-surface font-semibold">₦800,000</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">As-Is Est. Value</span>
+<span class="font-metric-body text-metric-body text-on-surface font-semibold">≈ ₦6.0M</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Target Sale</span>
+<span class="font-metric-body text-metric-body text-primary font-semibold">₦9,000,000</span>
+</div>
+</div>
+<!-- CTA -->
+<button class="w-full py-2.5 px-space-md rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-primary font-title-md text-title-md flex items-center justify-center gap-2 transition-colors" onclick="openModal()">
+<span>Review Decision</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+<!-- Asset Candidate 2: White BMW F30 335i -->
+<div class="bg-surface-container rounded-xl p-space-md space-y-space-sm shadow-md">
+<div class="flex items-start justify-between">
+<div>
+<div class="flex items-center gap-2 mb-1">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-tertiary font-label-sm text-label-sm">Tracked Vehicle</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm">Comparison Ready</span>
+</div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface">White BMW F30 335i</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Compare Sell As-Is vs Repair</p>
+</div>
+<button class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-tertiary" onclick="switchTab('compare')">
+<span class="material-symbols-outlined text-[20px]">compare_arrows</span>
+</button>
+</div>
+<!-- Figure Matrix -->
+<div class="grid grid-cols-3 gap-2 bg-surface-container-low p-space-sm rounded-lg text-center">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">As-Is Est.</span>
+<span class="font-metric-body text-metric-body text-on-surface font-semibold">≈ ₦7.0M</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Repair Add</span>
+<span class="font-metric-body text-metric-body text-secondary font-semibold">₦1.8M</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Target Exit</span>
+<span class="font-metric-body text-metric-body text-primary font-semibold">₦9.0M</span>
+</div>
+</div>
+<button class="w-full py-2.5 px-space-md rounded-lg bg-surface-container-high hover:bg-surface-container-highest text-tertiary font-title-md text-title-md flex items-center justify-center gap-2 transition-colors" onclick="switchTab('compare')">
+<span>Open Scenario Comparison</span>
+<span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<!-- TAB PANE: TEST NEW (Decision Type Selector) -->
+<div class="hidden space-y-space-md" id="pane-test">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">What are you considering?</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Choose what you’re considering. See how this could affect your cash, assets and financial rules.</p>
+</div>
+<div class="grid grid-cols-2 gap-space-sm">
+<!-- Item 1 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors" onclick="openModal()">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[24px]">shopping_cart</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Buy an Asset</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Vehicles, land, equipment</span>
+</div>
+</button>
+<!-- Item 2 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors" onclick="openModal()">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-[24px]">store</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Invest in a Business</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Capital contributions or equity</span>
+</div>
+</button>
+<!-- Item 3 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors" onclick="openModal()">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[24px]">build</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Repair / Improve an Asset</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Repairs, refits, improvements</span>
+</div>
+</button>
+<!-- Item 4 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors" onclick="openModal()">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[24px]">sell</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Sell an Asset</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Liquidate inventory or equity</span>
+</div>
+</button>
+<!-- Item 5 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors" onclick="openModal()">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-error">
+<span class="material-symbols-outlined text-[24px]">local_mall</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Large Personal Purchase</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Major personal outlays</span>
+</div>
+</button>
+<!-- Item 6 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors" onclick="openModal()">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-secondary">
+<span class="material-symbols-outlined text-[24px]">savings</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Use Savings</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Deploy targeted savings pots</span>
+</div>
+</button>
+<!-- Item 7 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors" onclick="openModal()">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined text-[24px]">account_balance</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Take or Pay Debt</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">New borrowing or paydowns</span>
+</div>
+</button>
+<!-- Item 8 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors" onclick="openModal()">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-primary">
+<span class="material-symbols-outlined text-[24px]">rocket_launch</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Start a New Venture</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">New commercial project</span>
+</div>
+</button>
+<!-- Item 9 -->
+<button class="bg-surface-container hover:bg-surface-container-high p-space-md rounded-xl text-left flex flex-col justify-between space-y-3 transition-colors col-span-2" onclick="openModal()">
+<div class="flex items-center gap-space-md">
+<div class="w-10 h-10 rounded-lg bg-surface-container-highest flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined text-[24px]">more_horiz</span>
+</div>
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Other Decision</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Custom financial evaluation</span>
+</div>
+</div>
+</button>
+</div>
+</div>
+<!-- TAB PANE: COMPARE SCENARIOS (White BMW F30) -->
+<div class="hidden space-y-space-md" id="pane-compare">
+<div class="flex items-center justify-between">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Scenario Comparison</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Asset: White BMW F30 335i (Basis: ₦6.0M)</p>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-surface-container-high text-tertiary font-label-sm text-label-sm">Side-by-Side</span>
+</div>
+<!-- Comparative Grid Container -->
+<div class="space-y-space-sm">
+<!-- Scenario A -->
+<div class="bg-surface-container rounded-xl p-space-md space-y-space-sm shadow-md">
+<div class="flex items-center justify-between">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-tertiary font-label-sm text-label-sm uppercase">Scenario A</span>
+<span class="font-label-sm text-label-sm text-primary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">sell</span> As-Is Exit
+          </span>
+</div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Sell As-Is Today</h4>
+<div class="grid grid-cols-2 gap-2 bg-surface-container-low p-space-sm rounded-lg">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">As-Is Est. Value</span>
+<span class="font-metric-headline text-metric-headline text-on-surface font-semibold">≈ ₦7.0M</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Additional Capital</span>
+<span class="font-metric-headline text-metric-headline text-primary font-semibold">₦0</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Cost Basis</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">₦6.0M</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Potential Gross Profit</span>
+<span class="font-title-md text-title-md text-primary font-semibold">≈ ₦1,000,000</span>
+</div>
+<div class="col-span-2 border-t border-outline-variant/30 pt-1.5 flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Expected Time to Sale</span>
+<span class="font-label-sm text-label-sm text-secondary italic">Not set (Assumption required)</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-space-sm rounded-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">water_drop</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Liquidity Impact: <strong class="text-primary">≈ +₦7,000,000 cash released</strong></span>
+</div>
+</div>
+<!-- Scenario B -->
+<div class="bg-surface-container rounded-xl p-space-md space-y-space-sm shadow-md">
+<div class="flex items-center justify-between">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-secondary font-label-sm text-label-sm uppercase">Scenario B</span>
+<span class="font-label-sm text-label-sm text-secondary flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">build</span> Repair &amp; Target Sale
+          </span>
+</div>
+<h4 class="font-headline-sm text-headline-sm text-on-surface">Complete Repairs First</h4>
+<div class="grid grid-cols-2 gap-2 bg-surface-container-low p-space-sm rounded-lg">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Target Sale</span>
+<span class="font-metric-headline text-metric-headline text-on-surface font-semibold">₦9.0M</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Repair Required</span>
+<span class="font-metric-headline text-metric-headline text-error font-semibold">−₦1.8M</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Expected Final Basis</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">≈ ₦7.8M</span>
+</div>
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant block">Projected Gross Profit</span>
+<span class="font-title-md text-title-md text-primary font-semibold">≈ ₦1,200,000</span>
+</div>
+<div class="col-span-2 border-t border-outline-variant/30 pt-1.5 flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Expected Time to Sale</span>
+<span class="font-label-sm text-label-sm text-secondary italic">Not set (Assumption required)</span>
+</div>
+</div>
+<div class="bg-surface-container-lowest p-space-sm rounded-lg flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px]">build</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Liquidity Impact: <strong class="text-secondary">Requires −₦1.8M liquid cash upfront</strong></span>
+</div>
+</div>
+<!-- Synthesis Trade-Off Verdict -->
+<div class="bg-surface-container-high rounded-xl p-space-md space-y-2">
+<div class="flex items-center gap-2 text-tertiary">
+<span class="material-symbols-outlined text-[20px]">analytics</span>
+<span class="font-label-lg text-label-lg uppercase tracking-wider">The Mathematical Trade-Off</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface">
+          Repairing requires committing <strong class="text-on-surface">₦1,800,000</strong> in additional liquid capital for an estimated incremental gross upside of <strong class="text-primary">₦200,000</strong>.
+        </p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+          Incremental return on additional capital: 11.1%. Holding period duration is unmodeled until a time assumption is provided.
+        </p>
+</div>
+</div>
+</div>
+<!-- TAB PANE: JOURNAL -->
+<div class="hidden space-y-space-md" id="pane-journal">
+<div class="flex items-center justify-between">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Decision Journal</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Decisions you record will appear here so you can compare what you expected with what actually happened.</p>
+</div>
+<span class="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm">0 Recorded</span>
+</div>
+<!-- Clean Empty State -->
+<div class="bg-surface-container rounded-xl p-space-lg text-center space-y-3 border border-outline-variant/30">
+<div class="w-10 h-10 rounded-full bg-surface-container-high mx-auto flex items-center justify-center text-on-surface-variant">
+<span class="material-symbols-outlined text-[22px]">history_edu</span>
+</div>
+<div class="space-y-1">
+<p class="font-title-md text-title-md text-on-surface font-semibold">No decisions recorded yet.</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant max-w-xs mx-auto">Decisions you record will appear here so you can compare what you expected with what actually happened.</p>
+</div>
+</div>
+</div>
+<!-- TAB PANE: FINANCIAL CONSTITUTION -->
+<div class="hidden space-y-space-md" id="pane-rules">
+<div class="flex items-center justify-between">
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Financial Constitution</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Your financial rules for protecting cash, goals and investment discipline.</p>
+</div>
+<button class="px-3 py-1.5 rounded-full bg-primary text-on-primary font-label-sm text-label-sm font-bold shadow hover:scale-[1.02] active:scale-95 transition-all">
+      Configure Rules
+    </button>
+</div>
+<div class="space-y-space-sm">
+<!-- Rule 1 -->
+<div class="bg-surface-container rounded-xl p-space-md space-y-1">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface">Minimum Protected Cash</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">Not configured</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Reserve balance to safeguard against operational or personal cash shortfalls.</p>
+</div>
+<!-- Rule 2 -->
+<div class="bg-surface-container rounded-xl p-space-md space-y-1">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface">Vehicle Concentration Limit</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">Not configured</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Limits exposure to automotive inventory as a percentage of total balance sheet capital.</p>
+</div>
+<!-- Rule 3 -->
+<div class="bg-surface-container rounded-xl p-space-md space-y-1">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface">Minimum Expected Margin</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">Not configured</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Benchmark minimum projected return before deploying capital to asset reconditioning or trade.</p>
+</div>
+<!-- Rule 4 -->
+<div class="bg-surface-container rounded-xl p-space-md space-y-1">
+<div class="flex items-center justify-between">
+<span class="font-title-md text-title-md text-on-surface">Protected Goals</span>
+<span class="px-2 py-0.5 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm">Not configured</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Ring-fenced allocations for house, land or long-term funds prevented from ad-hoc usage.</p>
+</div>
+</div>
+</div>
+<!-- INTERACTIVE SIMULATION DRILLDOWN MODAL / DRAWER -->
+<div class="fixed inset-0 z-50 bg-surface-container-lowest/80 backdrop-blur-xl flex flex-col justify-end hidden" id="decision-modal">
+<div class="bg-surface-container max-h-[777px] overflow-y-auto w-full rounded-t-2xl p-margin space-y-space-md shadow-2xl">
+<!-- Modal Navigation Bar -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-tertiary font-bold tracking-wider uppercase">Decision Review</span>
+</div>
+<button class="w-8 h-8 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface" onclick="closeModal()">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Title -->
+<div>
+<h3 class="font-headline-lg text-headline-lg text-on-surface">Repair Audi A5</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Evaluate capital commitment, liquidity, and rule alignment.</p>
+</div>
+<!-- FACTS, ESTIMATES & ASSUMPTIONS (4 EXPLICIT CATEGORIES) -->
+<div class="bg-surface-container-low rounded-xl p-space-md space-y-space-sm">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Facts, Estimates &amp; Calculations</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[16px]">tune</span>
+</div>
+<div class="grid grid-cols-2 gap-3 text-sm">
+<!-- Category 1: Tracked Fact -->
+<div class="p-2 rounded bg-surface-container-lowest space-y-1">
+<div class="flex items-center justify-between">
+<span class="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded font-label-sm font-semibold uppercase">Tracked Fact</span>
+</div>
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Current Cost Basis</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">₦7,000,000</span>
+</div>
+<div class="pt-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Liquid Cash in Hand</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">₦840,000</span>
+</div>
+</div>
+<!-- Category 2: User Estimate -->
+<div class="p-2 rounded bg-surface-container-lowest space-y-1">
+<div class="flex items-center justify-between">
+<span class="text-[10px] bg-secondary-container/20 text-secondary px-1.5 py-0.5 rounded font-label-sm font-semibold uppercase">User Estimate</span>
+</div>
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Repair Remaining</span>
+<span class="font-title-md text-title-md text-secondary font-semibold">₦800,000</span>
+</div>
+<div class="pt-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Target Sale / As-Is Est</span>
+<span class="font-title-md text-title-md text-primary font-semibold">₦9.0M <span class="text-on-surface-variant font-normal text-body-sm">(≈ ₦6.0M)</span></span>
+</div>
+</div>
+<!-- Category 3: User Assumption -->
+<div class="p-2 rounded bg-surface-container-lowest space-y-1">
+<div class="flex items-center justify-between">
+<span class="text-[10px] bg-tertiary-container/20 text-tertiary px-1.5 py-0.5 rounded font-label-sm font-semibold uppercase">User Assumption</span>
+</div>
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Expected Time to Sale</span>
+<span class="font-body-sm text-body-sm text-secondary font-medium italic block pt-1">Not set</span>
+<span class="text-[11px] text-on-surface-variant">Assumption required</span>
+</div>
+</div>
+<!-- Category 4: Derived Calculation -->
+<div class="p-2 rounded bg-surface-container-lowest space-y-1">
+<div class="flex items-center justify-between">
+<span class="text-[10px] bg-surface-container-highest text-on-surface-variant px-1.5 py-0.5 rounded font-label-sm font-semibold uppercase">Derived Calculation</span>
+</div>
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Exp. Final Basis</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">₦7,800,000</span>
+</div>
+<div class="pt-1">
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Gross Margin / Cash Left</span>
+<span class="font-title-md text-title-md text-primary font-semibold">₦1.2M <span class="text-on-surface-variant font-normal text-body-sm">(₦40K left)</span></span>
+</div>
+</div>
+</div>
+</div>
+<!-- WHAT CHANGES (Financial Impact Matrix) -->
+<div class="space-y-2">
+<h4 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface">What Changes in Your Position</h4>
+<div class="space-y-2">
+<!-- Row 1 -->
+<div class="flex items-center justify-between p-space-sm rounded-lg bg-surface-container-low">
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Liquid Cash Balance</span>
+<span class="font-title-md text-title-md text-error">₦840,000 → ₦40,000</span>
+</div>
+<span class="px-2 py-1 rounded bg-error-container/20 text-error font-label-sm text-label-sm font-semibold">−₦800,000</span>
+</div>
+<!-- Row 2: Concentration Logic Distinction -->
+<div class="p-space-sm rounded-lg bg-surface-container-low space-y-1">
+<div class="flex items-center justify-between">
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Deployed Capital Concentration</span>
+<span class="font-title-md text-title-md text-tertiary">Vehicle Cost Basis: ₦7.0M → ₦7.8M</span>
+</div>
+<span class="px-2 py-1 rounded bg-surface-container-highest text-tertiary font-label-sm text-label-sm font-semibold">+₦800,000</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant border-t border-outline-variant/30 pt-1">
+Spending ₦800K repair increases cost basis concentration, not vehicle market value until re-estimated.
+</p>
+</div>
+<!-- Row 3 -->
+<div class="flex items-center justify-between p-space-sm rounded-lg bg-surface-container-low">
+<div>
+<span class="font-body-sm text-body-sm text-on-surface-variant block">Projected Gross Margin</span>
+<span class="font-title-md text-title-md text-primary">₦9.0M − ₦7.8M Basis</span>
+</div>
+<span class="px-2 py-1 rounded bg-primary/20 text-primary font-label-sm text-label-sm font-semibold">≈ +₦1,200,000 (15.4%)</span>
+</div>
+</div>
+</div>
+<!-- FINANCIAL CONSTITUTION CHECK (OBJECTIVE STATUSES) -->
+<div class="space-y-2">
+<h4 class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface">Financial Constitution Check</h4>
+<div class="space-y-1.5">
+<!-- Rule 1 -->
+<div class="p-space-sm rounded-lg bg-surface-container-low flex items-center justify-between">
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Protected Cash Rule</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Deploying ₦800K leaves ₦40K liquid cash</span>
+</div>
+<span class="px-2 py-1 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm font-semibold">Not Configured</span>
+</div>
+<!-- Rule 2 -->
+<div class="p-space-sm rounded-lg bg-surface-container-low flex items-center justify-between">
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Capital Concentration Limit</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Deployed Capital vs Asset Value ratio unconfigured</span>
+</div>
+<span class="px-2 py-1 rounded-full bg-secondary-container/20 text-secondary font-label-sm text-label-sm font-semibold">Insufficient Data</span>
+</div>
+<!-- Rule 3 -->
+<div class="p-space-sm rounded-lg bg-surface-container-low flex items-center justify-between">
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Minimum Projected Margin</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Projected 15.4% return on final basis</span>
+</div>
+<span class="px-2 py-1 rounded-full bg-surface-container-highest text-on-surface-variant font-label-sm text-label-sm font-semibold">Not Configured</span>
+</div>
+<!-- Rule 4 -->
+<div class="p-space-sm rounded-lg bg-surface-container-low flex items-center justify-between">
+<div>
+<span class="font-title-md text-title-md text-on-surface block">Goal Protection (House Fund)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">No direct draw required from goal funds</span>
+</div>
+<span class="px-2 py-1 rounded-full bg-surface-container-highest text-tertiary font-label-sm text-label-sm font-semibold">No Direct Impact</span>
+</div>
+</div>
+</div>
+<!-- STRESS TEST (WORST-CASE VIEW) -->
+<div class="space-y-space-sm bg-surface-container-low p-space-md rounded-xl">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[20px]">compress</span>
+<h4 class="font-title-md text-title-md text-on-surface">Worst-Case Stress Test</h4>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Stress view, not forecast</span>
+</div>
+<!-- Stress Toggle 1 -->
+<div class="flex items-center justify-between py-1">
+<div>
+<span class="font-body-sm text-body-sm text-on-surface block">Repairs Overrun +25% (+₦200K)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Final basis: ₦8.0M • Liquid cash: -₦160K deficit</span>
+</div>
+<input checked="" class="w-5 h-5 accent-secondary rounded bg-surface-container-high" id="stress-overrun" type="checkbox">
+</div>
+<!-- Stress Toggle 2 -->
+<div class="flex items-center justify-between py-1">
+<div>
+<span class="font-body-sm text-body-sm text-on-surface block">Sale Price 10% Discount (₦8.1M)</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Gross margin compresses from ₦1.2M to ₦100K</span>
+</div>
+<input class="w-5 h-5 accent-secondary rounded bg-surface-container-high" id="stress-discount" type="checkbox">
+</div>
+</div>
+<!-- YOUR DECISION RECORDING -->
+<div class="space-y-space-sm bg-surface-container-high p-space-md rounded-xl">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Your Decision</span>
+<span class="font-label-sm text-label-sm text-tertiary">Select Action</span>
+</div>
+<div class="grid grid-cols-4 gap-1.5">
+<button class="py-2.5 rounded-lg bg-surface-container hover:bg-primary hover:text-on-primary transition-colors font-label-sm text-label-sm text-on-surface text-center" onclick="setDecision('Proceed')">
+            Proceed
+          </button>
+<button class="py-2.5 rounded-lg bg-primary text-on-primary font-bold font-label-sm text-label-sm text-center" onclick="setDecision('Wait')">
+            Wait
+          </button>
+<button class="py-2.5 rounded-lg bg-surface-container hover:bg-error hover:text-on-error transition-colors font-label-sm text-label-sm text-on-surface text-center" onclick="setDecision('Decline')">
+            Decline
+          </button>
+<button class="py-2.5 rounded-lg bg-surface-container hover:bg-tertiary hover:text-on-tertiary transition-colors font-label-sm text-label-sm text-on-surface text-center" onclick="setDecision('Keep Reviewing')">
+            Keep Reviewing
+          </button>
+</div>
+<div class="space-y-1.5 pt-1">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">calendar_today</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Review Again:</span>
+<input class="bg-surface-container-lowest text-on-surface text-body-sm px-2 py-1 rounded font-body-sm outline-none" placeholder="Optional date" type="text" value="Oct 15, 2024">
+</div>
+<input class="w-full bg-surface-container-lowest text-on-surface text-body-sm p-2 rounded outline-none placeholder:text-on-surface-variant" placeholder="Reason / Note (e.g. Wait until liquid buffer increases)..." type="text">
+</div>
+<div class="bg-surface-container-lowest p-2 rounded flex items-center justify-between" id="decision-status-banner">
+<span class="font-label-sm text-label-sm text-on-surface">Choice: <strong class="text-secondary" id="active-choice-label">Wait</strong></span>
+<span class="font-label-sm text-label-sm text-tertiary">Review: Oct 15, 2024</span>
+</div>
+<button class="w-full py-3 rounded-full bg-primary text-on-primary font-headline-sm text-headline-sm font-bold shadow-md hover:scale-[1.01] active:scale-95 transition-all" onclick="closeModal()">
+          Save Decision
+        </button>
+</div>
+</div>
+</div>
+</div>
+<!-- Vanilla JS Tab & Modal Controller -->
+<script>
+  function switchTab(tabKey) {
+    const tabs = ['active', 'test', 'compare', 'journal', 'rules'];
+    tabs.forEach(t => {
+      const pane = document.getElementById('pane-' + t);
+      const btn = document.getElementById('tab-btn-' + t);
+      if (pane) {
+        if (t === tabKey) {
+          pane.classList.remove('hidden');
+        } else {
+          pane.classList.add('hidden');
+        }
+      }
+      if (btn) {
+        if (t === tabKey) {
+          btn.className = "px-3.5 py-1.5 rounded-full font-label-lg text-label-lg transition-all bg-primary text-on-primary font-bold shadow-sm";
+        } else {
+          btn.className = "px-3.5 py-1.5 rounded-full font-label-lg text-label-lg transition-all text-on-surface-variant hover:text-on-surface";
+        }
+      }
+    });
+  }
+
+  function openModal() {
+    const modal = document.getElementById('decision-modal');
+    if (modal) modal.classList.remove('hidden');
+  }
+
+  function closeModal() {
+    const modal = document.getElementById('decision-modal');
+    if (modal) modal.classList.add('hidden');
+  }
+
+  function setDecision(choice) {
+    const label = document.getElementById('active-choice-label');
+    if (label) label.textContent = choice;
+  }
+</script></main><nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface-container-lowest/90 backdrop-blur-xl shadow-[0_-4px_24px_rgba(0,0,0,0.35)]" data-active-classes="text-primary font-semibold"><div class="relative flex items-center justify-between h-16 px-space-xs max-w-md mx-auto"><a class="flex-1 flex flex-col items-center justify-center h-full text-on-surface-variant hover:text-on-surface transition-colors" data-path="overview" href="#"><span class="material-symbols-outlined text-[22px]">grid_view</span><span class="font-label-sm text-label-sm mt-1">Home</span></a><a class="flex-1 flex flex-col items-center justify-center h-full text-on-surface-variant hover:text-on-surface transition-colors" data-path="cash-flow" href="#"><span class="material-symbols-outlined text-[22px]">account_balance_wallet</span><span class="font-label-sm text-label-sm mt-1">Money</span></a><div class="flex-1 flex flex-col items-center justify-center"><a aria-label="Quick Action" class="relative -top-3 w-12 h-12 rounded-full bg-primary text-on-primary flex items-center justify-center shadow-[0_4px_20px_rgba(16,185,129,0.35)] hover:scale-105 active:scale-95 transition-transform" data-path="quick-action-modal" href="#"><span class="material-symbols-outlined text-[26px]">add</span></a></div><a class="flex-1 flex flex-col items-center justify-center h-full text-on-surface-variant hover:text-on-surface transition-colors" data-path="holdings-ledger" href="#"><span class="material-symbols-outlined text-[22px]">explore</span><span class="font-label-sm text-label-sm mt-1">Assets</span></a><a aria-current="page" class="flex-1 flex flex-col items-center justify-center h-full transition-colors text-primary font-semibold" data-path="decision-engine" href="#"><span class="material-symbols-outlined text-[22px]">tune</span><span class="font-label-sm text-label-sm mt-1">Decisions</span><span class="w-1 h-1 rounded-full bg-primary mt-0.5"></span></a><a class="flex-1 flex flex-col items-center justify-center h-full text-on-surface-variant hover:text-on-surface transition-colors" data-path="strategic-goals" href="#"><span class="material-symbols-outlined text-[22px]">flag</span><span class="font-label-sm text-label-sm mt-1">Goals</span></a></div></nav></body></html>

@@ -12,7 +12,7 @@ export default function LandingPage() {
 
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-8 bg-background px-4 text-center">
-      <BrandLogo variant="wordmark" className="h-8 w-auto" />
+      <BrandLogo variant="wordmark" className="h-10 w-auto" />
       <p className="max-w-md text-text-secondary">{siteConfig.description}</p>
       <div className="flex gap-3">
         <Link href="/login">

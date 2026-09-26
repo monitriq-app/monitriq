@@ -1,4 +1,4 @@
-# Monatriq — Multi-Currency Model
+# Monitriq — Multi-Currency Model
 
 Status: Canonical. Established P0-E2-S2 (Money), hardened P0-E2-S3
 (comprehensive registry + Assets). This document is the implementation
@@ -26,7 +26,7 @@ room than a section there.
   reporting currency does not constrain which currencies their buckets or
   assets hold — see §2.
 
-Monatriq is multi-currency from day one: NGN is one supported currency
+Monitriq is multi-currency from day one: NGN is one supported currency
 among many, never assumed.
 
 ## 2. A user's buckets and assets do not have to share a currency
@@ -200,7 +200,7 @@ planning or reporting conversion (§10) — never conflated with an actually-
 applied transaction rate. Provider/bank/broker-sourced rates are an
 anticipated future `source` value; none are integrated this phase (V1 is
 manual-first, per
-[PRODUCT_DEFINITION.md](../product/PRODUCT_DEFINITION.md)) — Monatriq
+[PRODUCT_DEFINITION.md](../product/PRODUCT_DEFINITION.md)) — Monitriq
 never claims a "live rate" or "current market rate" it doesn't actually
 have.
 
@@ -331,7 +331,7 @@ from this particular total), and a missing reporting-currency rate means
 
 A `minimum_cash_floor` rule always names an explicit `currency_code` — "a
 minimum cash floor" is meaningless without saying which currency, and
-Monatriq never collapses a USD floor and an NGN floor into one blended
+Monitriq never collapses a USD floor and an NGN floor into one blended
 number. A user may configure entirely independent floors for as many
 currencies as they hold cash in (verified: separate USD/NGN/EUR/GBP/...
 configurations coexist, each with its own threshold and independent
@@ -433,7 +433,7 @@ kinds of row, distinguished by `source`:
 - **`manual`** — a standalone rate the user records explicitly, not tied
   to any transaction. This phase gives this kind of row its first real
   purpose: **reporting/valuation rate** — "what rate does the user want
-  Monatriq to use *right now* to express one currency in the reporting
+  Monitriq to use *right now* to express one currency in the reporting
   currency." Recorded via `record_manual_reporting_rate()`
   (`lib/domain/currency/repository.ts`'s `recordManualReportingRate()`),
   always `event_id = null`.

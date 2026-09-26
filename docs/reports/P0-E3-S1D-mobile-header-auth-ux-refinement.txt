@@ -1,0 +1,127 @@
+P0-E3-S1D — MOBILE HEADER + AUTH UX REFINEMENT
+================================================================
+
+1. PHASE
+P0-E3-S1D — Mobile Header + Auth UX Refinement (narrow UI remediation
+after the Monitriq rebrand).
+
+2. STATUS
+COMPLETE. Nothing committed or pushed. No domain/schema/migration/RLS/
+auth-backend change.
+
+3. OBJECTIVE
+(1) Remove the repeated current-page label from the shared header,
+(2) fix the pre-existing 768px header overflow, (3) enlarge the Monitriq
+logo on auth screens, (4) add show/hide controls to auth password fields.
+
+4. FILES MODIFIED (this phase)
+New: components/ui/PasswordInput.tsx
+Modified: components/layout/HeaderBrand.tsx, components/layout/AppShell.tsx,
+components/layout/DesktopNav.tsx, app/(auth)/layout.tsx,
+app/(auth)/login/page.tsx, app/(auth)/signup/page.tsx,
+app/(auth)/update-password/page.tsx, this report.
+Untouched: lib/domain, supabase/*, migrations, logo assets, MobileBottomNav.
+
+5. REDUNDANT HEADER LABEL
+HeaderBrand is the single shared header for every (app) route. It had a
+ROUTE_TITLES table + usePathname() that rendered the current page name
+under a small "MONITRIQ" eyebrow. Both are removed (component is now
+server-renderable and stateless). The header now shows only the supplied
+Monitriq horizontal logo (via BrandLogo, theme-aware) plus the unchanged
+account control. No per-page exceptions exist or were added. Header height
+reduced h-16 -> h-14 (57px measured incl. border). In-page headings were
+not touched. MobileBottomNav and DesktopNav untouched apart from padding
+(below); their active states verified.
+Observation: /money has no in-page "Money" title of its own (its content
+begins with the subtitle, then "Add Cash Balance"); it previously relied on
+the header label. Per this phase's instruction the bottom nav's active
+"Money" state is now the page indicator. Adding a page title to Money (and
+similar pages) would be new UI and was not done — flagged in risks.
+
+6. 768PX OVERFLOW FIX
+Cause (measured): at 768 the header row needed ~749px (logo 115 + nav 562 +
+account 48 + gaps) inside 720px of content width, pushing the 48px account
+button to x=770. Fix: nav link padding px-3 -> px-2 below lg (lg:px-3
+restored), nav 562 -> 522px. Account button now ends at x=744 (768 wide).
+Verified no horizontal overflow and zero header elements past the viewport
+on all 9 app routes at 390, 768, 1024, 1280, and 1440 px. Logo aspect stays
+3.579 (115x32). The old "gap-4" became gap-3 in the header row.
+
+7. AUTH LOGO SIZING
+Central change in app/(auth)/layout.tsx (used by login, signup,
+forgot-password, update-password): wordmark h-9 (129x36) -> h-12 (172x48),
+same supplied horizontal SVGs, aspect 3.578 preserved. Verified on all four
+auth pages, dark and light, at 390/768/1280: no clipping, no overflow, no
+layout shift. Modest increase, no new gaps/gradients/copy. The landing page
+(/) logo was left at S1C's h-10.
+
+8. PASSWORD VISIBILITY IMPLEMENTATION
+components/ui/PasswordInput.tsx: one shared component wrapping the existing
+Input; local `visible` state toggles the same <input> between
+type="password" and type="text". Eye / EyeOff (lucide) icon in a 48x48
+type="button" control absolutely positioned inside the field's right
+padding (pr-12), muted color with hover:text-text-primary, rounded to the
+field. Props pass through, so id/name/autoComplete/minLength/required/value/
+onChange are unchanged and the value stays in the caller's state (nothing
+logged, stored, or sent). aria-label "Show password"/"Hide password",
+aria-pressed, aria-controls=input id. Used by the three existing auth
+password fields: Sign In (current-password), Sign Up (new-password),
+Update password (new-password). Signup has ONE password field and no
+Confirm Password; none was added. Forgot-password has no password field.
+Auth backend calls unchanged.
+
+9. ACCESSIBILITY VERIFICATION (headless Chrome, real keyboard events)
+On /login, /signup, /update-password: Tab from the password input reaches
+the eye control next (label "Show password"), then the submit button —
+logical order, one control per field (no duplicates). Enter toggles to
+type=text (label "Hide password", aria-pressed=true) and Space toggles
+back; typed value preserved each time; input box size identical before/
+after (no layout shift); 0 POST requests and no navigation on toggle (never
+submits); control is 48x48 and inside the field bounds. :focus-visible
+matched with the global 2px solid outline. The visible "Password"/"New
+password" labels were kept.
+
+10. RESPONSIVE QA RESULTS
+Unauthenticated /login, /signup, /forgot-password, /update-password at 390/
+768/1280 in dark and light: pass. Authenticated /home, /money, /assets,
+/decisions, /goals, /rules, /receivables, /liabilities, /financial-position
+at 390/768/1024/1280/1440: shared header shows no route label; bottom nav
+(<768) and DesktopNav (>=768) show the correct aria-current active item on
+Home/Money/Assets/Decisions/Goals; account button fits; no horizontal
+overflow anywhere. Method: installed Chrome headless via playwright-core in
+a scratch dir outside the repo, scratch copy of the app built against the
+LOCAL Supabase, throwaway local user (profile only, deleted afterwards); the
+remote project and the user's dev server were not touched.
+
+11. REGRESSION RESULTS
+Full suite 20/48/11/114/27/25/56/86/90/33/30/31 = 571/571, output identical
+to the S1B/S1C baseline. Migration checksums (16) unchanged; no change under
+supabase/migrations or lib/domain in this phase.
+
+12. LINT / TYPECHECK / BUILD
+Lint clean. App typecheck clean. Test-harness typecheck clean. Production
+build clean.
+
+13. GIT DIFF SUMMARY
+This phase: 1 new file (PasswordInput) and 7 modified files (see 4),
+roughly 70 lines of change, presentation only. The working tree also still
+contains earlier uncommitted phases.
+
+14. GIT STATUS
+Uncommitted; nothing staged or pushed.
+
+15. RISKS
+- Pages without their own in-page title (notably /money) now show no page
+  name on mobile except the highlighted bottom-nav item; consider a
+  content-level title in a future phase.
+- Routes not in primary nav (Rules, Receivables, Liabilities, Financial
+  Position) have no active nav item and now no header label either; the
+  in-page headings identify them.
+- Nav padding is tighter at 768-1023px; verified visually only via headless
+  measurements/screenshots, not on physical devices.
+- Screenshot review by a human is still worthwhile for the enlarged auth
+  logo (172x48).
+
+16. RECOMMENDED NEXT STEP
+Human review of the header and auth screens on device; decide whether to add
+in-page titles to pages that lacked them; then the next product phase.

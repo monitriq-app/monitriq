@@ -49,7 +49,7 @@ function Metric({ label, value, valueClassName }: { label: string; value: string
  *   figure — the two must never share a label.
  * - Vehicle's default card is NEUTRAL (P0-E4-S2A correction — an
  *   earlier pass had it emphasize quick-sale by default, which silently
- *   assumed every vehicle is resale-intent; Monatriq has no canonical
+ *   assumed every vehicle is resale-intent; Monitriq has no canonical
  *   field to know that). Quick-Sale Estimate, Target Sale Price, and
  *   Vehicle Status all live in "More details" for Vehicle, same as
  *   every other non-investment type — none of them removed, all still

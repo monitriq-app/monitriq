@@ -300,6 +300,98 @@ export type Database = {
           },
         ]
       }
+      budget_category_allocations: {
+        Row: {
+          budget_id: string
+          created_at: string
+          id: string
+          planned_amount: number
+          spending_category_code: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          budget_id: string
+          created_at?: string
+          id?: string
+          planned_amount: number
+          spending_category_code: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          budget_id?: string
+          created_at?: string
+          id?: string
+          planned_amount?: number
+          spending_category_code?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_category_allocations_budget_id_user_id_fkey"
+            columns: ["budget_id", "user_id"]
+            isOneToOne: false
+            referencedRelation: "budgets"
+            referencedColumns: ["id", "user_id"]
+          },
+          {
+            foreignKeyName: "budget_category_allocations_spending_category_code_fkey"
+            columns: ["spending_category_code"]
+            isOneToOne: false
+            referencedRelation: "money_spending_categories"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      budgets: {
+        Row: {
+          created_at: string
+          currency_code: string
+          expected_money_in: number | null
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          currency_code: string
+          expected_money_in?: number | null
+          id?: string
+          notes?: string | null
+          period_end: string
+          period_start: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          currency_code?: string
+          expected_money_in?: number | null
+          id?: string
+          notes?: string | null
+          period_end?: string
+          period_start?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_currency_code_fkey"
+            columns: ["currency_code"]
+            isOneToOne: false
+            referencedRelation: "currencies"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
       cash_buckets: {
         Row: {
           bucket_type: string
@@ -1749,6 +1841,65 @@ export type Database = {
           total_estimated_value: string
         }[]
       }
+      budget_category_status: {
+        Args: { p_budget_id: string }
+        Returns: {
+          category_code: string
+          category_label: string
+          is_budgeted: boolean
+          is_over: boolean
+          planned: string
+          remaining: string
+          spent: string
+        }[]
+      }
+      budget_facts_for_date: {
+        Args: {
+          p_category_code?: string
+          p_currency_code: string
+          p_on_date?: string
+        }
+        Returns: {
+          budget_id: string
+          category_code: string
+          planned: string
+          remaining: string
+          scope: string
+          spent: string
+        }[]
+      }
+      budget_summary: {
+        Args: { p_budget_id: string }
+        Returns: {
+          actual_spending_total: string
+          budget_id: string
+          budgeted_category_count: number
+          budgeted_spent: string
+          currency_code: string
+          days_elapsed: number
+          expected_money_in: string
+          is_over: boolean
+          period_days: number
+          period_end: string
+          period_start: string
+          period_state: string
+          planned_total: string
+          remaining: string
+          status: string
+          unbudgeted_spent: string
+          upcoming_commitments_total: string
+        }[]
+      }
+      budget_upcoming_commitments: {
+        Args: { p_budget_id: string }
+        Returns: {
+          amount: string
+          due_date: string
+          is_protected: boolean
+          name: string
+          obligation_id: string
+        }[]
+      }
       create_asset: {
         Args: {
           p_acquired_at?: string
@@ -1778,6 +1929,32 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "assets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      create_budget: {
+        Args: {
+          p_currency_code: string
+          p_expected_money_in?: number
+          p_month?: string
+          p_notes?: string
+        }
+        Returns: {
+          created_at: string
+          currency_code: string
+          expected_money_in: number | null
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "budgets"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -3092,6 +3269,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      remove_budget_category_amount: {
+        Args: { p_budget_id: string; p_category_code: string }
+        Returns: boolean
+      }
       reporting_fx_rates: {
         Args: { p_reporting_currency: string }
         Returns: {
@@ -3154,6 +3335,49 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      set_budget_category_amount: {
+        Args: {
+          p_budget_id: string
+          p_category_code: string
+          p_planned_amount: number
+        }
+        Returns: {
+          budget_id: string
+          created_at: string
+          id: string
+          planned_amount: number
+          spending_category_code: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "budget_category_allocations"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      set_budget_status: {
+        Args: { p_budget_id: string; p_status: string }
+        Returns: {
+          created_at: string
+          currency_code: string
+          expected_money_in: number | null
+          id: string
+          notes: string | null
+          period_end: string
+          period_start: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "budgets"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       set_focus_goal: { Args: { p_goal_id?: string }; Returns: undefined }
       upcoming_obligations: {
         Args: { p_end?: string; p_start?: string }
@@ -3184,12 +3408,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3213,11 +3437,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3238,11 +3462,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3263,11 +3487,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -3280,11 +3504,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

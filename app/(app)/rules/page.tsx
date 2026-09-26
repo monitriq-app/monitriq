@@ -2,24 +2,31 @@ import { createClient } from "@/lib/supabase/server";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
 import { listCurrencies } from "@/lib/domain/currency/repository";
 import { getFinancialRuleSummaries, getSafeToDeployByCurrency } from "@/lib/domain/rules/repository";
-import { getObligationSummaries, getUpcomingObligations } from "@/lib/domain/obligations/repository";
+import { getObligationSummaries } from "@/lib/domain/obligations/repository";
 import { getGoalSummaries, getGoalBucketShortfalls } from "@/lib/domain/goals/repository";
 import { listBuckets } from "@/lib/domain/money/repository";
-import { SafeToDeployPanel } from "@/components/rules/SafeToDeployPanel";
-import { MinimumCashFloorList } from "@/components/rules/MinimumCashFloorList";
-import { MinimumCashFloorForm } from "@/components/rules/MinimumCashFloorForm";
+import { SafeToDeployCard } from "@/components/rules/SafeToDeployCard";
+import { MinimumCashSection } from "@/components/rules/MinimumCashSection";
+import { CommitmentsSection } from "@/components/rules/CommitmentsSection";
 import { CashUseEvaluatorForm } from "@/components/rules/CashUseEvaluatorForm";
-import { ObligationList } from "@/components/obligations/ObligationList";
-import { CreateObligationForm } from "@/components/obligations/CreateObligationForm";
-import { UpcomingObligationsList } from "@/components/obligations/UpcomingObligationsList";
 import { ShortfallBanner } from "@/components/goals/ShortfallBanner";
+import { MoreDetails } from "@/components/ui/MoreDetails";
 
 /**
- * Foundation-level Rules & Obligations screen (P0-E2-S6) — proves the
- * domain, not the final design. No fake data: a brand-new user sees "No
- * minimum cash floor configured yet." / "No obligations yet."
+ * Monitriq's production Rules & Obligations screen (P0-E4-S3A). Answers
+ * two plain questions: "What money do I want to keep protected?" and
+ * "What payments or commitments are coming up?" — not "edit your
+ * database configuration." Every figure reads from the existing,
+ * unmodified Rules/Obligations domain (`getSafeToDeployByCurrency()`,
+ * `getFinancialRuleSummaries()`, `getObligationSummaries()`) — no
+ * calculation happens in this file. Decisions links here via "Set
+ * Financial Rules"; saving a rule or a commitment here and returning to
+ * Decisions shows the updated Safe to Deploy/Protected Cash/rule
+ * relationships through those same shared reads — nothing is duplicated
+ * client-side.
  */
-export default async function RulesPage() {
+export default async function RulesPage({ searchParams }: { searchParams: Promise<{ add?: string }> }) {
+  const { add } = await searchParams;
   const user = await getCurrentUser();
   if (!user) {
     return null;
@@ -27,12 +34,11 @@ export default async function RulesPage() {
 
   const supabase = await createClient();
 
-  const [currencies, ruleSummaries, safeToDeploy, obligations, upcoming, goals, buckets, shortfalls] = await Promise.all([
+  const [currencies, ruleSummaries, safeToDeploy, obligations, goals, buckets, shortfalls] = await Promise.all([
     listCurrencies(supabase),
     getFinancialRuleSummaries(supabase),
     getSafeToDeployByCurrency(supabase),
     getObligationSummaries(supabase),
-    getUpcomingObligations(supabase),
     getGoalSummaries(supabase),
     listBuckets(supabase),
     getGoalBucketShortfalls(supabase),
@@ -42,45 +48,39 @@ export default async function RulesPage() {
   const activeBuckets = buckets.filter((bucket) => !bucket.is_archived);
 
   return (
-    <div className="flex flex-col gap-10">
+    <div className="flex flex-col gap-3.5">
       <div>
-        <h1 className="text-xl font-semibold text-text-primary">Financial Rules & Obligations</h1>
-        <p className="text-text-secondary">Foundation-level view — not the final design.</p>
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent-primary" aria-hidden="true" />
+          Rules &amp; Obligations
+        </p>
+        <p className="text-sm text-text-secondary">What money do you want to keep protected, and what&apos;s coming up?</p>
       </div>
 
       <ShortfallBanner shortfalls={shortfalls} currencies={currenciesByCode} />
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-text-secondary">Safe to Deploy</h2>
-        <SafeToDeployPanel results={safeToDeploy} currencies={currenciesByCode} />
+      <section className="flex flex-col gap-2.5">
+        <h2 className="text-[15px] font-semibold text-text-primary">Safe to Deploy</h2>
+        <SafeToDeployCard results={safeToDeploy} currencies={currenciesByCode} />
       </section>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-text-secondary">Minimum Cash Floor by Currency</h2>
-        <MinimumCashFloorList rules={ruleSummaries} currencies={currenciesByCode} />
-        <MinimumCashFloorForm rules={ruleSummaries} currencies={currencies} />
+      <section className="flex flex-col gap-2.5">
+        <div>
+          <h2 className="text-[15px] font-semibold text-text-primary">Minimum Cash to Keep</h2>
+          <p className="text-xs text-text-muted">The amount you want to keep untouched before Monitriq treats other cash as available to use.</p>
+        </div>
+        <MinimumCashSection ruleSummaries={ruleSummaries} currencies={currencies} />
       </section>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-text-secondary">Upcoming Obligations</h2>
-        <UpcomingObligationsList obligations={upcoming} currencies={currenciesByCode} />
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-text-secondary">All Obligations</h2>
-        <ObligationList obligations={obligations} currencies={currenciesByCode} />
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium text-text-secondary">Add Obligation</h2>
-        <CreateObligationForm currencies={currencies} goals={goals} />
-      </section>
+      <CommitmentsSection defaultAdding={add === "commitment"} obligations={obligations} goals={goals} currencies={currencies} currenciesByCode={currenciesByCode} />
 
       {activeBuckets.length > 0 ? (
-        <section className="flex flex-col gap-3">
-          <h2 className="text-sm font-medium text-text-secondary">Cash Use Evaluator</h2>
-          <CashUseEvaluatorForm buckets={activeBuckets} />
-        </section>
+        <MoreDetails label="Advanced: test a cash use">
+          <div className="rounded-xl bg-surface-raised p-4">
+            <p className="mb-3 text-xs text-text-muted">See what would happen to your protected cash if you spent a specific amount from an account — nothing here actually spends anything.</p>
+            <CashUseEvaluatorForm buckets={activeBuckets} />
+          </div>
+        </MoreDetails>
       ) : null}
     </div>
   );

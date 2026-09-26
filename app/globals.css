@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 /*
- * Canonical Monatriq brand tokens (hex values, gradient). Source of truth
+ * Canonical Monitriq brand tokens (hex values, gradient). Source of truth
  * is docs/reference/brand/brand-tokens.css — edit values there, never here.
  */
 @import "../docs/reference/brand/brand-tokens.css";

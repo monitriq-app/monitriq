@@ -1,4 +1,4 @@
 export const siteConfig = {
-  name: "Monatriq",
+  name: "Monitriq",
   description: "Know today. Go further.",
 } as const;

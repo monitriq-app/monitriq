@@ -1,0 +1,1677 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport">
+<meta content="mobile_tab" name="shell-type">
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=Plus+Jakarta+Sans:wght@600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<style>
+    @layer base {
+      html, body {
+        width: 100vw;
+        margin: 0;
+        padding: 0;
+        background-color: #0f131c;
+      }
+      body {
+        overscroll-behavior: none;
+      }
+      .pb-safe {
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+      }
+      .pt-safe {
+        padding-top: env(safe-area-inset-top, 0px);
+      }
+      main > :first-child {
+        margin-top: 0 !important;
+      }
+      main > :last-child {
+        margin-bottom: 0 !important;
+      }
+    }
+    ::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "secondary": "#ffb95f",
+            "outline-variant": "#3c4a42",
+            "primary-container": "#10b981",
+            "primary-fixed-dim": "#4edea3",
+            "on-surface": "#dfe2ee",
+            "secondary-fixed-dim": "#ffb95f",
+            "on-primary-fixed-variant": "#005236",
+            "tertiary-fixed-dim": "#4cd7f6",
+            "error": "#ffb4ab",
+            "tertiary-fixed": "#acedff",
+            "on-tertiary-fixed-variant": "#004e5c",
+            "surface-container": "#1c2028",
+            "surface-container-lowest": "#0a0e16",
+            "surface": "#0f131c",
+            "surface-container-high": "#262a33",
+            "on-tertiary": "#003640",
+            "on-primary": "#003824",
+            "tertiary-container": "#00b2d0",
+            "on-tertiary-fixed": "#001f26",
+            "inverse-surface": "#dfe2ee",
+            "primary": "#4edea3",
+            "surface-container-low": "#181c24",
+            "surface-container-highest": "#31353e",
+            "inverse-primary": "#006c49",
+            "on-error": "#690005",
+            "on-surface-variant": "#bbcabf",
+            "on-secondary-fixed-variant": "#653e00",
+            "secondary-container": "#ee9800",
+            "on-error-container": "#ffdad6",
+            "surface-bright": "#353942",
+            "primary-fixed": "#6ffbbe",
+            "secondary-fixed": "#ffddb8",
+            "on-secondary-fixed": "#2a1700",
+            "on-primary-fixed": "#002113",
+            "surface-variant": "#31353e",
+            "on-background": "#dfe2ee",
+            "surface-tint": "#4edea3",
+            "on-secondary-container": "#5b3800",
+            "surface-dim": "#0f131c",
+            "tertiary": "#4cd7f6",
+            "error-container": "#93000a",
+            "background": "#0f131c",
+            "outline": "#86948a",
+            "on-tertiary-container": "#003f4b",
+            "on-primary-container": "#00422b",
+            "on-secondary": "#472a00",
+            "inverse-on-surface": "#2c3039"
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+          spacing: {
+            "gutter": "1rem",
+            "margin": "1rem",
+            "space-xl": "2rem",
+            "space-sm": "0.5rem",
+            "space-xs": "0.25rem",
+            "space-lg": "1.5rem",
+            "space-md": "1rem"
+          },
+          fontFamily: {
+            "display-lg": ["Plus Jakarta Sans"],
+            "metric-body": ["Inter"],
+            "headline-sm": ["Plus Jakarta Sans"],
+            "label-lg": ["Inter"],
+            "body-md": ["Inter"],
+            "metric-headline": ["Inter"],
+            "label-sm": ["Inter"],
+            "display-lg-mobile": ["Plus Jakarta Sans"],
+            "body-sm": ["Inter"],
+            "headline-lg": ["Plus Jakarta Sans"],
+            "title-md": ["Inter"],
+            "headline-md": ["Plus Jakarta Sans"],
+            "body-lg": ["Inter"]
+          }
+        }
+      }
+    };
+  </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+</head>
+<body class="bg-surface text-on-surface font-body-md text-body-md flex flex-col min-h-screen">
+<!-- TOP APP HEADER -->
+<header class="fixed top-0 inset-x-0 z-40 bg-surface/85 backdrop-blur-xl pt-safe shadow-[0_4px_20px_rgba(0,0,0,0.35)]">
+<div class="h-20 px-margin flex items-center justify-between">
+<div class="flex flex-col justify-center max-w-[65%]">
+<div class="flex items-center gap-1.5 mb-0.5">
+<div class="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(78,222,163,0.8)]"></div>
+<span class="font-label-sm text-label-sm uppercase tracking-[0.16em] text-on-surface-variant">Capital Compass</span>
+</div>
+<h1 class="font-headline-md text-headline-md text-on-surface tracking-tight truncate leading-tight">Goals</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">Turn your priorities into measurable progress</p>
+</div>
+<div class="flex items-center gap-space-sm">
+<button aria-label="Notifications" class="w-10 h-10 relative rounded-full flex items-center justify-center text-on-surface hover:text-primary transition-colors focus:outline-none">
+<span class="material-symbols-outlined text-[22px]">notifications</span>
+</button>
+<div class="w-8 h-8 rounded-full bg-surface-container-high border border-outline-variant/60 flex items-center justify-center text-on-surface">
+<span class="material-symbols-outlined text-[18px]">person</span>
+</div>
+</div>
+</div>
+</header>
+<!-- MAIN SCROLL VIEW -->
+<main class="flex-1 flex flex-col relative w-full pt-20 pb-28 bg-surface">
+<!-- DEMO WATERMARK BANNER (Visible only when demo is active) -->
+<div class="hidden px-margin pt-2" id="demoBanner"><div class="flex items-center justify-between px-3 py-2 rounded-lg bg-secondary/15 border border-secondary/30 text-secondary"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">labs</span><span class="font-label-sm text-label-sm uppercase tracking-wider font-semibold">Demo Example (Hypothetical) • Illustrative Data Only</span></div><button class="text-xs underline hover:text-on-surface" onclick="toggleDemoState(false)">View Empty State</button></div></div>
+<!-- TOP SUMMARY: DIRECTION & ALLOCATION OVERVIEW -->
+<section class="px-margin pt-space-sm pb-space-sm">
+<div class="bg-surface-container rounded-xl p-space-md shadow-md border border-outline-variant/20">
+<div class="flex items-center justify-between pb-space-sm">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary text-[18px]">explore</span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Your Direction</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-surface-container-high" id="summaryBadge">
+<span class="w-1.5 h-1.5 rounded-full bg-outline"></span>
+<span class="font-label-sm text-label-sm text-on-surface-variant" id="summaryBadgeText">0 Goals Active</span>
+</div>
+</div>
+<!-- Metric Quads -->
+<div class="grid grid-cols-2 gap-2.5 pt-1">
+<div class="bg-surface-container-low rounded-lg p-2.5">
+<p class="font-label-sm text-label-sm text-on-surface-variant truncate">Allocated to Goals</p>
+<p class="font-metric-headline text-metric-headline text-on-surface tracking-tight mt-0.5" id="summaryAllocated">₦0</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5 truncate">One Naira, One Purpose</p>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2.5">
+<p class="font-label-sm text-label-sm text-on-surface-variant truncate">Next Target Date</p>
+<p class="font-metric-headline text-metric-headline text-tertiary tracking-tight mt-0.5 text-[20px] leading-8" id="summaryHorizon">Not set</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5 truncate" id="summaryHorizonSub">No horizon established</p>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2.5">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Active Goals</span>
+<span class="font-label-sm text-label-sm text-primary" id="summaryStatusPct">—</span>
+</div>
+<p class="font-headline-sm text-headline-sm text-on-surface mt-1" id="summaryActiveGoals">0 Active</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant" id="summaryPausedGoals">0 Paused</p>
+</div>
+<div class="bg-surface-container-low rounded-lg p-2.5">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Goal Protection</span>
+<span class="material-symbols-outlined text-secondary text-[16px]">shield</span>
+</div>
+<p class="font-headline-sm text-headline-sm text-secondary mt-1" id="summaryProtectedGoals">0 Protected</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant" id="summaryProtectedSub">Safe from impulse draws</p>
+</div>
+</div>
+<!-- Governance Note (Cleaned of cordon jargon) -->
+<div class="flex items-start gap-2 mt-3 pt-2.5 bg-surface-container-lowest/70 rounded-lg p-2.5 border border-outline-variant/20">
+<span class="material-symbols-outlined text-primary text-[16px] mt-0.5 shrink-0">verified_user</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+            Money assigned to protected goals is preserved for your specific objectives. Capital Compass warns you before you redirect it elsewhere.
+          </p>
+</div>
+</div>
+</section>
+<!-- ACTION CONTROLS & FILTER TABS -->
+<section class="px-margin pb-space-sm flex flex-col gap-3">
+<div class="flex items-center gap-2">
+<button class="flex-1 h-12 rounded-full bg-primary-container hover:bg-primary text-on-primary flex items-center justify-center gap-2 font-headline-sm text-headline-sm transition-all shadow-[0_4px_16px_rgba(16,185,129,0.25)] active:scale-[0.98]" id="openCreateGoalBtn" onclick="openCreateGoalModal()">
+<span class="material-symbols-outlined text-[20px]">add_circle</span>
+<span class="">Create Goal</span>
+</button>
+<!-- Prototype Demo Toggle -->
+<button class="h-12 px-3.5 rounded-full bg-surface-container hover:bg-surface-container-high border border-outline-variant/30 text-on-surface-variant flex items-center justify-center gap-1.5 transition-all active:scale-[0.98]" id="demoToggleBtn" onclick="toggleDemoState()" title="Preview full scenario with illustrative numbers">
+<span class="material-symbols-outlined text-[18px] text-secondary">labs</span>
+<span class="font-label-sm text-label-sm whitespace-nowrap text-on-surface" id="demoToggleLabel">Demo Example (Hypothetical)</span>
+</button>
+</div>
+<!-- Segmented Filter Bar -->
+<div class="flex items-center gap-1.5 overflow-x-auto py-1 no-scrollbar text-on-surface-variant" id="filterBar">
+<button class="filter-pill px-3.5 py-1.5 rounded-full bg-surface-container-highest text-on-surface font-label-sm text-label-sm font-semibold transition-colors" data-filter="all">
+          All (<span id="count-all" class="">0</span>)
+        </button>
+<button class="filter-pill px-3.5 py-1.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm hover:text-on-surface transition-colors" data-filter="focus">
+          Focus (<span id="count-focus" class="">0</span>)
+        </button>
+<button class="filter-pill px-3.5 py-1.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm hover:text-on-surface transition-colors" data-filter="protected">
+          Protected (<span id="count-protected" class="">0</span>)
+        </button>
+<button class="filter-pill px-3.5 py-1.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm hover:text-on-surface transition-colors" data-filter="paused">
+          Paused (0)
+        </button>
+<button class="filter-pill px-3.5 py-1.5 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm hover:text-on-surface transition-colors" data-filter="completed">
+          Completed (0)
+        </button>
+</div>
+</section>
+<!-- SECTION: REAL USER GETTING STARTED & SUGGESTED GOALS (Victor's default state) -->
+<div class="px-margin flex flex-col gap-space-md" id="realUserStateContainer">
+<!-- Empty / Getting Started Prompt -->
+<div class="bg-surface-container rounded-xl p-space-md border border-outline-variant/30 text-center flex flex-col items-center">
+<div class="w-14 h-14 rounded-full bg-surface-container-high flex items-center justify-center text-primary mb-3">
+<span class="material-symbols-outlined text-[30px]">flag</span>
+</div>
+<h2 class="font-headline-sm text-headline-sm text-on-surface">What are you building toward?</h2>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-sm mt-1">
+          Create a goal for something you want to fund, purchase, reduce or achieve. Protected goals are kept safe from lifestyle draws.
+        </p>
+<div class="mt-4 flex flex-wrap items-center justify-center gap-2">
+<button class="h-10 px-5 rounded-full bg-primary text-on-primary font-title-md text-title-md inline-flex items-center gap-1.5" onclick="openCreateGoalModal()">
+<span class="material-symbols-outlined text-[18px]">add</span>
+<span class="">Create First Goal</span>
+</button>
+</div>
+</div>
+<!-- Suggested Goals Section -->
+<section class="space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-secondary text-[18px]">lightbulb</span>
+<h3 class="font-title-md text-title-md text-on-surface font-semibold">Suggested Goals</h3>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Based on your interests</span>
+</div>
+<div class="space-y-2.5">
+<!-- Suggestion 1: Home Purchase -->
+<div class="p-3.5 rounded-xl bg-surface-container border border-outline-variant/30 hover:border-outline-variant flex items-center justify-between gap-3">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary/15 text-tertiary flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[22px]">real_estate_agent</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface font-semibold">Home Purchase</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Accumulate down payment equity &amp; financing readiness</p>
+</div>
+</div>
+<button class="h-9 px-3 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary font-label-sm text-label-sm font-semibold shrink-0" onclick="openCreateWithPreset('home')">
+              Set Up
+            </button>
+</div>
+<!-- Suggestion 2: Emergency Reserve -->
+<div class="p-3.5 rounded-xl bg-surface-container border border-outline-variant/30 hover:border-outline-variant flex items-center justify-between gap-3">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded-lg bg-secondary/15 text-secondary flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[22px]">shield</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface font-semibold">Emergency Reserve</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Build 3 to 6 months of essential living expenses</p>
+</div>
+</div>
+<button class="h-9 px-3 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary font-label-sm text-label-sm font-semibold shrink-0" onclick="openCreateWithPreset('reserve')">
+              Set Up
+            </button>
+</div>
+<!-- Suggestion 3: Relocation -->
+<div class="p-3.5 rounded-xl bg-surface-container border border-outline-variant/30 hover:border-outline-variant flex items-center justify-between gap-3">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[22px]">flight_takeoff</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface font-semibold">Relocation</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Step-by-step milestones + settlement capital fund</p>
+</div>
+</div>
+<button class="h-9 px-3 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary font-label-sm text-label-sm font-semibold shrink-0" onclick="openCreateWithPreset('relocation')">
+              Set Up
+            </button>
+</div>
+<!-- Suggestion 4: Recurring Income -->
+<div class="p-3.5 rounded-xl bg-surface-container border border-outline-variant/30 hover:border-outline-variant flex items-center justify-between gap-3">
+<div class="flex items-start gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container/20 text-tertiary flex items-center justify-center shrink-0 mt-0.5">
+<span class="material-symbols-outlined text-[22px]">autorenew</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface font-semibold">Recurring Income</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Target monthly cash flow from dependable channels</p>
+</div>
+</div>
+<button class="h-9 px-3 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary font-label-sm text-label-sm font-semibold shrink-0" onclick="openCreateWithPreset('recurring')">
+              Set Up
+            </button>
+</div>
+</div>
+</section>
+<!-- Focus Goal Callout Prompt -->
+<div class="p-3.5 rounded-xl bg-surface-container-low border border-dashed border-outline-variant/40 flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<span class="material-symbols-outlined text-secondary text-[20px]">star_border</span>
+<div>
+<p class="font-title-md text-title-md text-on-surface">Focus Goal Not Set</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Pin your top priority for deep visibility and pacing</p>
+</div>
+</div>
+<button class="text-tertiary font-label-sm text-label-sm hover:underline" onclick="openCreateGoalModal()">Select Goal</button>
+</div>
+</div>
+<!-- SECTION: DEMO GOALS FEED (Rendered only when Demo Mode is toggled ON) -->
+<div class="hidden px-margin flex-col gap-space-md" id="demoGoalsFeed">
+<!-- 1. DEMO FOCUS GOAL: HOME PURCHASE (Dynamic Date Calculation) -->
+<article class="goal-card bg-surface-container rounded-xl p-space-md shadow-md relative overflow-hidden border border-outline-variant/30" data-category="focus protected all">
+<div class="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-primary via-tertiary to-primary"></div>
+<div class="flex items-center justify-between mb-2 pt-1">
+<div class="flex items-center gap-1.5 flex-wrap"><span class="px-2 py-0.5 rounded bg-surface-container-highest text-tertiary font-label-sm text-label-sm font-bold border border-tertiary/30">DEMO</span>
+<span class="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-secondary/15 text-secondary font-label-sm text-label-sm font-semibold">
+<span class="material-symbols-outlined text-[14px]">star</span>
+              Focus Goal
+            </span>
+<span class="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 text-primary font-label-sm text-label-sm font-semibold">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+              Protected
+            </span>
+</div>
+<button class="text-tertiary hover:text-tertiary-fixed flex items-center gap-0.5 font-label-sm text-label-sm font-semibold" onclick="openGoalDetailsModal()">
+<span class="">Goal Details</span>
+<span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</button>
+</div>
+<div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface tracking-tight">Home Purchase</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Real Estate Equity Accumulation</p>
+</div>
+<!-- Progress Metric Bar -->
+<div class="mt-4 bg-surface-container-low rounded-lg p-3">
+<div class="flex items-baseline justify-between mb-1.5">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Allocated Equity</span>
+<div class="flex items-baseline gap-1.5">
+<span class="font-metric-headline text-metric-headline text-on-surface">₦4,000,000</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">/ ₦35,000,000</span>
+</div>
+</div>
+<div class="text-right">
+<span class="font-headline-sm text-headline-sm text-primary font-bold">11.4%</span>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Funded</p>
+</div>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-high overflow-hidden my-2">
+<div class="h-full bg-primary rounded-full transition-all duration-500" style="width: 11.4%;"></div>
+</div>
+<div class="grid grid-cols-2 gap-2 mt-3 pt-2 bg-surface-container-lowest/50 rounded-lg p-2.5">
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Target Property Value</p>
+<p class="font-metric-body text-metric-body text-on-surface font-semibold mt-0.5">₦120,000,000</p>
+<p class="font-body-sm text-body-sm text-tertiary" id="demoFinancingGap">≈ ₦85M debt/financing gap</p>
+</div>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Remaining Equity</p>
+<p class="font-metric-body text-metric-body text-on-surface font-semibold mt-0.5">₦31,000,000</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant" id="demoHomeHorizonText">Horizon: Jun 2027 (9 mos)</p>
+</div>
+</div>
+</div>
+<!-- Dynamic Pace Status -->
+<div class="mt-3 flex items-center justify-between p-2.5 rounded-lg bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[18px]">speed</span>
+<div>
+<p class="font-label-sm text-label-sm text-on-surface-variant">Required Monthly Pace</p>
+<p class="font-title-md text-title-md text-on-surface font-semibold" id="demoRequiredPaceDisplay">₦3,444,445 / mo</p>
+</div>
+</div>
+<div class="text-right">
+<span class="px-2 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm" id="demoPaceBadge">
+              Early Stage
+            </span>
+</div>
+</div>
+<!-- Readiness Checklist -->
+<div class="mt-3 pt-1">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Purchase Readiness</span>
+<span class="font-label-sm text-label-sm text-secondary">2 of 4 In Place</span>
+</div>
+<div class="grid grid-cols-2 gap-1.5">
+<div class="flex items-center gap-1.5 p-2 rounded bg-surface-container-low">
+<span class="material-symbols-outlined text-primary text-[16px]">check_circle</span>
+<span class="font-body-sm text-body-sm text-on-surface truncate">₦4M Equity Sourced</span>
+</div>
+<div class="flex items-center gap-1.5 p-2 rounded bg-surface-container-low">
+<span class="material-symbols-outlined text-primary text-[16px]">check_circle</span>
+<span class="font-body-sm text-body-sm text-on-surface truncate">Emergency Reserve Linked</span>
+</div>
+<div class="flex items-center gap-1.5 p-2 rounded bg-surface-container-low opacity-60">
+<span class="material-symbols-outlined text-outline text-[16px]">radio_button_unchecked</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Financing Pre-Approval</span>
+</div>
+<div class="flex items-center gap-1.5 p-2 rounded bg-surface-container-low opacity-60">
+<span class="material-symbols-outlined text-outline text-[16px]">radio_button_unchecked</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Target Shortlist</span>
+</div>
+</div>
+</div>
+<!-- Direct Actions -->
+<div class="flex items-center gap-2 mt-4 pt-1">
+<button class="flex-1 h-11 rounded-full bg-primary hover:bg-primary-fixed-dim text-on-primary font-headline-sm text-headline-sm flex items-center justify-center gap-1.5 transition-transform active:scale-[0.98]" onclick="showToast('Transfer to Home Purchase opened', 'paid')">
+<span class="material-symbols-outlined text-[18px]">add_card</span>
+<span class="">Add Money</span>
+</button>
+<button class="h-11 px-4 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-title-md text-title-md flex items-center justify-center gap-1 transition-colors" onclick="openGoalDetailsModal()">
+<span class="">Details</span>
+<span class="material-symbols-outlined text-[18px]">tune</span>
+</button>
+</div>
+</article>
+<!-- 2. DEMO GOAL: EMERGENCY RESERVE -->
+<article class="goal-card bg-surface-container rounded-xl p-space-md shadow-md border border-outline-variant/30" data-category="protected all">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-2"><span class="px-2 py-0.5 rounded bg-surface-container-highest text-tertiary font-label-sm text-label-sm font-bold border border-tertiary/30">DEMO</span>
+<span class="px-2 py-0.5 rounded-full bg-secondary/15 text-secondary font-label-sm text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">shield</span>
+              Emergency Reserve
+            </span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Protected</span>
+</div>
+<button class="text-secondary hover:text-secondary-fixed text-label-sm font-label-sm flex items-center gap-0.5" onclick="showToast('Reserve Protection Floor: ₦840,000', 'lock')">
+<span class="">Edit Protection</span>
+<span class="material-symbols-outlined text-[14px]">edit</span>
+</button>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Emergency Reserve</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Safety buffer for unforeseen events</p>
+<div class="mt-3 bg-surface-container-low rounded-lg p-3">
+<div class="flex items-baseline justify-between mb-1">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Allocated Balance</span>
+<p class="font-metric-headline text-metric-headline text-on-surface">₦840,000 <span class="font-body-sm text-body-sm text-on-surface-variant">/ ₦10,000,000</span></p>
+</div>
+<span class="font-headline-sm text-headline-sm text-secondary font-semibold">8.4%</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-high overflow-hidden my-2">
+<div class="h-full bg-secondary rounded-full" style="width: 8.4%;"></div>
+</div>
+<div class="flex items-center justify-between text-on-surface-variant mt-2 pt-1 font-body-sm text-body-sm">
+<span class="">₦9,160,000 remaining</span>
+<span class="">Target: Continuous Reserve</span>
+</div>
+</div>
+<div class="mt-3 p-2.5 rounded-lg bg-surface-container-lowest/80 flex items-start gap-2">
+<span class="material-symbols-outlined text-secondary text-[16px] mt-0.5 shrink-0">verified_user</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-snug">
+<strong class="text-on-surface">Protection active:</strong> Capital Compass warns before using this reserve for other purchases or transfers.
+          </p>
+</div>
+<div class="flex items-center gap-2 mt-3 pt-1"><span class="px-2 py-0.5 rounded bg-surface-container-highest text-tertiary font-label-sm text-label-sm font-bold border border-tertiary/30">DEMO</span>
+<button class="flex-1 h-10 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-title-md text-title-md flex items-center justify-center gap-1.5 transition-colors" onclick="showToast('Deposit to Emergency Reserve initiated', 'paid')">
+<span class="material-symbols-outlined text-[16px] text-primary">add</span>
+<span class="">Add Money</span>
+</button>
+<button class="h-10 px-4 rounded-full bg-surface-container-low hover:bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm transition-colors" onclick="triggerWithdrawWarning()">
+            Withdraw...
+          </button>
+</div>
+</article>
+<!-- 3. DEMO GOAL: RELOCATION -->
+<article class="goal-card bg-surface-container rounded-xl p-space-md shadow-md border border-outline-variant/30" data-category="all">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-1.5"><span class="px-2 py-0.5 rounded bg-surface-container-highest text-tertiary font-label-sm text-label-sm font-bold border border-tertiary/30">DEMO</span>
+<span class="px-2 py-0.5 rounded-full bg-tertiary/15 text-tertiary font-label-sm text-label-sm font-semibold">Milestones + Fund</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Relocation Fund</span>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">flight_takeoff</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Relocation</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Step-by-step documentation and relocation fund</p>
+<div class="mt-3 bg-surface-container-low rounded-lg p-3">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Milestone Progress</span>
+<span class="font-title-md text-title-md text-tertiary font-bold">1 of 6 (16.7%)</span>
+</div>
+<div class="w-full h-2 rounded-full bg-surface-container-high overflow-hidden my-1.5">
+<div class="h-full bg-tertiary rounded-full" style="width: 16.7%;"></div>
+</div>
+<div class="space-y-1.5 mt-3">
+<div class="flex items-center justify-between p-2 rounded bg-surface-container-lowest/60">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[16px]">check_circle</span>
+<span class="font-body-sm text-body-sm text-on-surface">Destination Selected</span>
+</div>
+<span class="font-label-sm text-label-sm text-primary">Done</span>
+</div>
+<div class="flex items-center justify-between p-2 rounded bg-surface-container-lowest/60">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary text-[16px]">schedule</span>
+<span class="font-body-sm text-body-sm text-on-surface">Route &amp; Visa Category</span>
+</div>
+<span class="font-label-sm text-label-sm text-secondary">In Progress</span>
+</div>
+<div class="flex items-center justify-between p-2 rounded bg-surface-container-lowest/60 opacity-60">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[16px]">radio_button_unchecked</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Document Collection</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Pending</span>
+</div>
+</div>
+</div>
+</article>
+<!-- 4. DEMO GOAL: RECURRING INCOME -->
+<article class="goal-card bg-surface-container rounded-xl p-space-md shadow-md border border-outline-variant/30" data-category="all">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center gap-1.5"><span class="px-2 py-0.5 rounded bg-surface-container-highest text-tertiary font-label-sm text-label-sm font-bold border border-tertiary/30">DEMO</span>
+<span class="px-2 py-0.5 rounded-full bg-tertiary-container/20 text-tertiary font-label-sm text-label-sm font-semibold">Recurring Income</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Monthly Flow</span>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">autorenew</span>
+</div>
+<h3 class="font-headline-md text-headline-md text-on-surface">Recurring Income</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Track income you expect to repeat each month (excluding lump-sum asset sales &amp; windfalls)</p>
+<div class="mt-3 bg-surface-container-low rounded-lg p-3">
+<div class="flex items-baseline justify-between mb-1">
+<div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Target Monthly Cash Flow</span>
+<p class="font-metric-headline text-metric-headline text-on-surface">Not configured</p>
+</div>
+<button class="text-tertiary font-label-sm text-label-sm font-semibold hover:underline" onclick="openCreateWithPreset('recurring')">Set Target</button>
+</div>
+<div class="p-2.5 rounded bg-surface-container-lowest/80 text-on-surface-variant mt-2 text-body-sm font-body-sm leading-relaxed">
+            Derives solely from qualifying recurring sources: salary, retainers, subscription contracts, or rental remittances.
+          </div>
+</div>
+</article>
+</div>
+<!-- EMPTY TAB NOTICES (e.g. Completed filter view) -->
+<div class="hidden px-margin py-12 text-center flex-col items-center" id="completedEmptyNotice">
+<span class="material-symbols-outlined text-[36px] text-outline mb-2">inventory_2</span>
+<p class="font-title-md text-title-md text-on-surface">No completed goals yet</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1">When you fulfill an objective, it will be catalogued here.</p>
+</div>
+</main>
+<!-- ========================================================================= -->
+<!-- MODAL 1: CREATE GOAL WITH DYNAMIC 13-TYPE FORM SWITCHER                   -->
+<!-- ========================================================================= -->
+<div class="fixed inset-0 z-50 bg-surface-container-lowest/85 backdrop-blur-xl flex flex-col justify-end hidden opacity-0 transition-opacity duration-300" id="createGoalModal">
+<div class="bg-surface-container w-full max-w-lg mx-auto rounded-t-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border-t border-outline-variant/30">
+<!-- Modal Header -->
+<div class="px-margin pt-3.5 pb-2.5 border-b border-outline-variant/30 flex items-center justify-between">
+<div>
+<h3 class="font-headline-md text-headline-md text-on-surface" id="modalHeaderTitle">Create Goal</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant" id="modalHeaderSub">Select a goal type to configure your plan.</p>
+</div>
+<button class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface" onclick="closeCreateGoalModal()">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- TYPE SELECTOR STEP -->
+<div class="p-margin overflow-y-auto space-y-2.5" id="typeSelectorView">
+<p class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant mb-2">Supported Goal Types</p>
+<!-- 1. Home / Property -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between transition-all group" onclick="selectType('home')">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary/15 text-tertiary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">real_estate_agent</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface group-hover:text-primary">Home / Property</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Down payment equity, property value &amp; financing gap</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 2. Emergency Reserve -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between transition-all group" onclick="selectType('reserve')">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-secondary/15 text-secondary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">shield</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface group-hover:text-primary">Emergency Reserve</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Fixed amount or months of essential expenses</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 3. Savings Target -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between transition-all group" onclick="selectType('savings')">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">savings</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface group-hover:text-primary">Savings Target</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">General capital accumulation or sinking fund</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 4. Relocation -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between transition-all group" onclick="selectType('relocation')">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-tertiary-container/20 text-tertiary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">flight_takeoff</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface group-hover:text-primary">Relocation</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Relocation fund + optional visa &amp; moving milestones</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 5. Recurring Income -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between transition-all group" onclick="selectType('recurring')">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-secondary/15 text-secondary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">autorenew</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface group-hover:text-primary">Recurring Income</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Monthly recurring baseline from qualifying sources</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 6. Debt Payoff -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between transition-all group" onclick="selectType('debt')">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-error/15 text-error flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">credit_card_off</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface group-hover:text-primary">Debt Payoff</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Amortization plan to achieve true ₦0 principal balance</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 7. Business Capital -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between transition-all group" onclick="selectType('business')">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[20px]">business_center</span>
+</div>
+<div>
+<p class="font-title-md text-title-md text-on-surface group-hover:text-primary">Business Capital</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Expansion funds, working capital, or runway</p>
+</div>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- More Types Collapsible Toggle -->
+<div class="pt-1">
+<button class="text-tertiary font-label-sm text-label-sm flex items-center gap-1" onclick="toggleOtherTypes()">
+<span id="otherTypesToggleLabel" class="">Show 6 more types (Education, Vehicle, Wedding, etc.)</span>
+<span class="material-symbols-outlined text-[16px]" id="otherTypesArrow">expand_more</span>
+</button>
+</div>
+<div class="hidden space-y-2.5 pt-1" id="otherTypesContainer">
+<!-- 8. Education -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between group" onclick="selectType('education')">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-highest text-on-surface flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">school</span>
+</div>
+<p class="font-title-md text-title-md text-on-surface">Education / Tuition</p>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 9. Vehicle -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between group" onclick="selectType('vehicle')">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-highest text-on-surface flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">directions_car</span>
+</div>
+<p class="font-title-md text-title-md text-on-surface">Vehicle Purchase</p>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 10. Wedding / Event -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between group" onclick="selectType('event')">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-highest text-on-surface flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">celebration</span>
+</div>
+<p class="font-title-md text-title-md text-on-surface">Wedding / Major Event</p>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 11. Retirement -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between group" onclick="selectType('retirement')">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-highest text-on-surface flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">beach_access</span>
+</div>
+<p class="font-title-md text-title-md text-on-surface">Retirement / Independence</p>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 12. Travel -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between group" onclick="selectType('travel')">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-highest text-on-surface flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">luggage</span>
+</div>
+<p class="font-title-md text-title-md text-on-surface">Travel / Sabbatical</p>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+<!-- 13. Custom -->
+<button class="w-full text-left p-3 rounded-xl bg-surface-container-low hover:bg-surface-container-high flex items-center justify-between group" onclick="selectType('custom')">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-lg bg-surface-container-highest text-on-surface flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[18px]">edit_note</span>
+</div>
+<p class="font-title-md text-title-md text-on-surface">Custom Objective</p>
+</div>
+<span class="material-symbols-outlined text-outline text-[18px]">chevron_right</span>
+</button>
+</div>
+</div>
+<!-- DYNAMIC FORM VIEW -->
+<div class="p-margin overflow-y-auto space-y-3.5 hidden" id="dynamicFormView">
+<button class="flex items-center gap-1 text-tertiary font-label-sm text-label-sm mb-1" onclick="backToTypeSelector()">
+<span class="material-symbols-outlined text-[16px]">arrow_back</span>
+<span class="">Choose a different goal type</span>
+</button>
+<h4 class="font-headline-sm text-headline-sm text-on-surface" id="dynamicFormHeading">Configure Goal</h4>
+<!-- Dynamic form fields injected by JS -->
+<div class="space-y-3" id="dynamicFormFields"></div>
+<!-- Submit Button -->
+<div class="pt-2">
+<button class="w-full h-12 rounded-full bg-primary hover:bg-primary-fixed-dim text-on-primary font-headline-sm text-headline-sm flex items-center justify-center gap-2 shadow-lg active:scale-[0.98]" onclick="saveCreatedGoal()">
+<span class="material-symbols-outlined text-[20px]">check_circle</span>
+<span id="submitGoalBtnText" class="">Create Goal</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<!-- ========================================================================= -->
+<!-- MODAL 2: GOAL DETAILS (Replacing Goal Cockpit)                             -->
+<!-- ========================================================================= -->
+<div class="fixed inset-0 z-50 bg-surface-container-lowest/85 backdrop-blur-xl flex flex-col justify-end hidden opacity-0 transition-opacity duration-300" id="goalDetailsModal">
+<div class="bg-surface-container w-full max-w-lg mx-auto rounded-t-2xl max-h-[85vh] flex flex-col overflow-hidden shadow-2xl border-t border-outline-variant/30">
+<!-- Cockpit / Details Header -->
+<div class="px-margin pt-4 pb-2 border-b border-outline-variant/30 flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-full bg-tertiary-container/30 text-tertiary flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">apartment</span>
+</div>
+<div>
+<div class="flex items-center gap-1.5">
+<h3 class="font-headline-md text-headline-md text-on-surface" id="detailsModalTitle">Home Purchase</h3>
+<span class="px-1.5 py-0.5 rounded bg-secondary/20 text-secondary font-label-sm text-label-sm">Focus</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Real Estate Equity Accumulation • Protected</p>
+</div>
+</div>
+<button class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-on-surface-variant hover:text-on-surface" onclick="closeGoalDetailsModal()">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+<!-- Tab Navigator -->
+<div class="flex items-center gap-1 px-margin pt-2 border-b border-outline-variant/20 overflow-x-auto no-scrollbar">
+<button class="details-tab-btn pb-2 px-2.5 font-label-sm text-label-sm border-b-2 border-primary text-primary font-bold" id="detailsTab-overview" onclick="switchDetailsTab('overview')">
+          Overview
+        </button>
+<button class="details-tab-btn pb-2 px-2.5 font-label-sm text-label-sm border-b-2 border-transparent text-on-surface-variant hover:text-on-surface" id="detailsTab-scenario" onclick="switchDetailsTab('scenario')">
+          What Would It Take?
+        </button>
+<button class="details-tab-btn pb-2 px-2.5 font-label-sm text-label-sm border-b-2 border-transparent text-on-surface-variant hover:text-on-surface" id="detailsTab-readiness" onclick="switchDetailsTab('readiness')">
+          Readiness
+        </button>
+<button class="details-tab-btn pb-2 px-2.5 font-label-sm text-label-sm border-b-2 border-transparent text-on-surface-variant hover:text-on-surface" id="detailsTab-activity" onclick="switchDetailsTab('activity')">
+          Activity History
+        </button>
+</div>
+<!-- Scrollable Tab Content Container -->
+<div class="p-margin overflow-y-auto space-y-4">
+<!-- 1. OVERVIEW TAB PANEL -->
+<div class="details-panel space-y-3.5" id="panel-overview">
+<div class="p-3.5 rounded-xl bg-surface-container-low space-y-3">
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-on-surface-variant">Asset Structure Breakdown</span>
+<div class="grid grid-cols-3 gap-2 text-center">
+<div class="p-2 rounded bg-surface-container-lowest">
+<p class="font-label-sm text-label-sm text-on-surface-variant">Target Value</p>
+<p class="font-title-md text-title-md text-on-surface font-semibold mt-1">₦120M</p>
+</div>
+<div class="p-2 rounded bg-surface-container-lowest">
+<p class="font-label-sm text-label-sm text-primary">Equity Stake</p>
+<p class="font-title-md text-title-md text-primary font-semibold mt-1">₦35M</p>
+</div>
+<div class="p-2 rounded bg-surface-container-lowest">
+<p class="font-label-sm text-label-sm text-tertiary">Financing Gap</p>
+<p class="font-title-md text-title-md text-tertiary font-semibold mt-1">≈ ₦85M</p>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant italic text-center">
+              Financing gap is an estimated requirement based on target value, not an approved loan.
+            </p>
+</div>
+<!-- Pace & Horizon Card -->
+<div class="p-3.5 rounded-xl bg-surface-container-low">
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Required Monthly Pace</span>
+<span class="font-label-sm text-label-sm text-secondary" id="detailsMonthsLeftDisplay">9 Months Left</span>
+</div>
+<p class="font-metric-headline text-metric-headline text-on-surface" id="detailsPaceAmount">₦3,444,445 / month</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1" id="detailsPaceNote">Required pace is dynamically computed from remaining ₦31,000,000 equity across 9 months.</p>
+</div>
+<!-- Protection Notice -->
+<div class="p-3.5 rounded-xl bg-surface-container-lowest/90 border border-outline-variant/40 space-y-1.5">
+<div class="flex items-center gap-2 text-secondary">
+<span class="material-symbols-outlined text-[18px]">verified_user</span>
+<span class="font-title-md text-title-md">Goal Protection Active</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">
+              If another decision attempts to draw from this fund, Capital Compass will display a confirmation warning.
+            </p>
+</div>
+<!-- Action Buttons -->
+<div class="grid grid-cols-2 gap-2 pt-2">
+<button class="h-11 rounded-full bg-primary text-on-primary font-headline-sm text-headline-sm flex items-center justify-center gap-1 active:scale-[0.98]" onclick="showToast('Transfer money to Home Purchase', 'add_circle')">
+<span class="material-symbols-outlined text-[18px]">add_circle</span>
+<span class="">Add Money</span>
+</button>
+<button class="h-11 rounded-full bg-surface-container-high hover:bg-surface-bright text-error font-title-md text-title-md flex items-center justify-center gap-1" onclick="triggerWithdrawWarning()">
+<span class="material-symbols-outlined text-[18px]">arrow_outward</span>
+<span class="">Withdraw...</span>
+</button>
+</div>
+</div>
+<!-- 2. SCENARIO CALCULATOR ("WHAT WOULD IT TAKE?") -->
+<div class="details-panel space-y-3.5 hidden" id="panel-scenario">
+<div class="p-3.5 rounded-xl bg-surface-container-low space-y-3">
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary text-[20px]">tune</span>
+<h4 class="font-title-md text-title-md text-on-surface">What Would It Take?</h4>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant bg-surface-container-highest px-2 py-0.5 rounded-full">Scenario — Not prediction</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant">
+              Model variations in your contributions to see estimated completion timelines dynamically.
+            </p>
+<!-- Input 1: Lump Sum -->
+<div>
+<div class="flex items-center justify-between text-body-sm font-body-sm mb-1">
+<span class="text-on-surface-variant">One-Time Contribution</span>
+<span class="text-on-surface font-semibold" id="dynamicLumpDisplay">₦1,000,000</span>
+</div>
+<input class="w-full accent-tertiary" id="dynamicLumpSlider" max="10000000" min="0" oninput="updateScenarioEngine()" step="500000" type="range" value="1000000">
+</div>
+<!-- Input 2: Monthly Pace -->
+<div>
+<div class="flex items-center justify-between text-body-sm font-body-sm mb-1">
+<span class="text-on-surface-variant">Monthly Contribution</span>
+<span class="text-on-surface font-semibold" id="dynamicPaceDisplay">₦1,000,000 / mo</span>
+</div>
+<input class="w-full accent-primary" id="dynamicPaceSlider" max="3000000" min="200000" oninput="updateScenarioEngine()" step="100000" type="range" value="1000000">
+</div>
+<!-- Dynamically Calculated Outcome Box -->
+<div class="p-3 rounded-lg bg-surface-container-lowest border border-tertiary/30 space-y-1.5 mt-3">
+<div class="flex items-center justify-between">
+<span class="font-label-sm text-label-sm text-on-surface-variant">Projected Completion</span>
+<span class="px-2 py-0.5 rounded-full bg-primary/20 text-primary font-label-sm text-label-sm font-bold" id="scenarioTargetBadge">Estimated</span>
+</div>
+<p class="font-metric-headline text-metric-headline text-tertiary" id="scenarioMonthsSummary">Calculating...</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant" id="scenarioDetailedText">
+                Based on current remaining equity.
+              </p>
+</div>
+<p class="font-label-sm text-label-sm text-on-surface-variant italic">Scenario projection based purely on mathematical cash-flow pacing. Not investment advice.</p>
+</div>
+</div>
+<!-- 3. READINESS CHECKLIST TAB -->
+<div class="details-panel space-y-3 hidden" id="panel-readiness">
+<div class="p-3.5 rounded-xl bg-surface-container-low space-y-3">
+<h4 class="font-title-md text-title-md text-on-surface">Purchase Readiness</h4>
+<div class="space-y-2">
+<div class="p-2.5 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">verified</span>
+<div>
+<p class="font-body-md text-body-md text-on-surface">Initial Equity Contribution</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Fund account created</p>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-semibold">Done</span>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[18px]">verified</span>
+<div>
+<p class="font-body-md text-body-md text-on-surface">Emergency Reserve Intact</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Separate safety buffer preserved</p>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-primary font-semibold">Done</span>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[18px]">schedule</span>
+<div>
+<p class="font-body-md text-body-md text-on-surface">Financing Pre-Approval</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Estimated requirement ≈ ₦85M</p>
+</div>
+</div>
+<button class="font-label-sm text-label-sm text-tertiary hover:underline" onclick="showToast('Upload financing documentation', 'upload')">Upload</button>
+</div>
+<div class="p-2.5 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-outline text-[18px]">schedule</span>
+<div>
+<p class="font-body-md text-body-md text-on-surface">Target Shortlist</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Neighborhood &amp; verified developer list</p>
+</div>
+</div>
+<button class="font-label-sm text-label-sm text-tertiary hover:underline" onclick="showToast('Select target properties', 'list')">Select</button>
+</div>
+</div>
+</div>
+</div>
+<!-- 4. ACTIVITY HISTORY (No fake hardcoded dates) -->
+<div class="details-panel space-y-3 hidden" id="panel-activity">
+<div class="p-3.5 rounded-xl bg-surface-container-low space-y-3">
+<h4 class="font-title-md text-title-md text-on-surface">Activity History</h4>
+<div class="space-y-2" id="activityHistoryFeed">
+<div class="p-2.5 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-[16px]">add_circle</span>
+</div>
+<div>
+<p class="font-body-md text-body-md text-on-surface font-semibold">Goal Initialized</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Home Purchase fund created</p>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant" id="activityInitDate">Sep 2026</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- ========================================================================= -->
+<!-- MODAL 3: PROTECTED WITHDRAWAL WARNING MODAL (Gentle, Not Auto-Blocked)    -->
+<!-- ========================================================================= -->
+<div class="fixed inset-0 z-50 bg-surface-container-lowest/85 backdrop-blur-xl flex flex-col justify-end hidden opacity-0 transition-opacity duration-300" id="withdrawWarningModal">
+<div class="bg-surface-container w-full max-w-lg mx-auto rounded-t-2xl p-space-md shadow-2xl space-y-4 border-t border-outline-variant/30">
+<div class="flex items-center gap-2 text-secondary">
+<span class="material-symbols-outlined text-[24px]">shield</span>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Rule Conflict: Protected Goal</h3>
+</div>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed">
+        This uses money you marked as <strong class="text-on-surface">protected</strong>. Withdrawing capital here will reduce your saved progress toward this objective.
+      </p>
+<div class="p-3 rounded-lg bg-secondary/10 border border-secondary/20 text-secondary font-body-sm text-body-sm leading-snug">
+        Protection is a self-imposed safety rule to help you stay focused on your primary commitments.
+      </div>
+<div class="flex items-center gap-2 pt-2">
+<button class="flex-1 h-11 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-title-md text-title-md transition-colors" onclick="closeWithdrawWarning()">
+          Cancel
+        </button>
+<button class="flex-1 h-11 rounded-full bg-secondary-container hover:bg-secondary text-on-secondary-container font-headline-sm text-headline-sm transition-colors" onclick="confirmWithdrawAction()">
+          Continue Anyway
+        </button>
+</div>
+</div>
+</div>
+<!-- TOAST NOTIFICATION -->
+<div class="fixed bottom-20 inset-x-4 max-w-md mx-auto z-50 pointer-events-none transform translate-y-8 opacity-0 transition-all duration-300 bg-surface-container-highest text-on-surface px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 border border-outline-variant/30" id="appToast">
+<span class="material-symbols-outlined text-primary text-[20px]" id="toastIcon">check_circle</span>
+<span class="font-body-md text-body-md" id="toastMessage">Action completed.</span>
+</div>
+<!-- BOTTOM NAVIGATION BAR (Capital Compass 5-Tab Shell) -->
+<nav class="fixed bottom-0 inset-x-0 z-40 pb-safe bg-surface/90 backdrop-blur-xl border-t border-outline-variant/20 shadow-[0_-4px_24px_rgba(0,0,0,0.45)]">
+<div class="flex justify-between items-center h-16 px-space-xs max-w-lg mx-auto">
+<a class="flex-1 flex flex-col items-center justify-center h-full min-w-[44px] text-on-surface-variant hover:text-on-surface transition-colors gap-0.5 group" data-path="home" href="#">
+<span class="material-symbols-outlined text-[22px]">dashboard</span>
+<span class="font-label-sm text-label-sm tracking-normal">Home</span>
+</a>
+<a class="flex-1 flex flex-col items-center justify-center h-full min-w-[44px] text-on-surface-variant hover:text-on-surface transition-colors gap-0.5 group" data-path="money" href="#">
+<span class="material-symbols-outlined text-[22px]">account_balance_wallet</span>
+<span class="font-label-sm text-label-sm tracking-normal">Money</span>
+</a>
+<div class="flex-1 flex items-center justify-center -mt-5">
+<button aria-label="Quick Add" class="w-12 h-12 rounded-full bg-primary-container text-on-primary flex items-center justify-center shadow-[0_8px_20px_rgba(16,185,129,0.35)] transition-transform active:scale-95 focus:outline-none hover:bg-primary" onclick="openCreateGoalModal()">
+<span class="material-symbols-outlined text-[26px]">add</span>
+</button>
+</div>
+<a class="flex-1 flex flex-col items-center justify-center h-full min-w-[44px] text-on-surface-variant hover:text-on-surface transition-colors gap-0.5 group" data-path="assets" href="#">
+<span class="material-symbols-outlined text-[22px]">pie_chart</span>
+<span class="font-label-sm text-label-sm tracking-normal">Assets</span>
+</a>
+<a class="flex-1 flex flex-col items-center justify-center h-full min-w-[44px] text-on-surface-variant hover:text-on-surface transition-colors gap-0.5 group" data-path="decisions" href="#">
+<span class="material-symbols-outlined text-[22px]">insights</span>
+<span class="font-label-sm text-label-sm tracking-normal">Decisions</span>
+</a>
+<a aria-current="page" class="flex-1 flex flex-col items-center justify-center h-full min-w-[44px] transition-colors gap-0.5 group text-primary font-bold" data-path="goals" href="#">
+<span class="material-symbols-outlined text-[22px]">flag_circle</span>
+<span class="font-label-sm text-label-sm tracking-normal">Goals</span>
+<span class="w-1 h-1 rounded-full bg-primary mt-0.5"></span>
+</a>
+</div>
+</nav>
+<!-- ========================================================================= -->
+<!-- JAVASCRIPT ENGINE: DYNAMIC DATES, FORMS & DEMO TOGGLE                     -->
+<!-- ========================================================================= -->
+<script>
+    // State management
+    let isDemoMode = false;
+    let selectedGoalType = 'home';
+    const currentDate = new Date(); // Dynamic live current date
+
+    // Utility: Format currency in Naira
+    function formatNaira(num) {
+      return '₦' + Number(num).toLocaleString();
+    }
+
+    // Utility: Exact Month Difference calculation between two dates
+    function calculateMonthsDifference(fromDate, toDate) {
+      let months = (toDate.getFullYear() - fromDate.getFullYear()) * 12;
+      months += toDate.getMonth() - fromDate.getMonth();
+      return Math.max(1, months);
+    }
+
+    // Utility: Format date to Month Year (e.g. Jun 2027)
+    function formatMonthYear(date) {
+      return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
+
+    // Demo target calculation (Set dynamically to June 30, 2027)
+    const demoHomeTargetDate = new Date(2027, 5, 30); // June 30, 2027
+    const demoRemainingEquity = 31000000;
+    const demoCurrentBalance = 4000000;
+
+    function refreshDemoDynamicDateMath() {
+      const monthsLeft = calculateMonthsDifference(currentDate, demoHomeTargetDate);
+      const horizonString = formatMonthYear(demoHomeTargetDate);
+
+      // Required Pace dynamically computed
+      const requiredMonthlyPace = Math.ceil(demoRemainingEquity / monthsLeft);
+
+      // Update text in demo cards
+      const horizonElem = document.getElementById('demoHomeHorizonText');
+      if (horizonElem) {
+        horizonElem.textContent = `Horizon: ${horizonString} (${monthsLeft} mos)`;
+      }
+
+      const paceDisplay = document.getElementById('demoRequiredPaceDisplay');
+      if (paceDisplay) {
+        paceDisplay.textContent = `${formatNaira(requiredMonthlyPace)} / mo`;
+      }
+
+      const detailsMonthsLeft = document.getElementById('detailsMonthsLeftDisplay');
+      if (detailsMonthsLeft) {
+        detailsMonthsLeft.textContent = `${monthsLeft} Months Left`;
+      }
+
+      const detailsPaceAmount = document.getElementById('detailsPaceAmount');
+      if (detailsPaceAmount) {
+        detailsPaceAmount.textContent = `${formatNaira(requiredMonthlyPace)} / month`;
+      }
+
+      const detailsPaceNote = document.getElementById('detailsPaceNote');
+      if (detailsPaceNote) {
+        detailsPaceNote.textContent = `Required pace is dynamically computed from remaining ${formatNaira(demoRemainingEquity)} equity across ${monthsLeft} months.`;
+      }
+
+      // Activity init date
+      const activityInitDate = document.getElementById('activityInitDate');
+      if (activityInitDate) {
+        activityInitDate.textContent = formatMonthYear(currentDate);
+      }
+    }
+
+    // DEMO TOGGLE HANDLER
+    function toggleDemoState(forceState) {
+      if (typeof forceState === 'boolean') {
+        isDemoMode = forceState;
+      } else {
+        isDemoMode = !isDemoMode;
+      }
+
+      const demoBanner = document.getElementById('demoBanner');
+      const demoFeed = document.getElementById('demoGoalsFeed');
+      const realContainer = document.getElementById('realUserStateContainer');
+      const toggleLabel = document.getElementById('demoToggleLabel');
+      const summaryBadgeText = document.getElementById('summaryBadgeText');
+      const summaryAllocated = document.getElementById('summaryAllocated');
+      const summaryHorizon = document.getElementById('summaryHorizon');
+      const summaryHorizonSub = document.getElementById('summaryHorizonSub');
+      const summaryActiveGoals = document.getElementById('summaryActiveGoals');
+      const summaryProtectedGoals = document.getElementById('summaryProtectedGoals');
+      const summaryStatusPct = document.getElementById('summaryStatusPct');
+      const countAll = document.getElementById('count-all');
+      const countFocus = document.getElementById('count-focus');
+      const countProtected = document.getElementById('count-protected');
+
+      if (isDemoMode) {
+        demoBanner.classList.remove('hidden');
+        demoFeed.classList.remove('hidden');
+        realContainer.classList.add('hidden');
+        toggleLabel.textContent = 'Exit Demo';
+
+        refreshDemoDynamicDateMath();
+
+        const monthsLeft = calculateMonthsDifference(currentDate, demoHomeTargetDate);
+        const horizonString = formatMonthYear(demoHomeTargetDate);
+
+        // Illustrative summary
+        summaryBadgeText.textContent = '4 Demo Goals';
+        summaryAllocated.textContent = '₦4,840,000';
+        summaryHorizon.textContent = horizonString;
+        summaryHorizonSub.textContent = `Home Purchase (${monthsLeft} mos)`;
+        summaryActiveGoals.textContent = '4 Active';
+        summaryProtectedGoals.textContent = '2 Protected';
+        summaryStatusPct.textContent = '100% Intact';
+        countAll.textContent = '4';
+        countFocus.textContent = '1';
+        countProtected.textContent = '2';
+
+        showToast('Viewing Demo Scenario (Illustrative Data)', 'labs');
+      } else {
+        demoBanner.classList.add('hidden');
+        demoFeed.classList.add('hidden');
+        realContainer.classList.remove('hidden');
+        toggleLabel.textContent = 'View Demo Example';
+
+        // Victor's true real state (0 goals)
+        summaryBadgeText.textContent = '0 Goals Active';
+        summaryAllocated.textContent = '₦0';
+        summaryHorizon.textContent = 'Not set';
+        summaryHorizonSub.textContent = 'No horizon established';
+        summaryActiveGoals.textContent = '0 Active';
+        summaryProtectedGoals.textContent = '0 Protected';
+        summaryStatusPct.textContent = '—';
+        countAll.textContent = '0';
+        countFocus.textContent = '0';
+        countProtected.textContent = '0';
+
+        showToast('Returned to your active portfolio', 'check_circle');
+      }
+    }
+
+    // FILTER PILL INTERACTIONS
+    const filterPills = document.querySelectorAll('.filter-pill');
+    filterPills.forEach(pill => {
+      pill.addEventListener('click', () => {
+        filterPills.forEach(p => {
+          p.classList.remove('bg-surface-container-highest', 'text-on-surface', 'font-semibold');
+          p.classList.add('bg-surface-container', 'text-on-surface-variant');
+        });
+        pill.classList.remove('bg-surface-container', 'text-on-surface-variant');
+        pill.classList.add('bg-surface-container-highest', 'text-on-surface', 'font-semibold');
+
+        const filter = pill.getAttribute('data-filter');
+        const completedNotice = document.getElementById('completedEmptyNotice');
+        const demoCards = document.querySelectorAll('#demoGoalsFeed .goal-card');
+
+        if (filter === 'completed') {
+          completedNotice.classList.remove('hidden');
+          if (isDemoMode) document.getElementById('demoGoalsFeed').classList.add('hidden');
+          document.getElementById('realUserStateContainer').classList.add('hidden');
+        } else {
+          completedNotice.classList.add('hidden');
+          if (isDemoMode) {
+            document.getElementById('demoGoalsFeed').classList.remove('hidden');
+            demoCards.forEach(card => {
+              const cat = card.getAttribute('data-category') || '';
+              if (filter === 'all' || cat.includes(filter)) {
+                card.classList.remove('hidden');
+              } else {
+                card.classList.add('hidden');
+              }
+            });
+          } else {
+            document.getElementById('realUserStateContainer').classList.remove('hidden');
+          }
+        }
+      });
+    });
+
+    // MODAL UTILITY HELPERS
+    function openModalById(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      modal.classList.remove('hidden');
+      requestAnimationFrame(() => modal.classList.remove('opacity-0'));
+    }
+
+    function closeModalById(id) {
+      const modal = document.getElementById(id);
+      if (!modal) return;
+      modal.classList.add('opacity-0');
+      setTimeout(() => modal.classList.add('hidden'), 250);
+    }
+
+    // CREATE GOAL MODAL MANAGEMENT
+    function openCreateGoalModal() {
+      backToTypeSelector();
+      openModalById('createGoalModal');
+    }
+
+    function closeCreateGoalModal() {
+      closeModalById('createGoalModal');
+    }
+
+    function openCreateWithPreset(type) {
+      openModalById('createGoalModal');
+      selectType(type);
+    }
+
+    function toggleOtherTypes() {
+      const container = document.getElementById('otherTypesContainer');
+      const arrow = document.getElementById('otherTypesArrow');
+      const label = document.getElementById('otherTypesToggleLabel');
+      if (container.classList.contains('hidden')) {
+        container.classList.remove('hidden');
+        arrow.textContent = 'expand_less';
+        label.textContent = 'Hide additional types';
+      } else {
+        container.classList.add('hidden');
+        arrow.textContent = 'expand_more';
+        label.textContent = 'Show 6 more types (Education, Vehicle, Wedding, etc.)';
+      }
+    }
+
+    function backToTypeSelector() {
+      document.getElementById('typeSelectorView').classList.remove('hidden');
+      document.getElementById('dynamicFormView').classList.add('hidden');
+      document.getElementById('modalHeaderTitle').textContent = 'Create Goal';
+      document.getElementById('modalHeaderSub').textContent = 'Select a goal type to configure your plan.';
+    }
+
+    // DYNAMIC FORM GENERATOR FOR ALL 13 SUPPORTED TYPES
+    function selectType(type) {
+      selectedGoalType = type;
+      document.getElementById('typeSelectorView').classList.add('hidden');
+      document.getElementById('dynamicFormView').classList.remove('hidden');
+
+      const headings = {
+        home: 'Home / Property Acquisition',
+        reserve: 'Emergency Reserve',
+        savings: 'Savings Target',
+        relocation: 'Relocation Plan',
+        recurring: 'Recurring Income Target',
+        debt: 'Debt Payoff Schedule',
+        business: 'Business Capital Goal',
+        education: 'Education & Tuition',
+        vehicle: 'Vehicle Acquisition',
+        event: 'Wedding / Major Event',
+        retirement: 'Retirement Independence',
+        travel: 'Travel / Sabbatical',
+        custom: 'Custom Goal'
+      };
+
+      document.getElementById('dynamicFormHeading').textContent = headings[type] || 'Configure Goal';
+      document.getElementById('modalHeaderTitle').textContent = headings[type] || 'Configure Goal';
+      document.getElementById('modalHeaderSub').textContent = 'Fill in your specific targets.';
+
+      const container = document.getElementById('dynamicFormFields');
+      container.innerHTML = generateFormHTMLForType(type);
+    }
+
+    function generateFormHTMLForType(type) {
+      // 1. Home / Property
+      if (type === 'home') {
+        return `
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Goal Name</label>
+            <input id="form-name" type="text" value="Home Purchase" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary text-body-md"/>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Property Value (opt)</label>
+              <input id="home-prop-val" type="number" placeholder="e.g. 120,000,000" oninput="calcHomeGap()" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+            </div>
+            <div>
+              <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Cash / Equity Target (₦)</label>
+              <input id="home-cash-target" type="number" placeholder="e.g. 35,000,000" oninput="calcHomeGap()" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+            </div>
+          </div>
+          <div class="p-2.5 rounded bg-surface-container-lowest/80 text-body-sm text-tertiary" id="home-gap-callout">
+            Estimated Financing Gap: ₦0
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Goal Fund</label>
+            <select class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md">
+              <option>Create new dedicated goal fund</option>
+              <option>Link existing account</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Date (opt)</label>
+            <input type="date" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div class="p-3 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+            <div>
+              <p class="font-title-md text-title-md text-on-surface">Enable Goal Protection</p>
+              <p class="font-body-sm text-body-sm text-on-surface-variant">Capital Compass will warn before money is redirected</p>
+            </div>
+            <input type="checkbox" checked class="w-5 h-5 accent-primary rounded"/>
+          </div>
+        `;
+      }
+
+      // 2. Emergency Reserve
+      if (type === 'reserve') {
+        return `
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Method</label>
+            <div class="grid grid-cols-2 gap-2">
+              <label class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/40 flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="res-type" checked class="accent-primary" onchange="toggleReserveMethod('fixed')"/>
+                <span class="font-label-sm text-label-sm text-on-surface">Fixed Amount</span>
+              </label>
+              <label class="p-2.5 rounded-lg bg-surface-container-low border border-outline-variant/40 flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="res-type" class="accent-primary" onchange="toggleReserveMethod('months')"/>
+                <span class="font-label-sm text-label-sm text-on-surface">Months of Expenses</span>
+              </label>
+            </div>
+          </div>
+          <div id="reserve-amount-box">
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Amount (₦)</label>
+            <input type="number" placeholder="e.g. 5,000,000" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div id="reserve-months-box" class="hidden space-y-1">
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Number of Months</label>
+            <input type="number" value="6" min="1" max="24" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+            <p class="font-body-sm text-body-sm text-secondary italic">Not enough spending history to automatically calculate monthly expense rate. You can set a fixed target for now.</p>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Date (opt)</label>
+            <input type="date" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div class="p-3 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+            <div>
+              <p class="font-title-md text-title-md text-on-surface">Mark as Protected Reserve</p>
+              <p class="font-body-sm text-body-sm text-on-surface-variant">Warn before using for investments or transactions</p>
+            </div>
+            <input type="checkbox" checked class="w-5 h-5 accent-primary rounded"/>
+          </div>
+        `;
+      }
+
+      // 3. Savings Target
+      if (type === 'savings') {
+        return `
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Goal Name</label>
+            <input type="text" placeholder="e.g. Annual Strategic Savings" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Amount (₦)</label>
+            <input type="number" placeholder="e.g. 10,000,000" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Date (opt)</label>
+            <input type="date" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div class="p-3 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+            <div>
+              <p class="font-title-md text-title-md text-on-surface">Goal Protection</p>
+              <p class="font-body-sm text-body-sm text-on-surface-variant">Prevent accidental spending</p>
+            </div>
+            <input type="checkbox" checked class="w-5 h-5 accent-primary rounded"/>
+          </div>
+        `;
+      }
+
+      // 4. Relocation
+      if (type === 'relocation') {
+        return `
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Goal Name</label>
+            <input type="text" value="Relocation" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Destination (opt)</label>
+              <input type="text" placeholder="e.g. United Kingdom" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+            </div>
+            <div>
+              <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Fund (opt)</label>
+              <input type="number" placeholder="e.g. 15,000,000" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-surface-container-lowest space-y-2">
+            <div class="flex items-center justify-between">
+              <p class="font-title-md text-title-md text-on-surface">Use Suggested Milestones</p>
+              <input type="checkbox" checked class="w-5 h-5 accent-primary rounded"/>
+            </div>
+            <p class="font-body-sm text-body-sm text-on-surface-variant">
+              Includes: 1. Destination, 2. Route, 3. Documents, 4. Fund, 5. Application, 6. Settlement.
+            </p>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Date (opt)</label>
+            <input type="date" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+        `;
+      }
+
+      // 5. Recurring Income
+      if (type === 'recurring') {
+        return `
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Goal Name</label>
+            <input type="text" value="Recurring Income" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Monthly Recurring Income (₦)</label>
+            <input type="number" placeholder="e.g. 2,000,000" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div class="space-y-1.5">
+            <label class="block font-label-sm text-label-sm text-on-surface-variant">Qualifying Income Sources</label>
+            <div class="space-y-1 bg-surface-container-low p-2.5 rounded-lg border border-outline-variant/40 text-body-sm">
+              <label class="flex items-center gap-2 text-on-surface"><input type="checkbox" checked class="accent-primary"/> Salary / Director Draw</label>
+              <label class="flex items-center gap-2 text-on-surface"><input type="checkbox" checked class="accent-primary"/> Monthly Client Retainers</label>
+              <label class="flex items-center gap-2 text-on-surface"><input type="checkbox" checked class="accent-primary"/> Subscription / SaaS Revenue</label>
+              <label class="flex items-center gap-2 text-on-surface"><input type="checkbox" checked class="accent-primary"/> Rental Remittances</label>
+              <label class="flex items-center gap-2 text-on-surface"><input type="checkbox" checked class="accent-primary"/> Recurring Business Contracts</label>
+            </div>
+            <p class="font-body-sm text-body-sm text-on-surface-variant italic">Note: Lump-sum equity windfalls and asset disposals are excluded from recurring cash flow.</p>
+          </div>
+        `;
+      }
+
+      // 6. Debt Payoff
+      if (type === 'debt') {
+        return `
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Debt Name</label>
+            <input type="text" placeholder="e.g. Equipment Facility" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Current Principal (₦)</label>
+              <input type="number" placeholder="e.g. 2,000,000" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+            </div>
+            <div>
+              <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Interest Rate % (opt)</label>
+              <input type="number" placeholder="e.g. 18" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+            </div>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Planned Monthly Payment (₦)</label>
+            <input type="number" placeholder="e.g. 200,000" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div class="p-2.5 rounded bg-surface-container-lowest text-body-sm text-primary">
+            Target Outcome: ₦0 remaining balance (Full Amortization).
+          </div>
+        `;
+      }
+
+      // 7. Business Capital
+      if (type === 'business') {
+        return `
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Goal Name</label>
+            <input type="text" placeholder="e.g. Q4 Growth Runway" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div>
+            <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Capital (₦)</label>
+            <input type="number" placeholder="e.g. 8,000,000" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+          </div>
+          <div class="p-2.5 rounded bg-surface-container-lowest text-body-sm text-on-surface-variant">
+            Note: Goal capital reflects cash allocated for business needs, separate from your company valuation.
+          </div>
+        `;
+      }
+
+      // Default fallback for education, vehicle, wedding, retirement, travel, custom
+      return `
+        <div>
+          <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Goal Name</label>
+          <input type="text" placeholder="e.g. ${type.charAt(0).toUpperCase() + type.slice(1)} Target" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+        </div>
+        <div>
+          <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Amount (₦)</label>
+          <input type="number" placeholder="e.g. 5,000,000" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+        </div>
+        <div>
+          <label class="block font-label-sm text-label-sm text-on-surface-variant mb-1">Target Date (opt)</label>
+          <input type="date" class="w-full h-11 px-3 rounded-lg bg-surface-container-low border border-outline-variant/40 text-on-surface text-body-md"/>
+        </div>
+        <div class="p-3 rounded-lg bg-surface-container-lowest flex items-center justify-between">
+          <div>
+            <p class="font-title-md text-title-md text-on-surface">Enable Goal Protection</p>
+            <p class="font-body-sm text-body-sm text-on-surface-variant">Shield from impulse transactions</p>
+          </div>
+          <input type="checkbox" checked class="w-5 h-5 accent-primary rounded"/>
+        </div>
+      `;
+    }
+
+    // Helper functions for dynamic form calculations
+    function calcHomeGap() {
+      const propVal = Number(document.getElementById('home-prop-val')?.value || 0);
+      const cashTarget = Number(document.getElementById('home-cash-target')?.value || 0);
+      const gap = Math.max(0, propVal - cashTarget);
+      const callout = document.getElementById('home-gap-callout');
+      if (callout) {
+        callout.textContent = `Estimated Financing Gap: ${formatNaira(gap)}`;
+      }
+    }
+
+    function toggleReserveMethod(method) {
+      const amtBox = document.getElementById('reserve-amount-box');
+      const moBox = document.getElementById('reserve-months-box');
+      if (method === 'fixed') {
+        amtBox.classList.remove('hidden');
+        moBox.classList.add('hidden');
+      } else {
+        amtBox.classList.add('hidden');
+        moBox.classList.remove('hidden');
+      }
+    }
+
+    function saveCreatedGoal() {
+      closeCreateGoalModal();
+      showToast('Goal created and saved to your portfolio', 'check_circle');
+    }
+
+    // GOAL DETAILS MODAL & TABS
+    function openGoalDetailsModal() {
+      switchDetailsTab('overview');
+      updateScenarioEngine();
+      openModalById('goalDetailsModal');
+    }
+
+    function closeGoalDetailsModal() {
+      closeModalById('goalDetailsModal');
+    }
+
+    function switchDetailsTab(tabKey) {
+      document.querySelectorAll('.details-tab-btn').forEach(btn => {
+        btn.classList.remove('border-primary', 'text-primary', 'font-bold');
+        btn.classList.add('border-transparent', 'text-on-surface-variant');
+      });
+      const activeBtn = document.getElementById(`detailsTab-${tabKey}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('border-transparent', 'text-on-surface-variant');
+        activeBtn.classList.add('border-primary', 'text-primary', 'font-bold');
+      }
+
+      document.querySelectorAll('.details-panel').forEach(panel => panel.classList.add('hidden'));
+      const activePanel = document.getElementById(`panel-${tabKey}`);
+      if (activePanel) activePanel.classList.remove('hidden');
+    }
+
+    // WHAT WOULD IT TAKE? DYNAMIC SCENARIO ENGINE
+    function updateScenarioEngine() {
+      const lump = Number(document.getElementById('dynamicLumpSlider').value);
+      const pace = Number(document.getElementById('dynamicPaceSlider').value);
+
+      document.getElementById('dynamicLumpDisplay').textContent = formatNaira(lump);
+      document.getElementById('dynamicPaceDisplay').textContent = `${formatNaira(pace)} / mo`;
+
+      const remainingEquity = Math.max(0, demoRemainingEquity - lump);
+      const monthsNeeded = Math.max(1, Math.ceil(remainingEquity / pace));
+
+      // Compute project target completion date dynamically
+      const projectedDate = new Date();
+      projectedDate.setMonth(projectedDate.getMonth() + monthsNeeded);
+      const projDateStr = formatMonthYear(projectedDate);
+
+      // Compare with the demo horizon date
+      const demoMonthsLeft = calculateMonthsDifference(currentDate, demoHomeTargetDate);
+      const diffMonths = demoMonthsLeft - monthsNeeded;
+
+      const summaryText = document.getElementById('scenarioMonthsSummary');
+      const badge = document.getElementById('scenarioTargetBadge');
+      const detailText = document.getElementById('scenarioDetailedText');
+
+      summaryText.textContent = `${monthsNeeded} Months to Complete (${projDateStr})`;
+
+      if (diffMonths > 0) {
+        badge.className = 'px-2 py-0.5 rounded-full bg-primary/20 text-primary font-label-sm text-label-sm font-bold';
+        badge.textContent = `${diffMonths} mos ahead of target`;
+      } else if (diffMonths === 0) {
+        badge.className = 'px-2 py-0.5 rounded-full bg-tertiary/20 text-tertiary font-label-sm text-label-sm font-bold';
+        badge.textContent = `On Target`;
+      } else {
+        badge.className = 'px-2 py-0.5 rounded-full bg-secondary/20 text-secondary font-label-sm text-label-sm font-bold';
+        badge.textContent = `+${Math.abs(diffMonths)} mos beyond target`;
+      }
+
+      detailText.textContent = `With ${formatNaira(lump)} upfront, remaining ${formatNaira(remainingEquity)} finishes in ${monthsNeeded} monthly contributions of ${formatNaira(pace)}.`;
+    }
+
+    // PROTECTED WITHDRAWAL WARNING MODAL
+    function triggerWithdrawWarning() {
+      openModalById('withdrawWarningModal');
+    }
+
+    function closeWithdrawWarning() {
+      closeModalById('withdrawWarningModal');
+    }
+
+    function confirmWithdrawAction() {
+      closeWithdrawWarning();
+      closeGoalDetailsModal();
+      showToast('Withdrawal completed with user confirmation', 'warning');
+    }
+
+    // TOAST SYSTEM
+    let toastTimeout;
+    function showToast(message, iconName = 'check_circle') {
+      const toast = document.getElementById('appToast');
+      const msg = document.getElementById('toastMessage');
+      const icon = document.getElementById('toastIcon');
+
+      msg.textContent = message;
+      icon.textContent = iconName;
+
+      if (iconName === 'warning' || iconName === 'lock') {
+        icon.className = 'material-symbols-outlined text-secondary text-[20px]';
+      } else {
+        icon.className = 'material-symbols-outlined text-primary text-[20px]';
+      }
+
+      toast.classList.remove('opacity-0', 'translate-y-8');
+      toast.classList.add('opacity-100', 'translate-y-0');
+
+      clearTimeout(toastTimeout);
+      toastTimeout = setTimeout(() => {
+        toast.classList.remove('opacity-100', 'translate-y-0');
+        toast.classList.add('opacity-0', 'translate-y-8');
+      }, 3000);
+    }
+
+    // Initial load setup
+    window.addEventListener('DOMContentLoaded', () => {
+      refreshDemoDynamicDateMath();
+    });
+  </script>
+
+
+</body></html>

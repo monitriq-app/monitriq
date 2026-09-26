@@ -11,7 +11,7 @@ interface MoreDetailsProps {
 }
 
 /**
- * The ONE progressive-disclosure control Monatriq uses for optional/
+ * The ONE progressive-disclosure control Monitriq uses for optional/
  * advanced financial detail (P0-E4-S2) — never a screen-by-screen mix of
  * "More" / "Advanced" / "Details" / "Show extras". A plain button + a
  * conditionally-rendered region rather than the native `<details>`

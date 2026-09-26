@@ -1,22 +1,25 @@
-# Monatriq — Product Definition
+# Monitriq — Product Definition
 
 Status: Canonical. Established P0-E1-S1.
 
 ## 1. Name
 
-The production product name is **Monatriq**.
+The production product name is **Monitriq**.
+
+Monitriq is the current product name. Historical implementation records may
+refer to the former name Monatriq (renamed in P0-E3-S1B — an identity-only
+rebrand; see [docs/rebrand/MONATRIQ_TO_MONITRIQ_AUDIT.md](../rebrand/MONATRIQ_TO_MONITRIQ_AUDIT.md)).
 
 "Capital Compass" was a working prototype name only. It must not appear in new
 production documentation, product naming, or user-facing implementation from
-this point forward. As of P0-E1-S1 no "Capital Compass" or "Stitch" references
-exist anywhere in this repository — there is nothing to migrate. If any such
-reference is introduced later (e.g. pasted from an old spec or mockup), replace
-it with Monatriq before it reaches committed code or docs; no repository rename
-or history rewrite is needed for this.
+this point forward. If any such reference is introduced later (e.g. pasted
+from an old spec or mockup), replace it with Monitriq before it reaches
+committed code or docs. Likewise, the former name Monatriq must not be
+reintroduced in current product surfaces.
 
-## 2. What Monatriq is
+## 2. What Monitriq is
 
-Monatriq is a personal financial position, asset, goal and decision-management
+Monitriq is a personal financial position, asset, goal and decision-management
 application.
 
 It is not merely:
@@ -34,7 +37,7 @@ Its core purpose is to help a person understand:
 5. What changes if they make a financial decision.
 6. What requires attention now.
 
-The user remains the decision-maker. Monatriq presents financial consequences
+The user remains the decision-maker. Monitriq presents financial consequences
 and rule conflicts. It does not autonomously tell users what they should do.
 
 ## 3. Primary product areas
@@ -67,7 +70,7 @@ Decision Assumptions, Goal Allocations, Audit / Financial Events.
 - **Decisions are not transactions.** Recording a decision, including
   choosing "Proceed", never moves money. Only an actual Money/Asset/Debt
   transaction changes balances.
-- **The user decides; Monatriq explains.** Rule conflicts and protected-fund
+- **The user decides; Monitriq explains.** Rule conflicts and protected-fund
   overrides are shown and recorded, never silently resolved by the system.
 - **No fabricated precision.** Quick-sale estimates, target values, and
   recoverable amounts are distinct concepts and must never be presented as
@@ -75,7 +78,7 @@ Decision Assumptions, Goal Allocations, Audit / Financial Events.
 
 ## 5. Multi-user model
 
-Monatriq is multi-user from the beginning. Each authenticated user has an
+Monitriq is multi-user from the beginning. Each authenticated user has an
 independent, private financial universe.
 
 - No shared family wallet in V1.
@@ -109,10 +112,14 @@ Full enforcement detail is in
 
 ## 8. Brand
 
-A Monatriq brand pack is present at
-[docs/reference/brand/](../reference/brand/) (`BRAND.md`, `brand-tokens.css`,
-SVG/PNG logo assets, `manifest.json`). It is canonical brand direction and
-must not be redesigned, recreated, or modified during implementation phases.
+The approved Monitriq 2D brand asset pack is stored, exactly as supplied, at
+`docs/reference/monitriq brand/` and is the canonical source of Monitriq
+logo artwork. Production copies (used directly, never redrawn or modified)
+live in `public/brand/`. The brand tokens and brand documentation are at
+[docs/reference/brand/](../reference/brand/) (`BRAND.md`, `brand-tokens.css`);
+that folder's older logo files are the archived former-name (Monatriq)
+artwork. Brand artwork must not be redesigned, recreated, or modified during
+implementation phases.
 
 Brand line: "Know today. Go further." Supporting line: "Smarter money. A
 brighter tomorrow."
@@ -128,7 +135,7 @@ Established P0-E4-S2.
 
 **Simple language first. Advanced financial detail only when needed.**
 
-A user should never have to speak Monatriq's database language to understand
+A user should never have to speak Monitriq's database language to understand
 their own money. Terms like cost basis, quick-sale value, disposition,
 capital returned, realised gain/loss, cash flow class, and valuation event are
 correct and necessary in the schema, the domain layer, and this documentation
@@ -151,3 +158,7 @@ See [VISUAL_CONSTITUTION.md §9](../design/VISUAL_CONSTITUTION.md#9-progressive-
 matching progressive-disclosure/copy pattern, and
 [docs/reports/P0-E4-S2-ux-language-progressive-disclosure.txt](../reports/P0-E4-S2-ux-language-progressive-disclosure.txt)
 for the full audit of what changed.
+
+## Budget (foundation, P0-E5-S1)
+
+Budget is a simple monthly plan for everyday spending: pick a currency and month, set a planned amount per spending category, and Monitriq shows planned, spent and remaining from your real Money activity. No default budget, no 50/30/20, no income guessing, no seeded data. Spending you did not plan for is shown as "Not budgeted", not hidden. Going over budget never blocks recording money. Upcoming commitments are shown for context and never counted as spending. Budget Remaining is different from Available Cash and Safe to Deploy. Budget UI is a later phase.

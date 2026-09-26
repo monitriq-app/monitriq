@@ -18,10 +18,14 @@ import { GoalsSection } from "@/components/home/GoalsSection";
 import { ThisMonthSection } from "@/components/home/ThisMonthSection";
 import { RecentActivityPreview } from "@/components/home/RecentActivityPreview";
 import { UpcomingObligationsList } from "@/components/obligations/UpcomingObligationsList";
+import { BudgetHomeCard } from "@/components/home/BudgetHomeCard";
+import { getBudgetSummary, listBudgets } from "@/lib/domain/budget/repository";
+import { todayInTimezone } from "@/lib/domain/budget/presentation";
+import type { BudgetSummary } from "@/lib/domain/budget/types";
 import { NewUserSetup } from "@/components/home/NewUserSetup";
 
 /**
- * Monatriq's production Home / Command Center (P0-E3-S2). Home is an
+ * Monitriq's production Home / Command Center (P0-E3-S2). Home is an
  * aggregation surface, never a second source of financial truth
  * (docs/product/PRODUCT_DEFINITION.md #3) — every figure here is read
  * from getFinancialPositionSummary() or, for Recent Activity (deliberately
@@ -64,6 +68,16 @@ export default async function HomePage() {
     activity = await getRecentActivity(supabase, 10);
   } catch {
     activity = null;
+  }
+
+  // Budget is a secondary module: its failure must not take down Home.
+  let budgetSummaries: BudgetSummary[] = [];
+  try {
+    const today = todayInTimezone(profile?.timezone ?? "UTC");
+    const live = (await listBudgets(supabase)).filter((b) => b.status === "active" && b.periodStart <= today && today <= b.periodEnd);
+    budgetSummaries = await Promise.all(live.slice(0, 3).map((b) => getBudgetSummary(supabase, b.id)));
+  } catch {
+    budgetSummaries = [];
   }
 
   const currenciesByCode = new Map(currencies.map((c) => [c.code, c]));
@@ -121,6 +135,11 @@ export default async function HomePage() {
 
           <section>
             <ThisMonthSection summary={summary.thisMonth} currencies={currenciesByCode} />
+          </section>
+
+          <section className="flex flex-col gap-2.5">
+            <h2 className="text-lg font-semibold text-text-primary">This Month&apos;s Budget</h2>
+            <BudgetHomeCard summaries={budgetSummaries} currencies={currenciesByCode} />
           </section>
 
           <section className="flex flex-col gap-2.5">

@@ -1,22 +1,10 @@
 import Link from "next/link";
-import {
-  ShoppingCart,
-  Tag,
-  Wrench,
-  Briefcase,
-  ShoppingBag,
-  PiggyBank,
-  Landmark,
-  CreditCard,
-  Rocket,
-  CircleDollarSign,
-  Flag,
-  Link as LinkIcon,
-} from "lucide-react";
+import { Flag, Link as LinkIcon } from "lucide-react";
 import { formatCurrencyAmount } from "@/lib/domain/currency/format";
 import type { Currency } from "@/lib/domain/currency/types";
 import type { GoalSummary } from "@/lib/domain/goals/types";
-import type { DecisionSummary, DecisionTypeCode } from "@/lib/domain/decisions/types";
+import type { DecisionSummary } from "@/lib/domain/decisions/types";
+import { DecisionTypeIcon } from "@/components/decisions/DecisionTypeIcon";
 
 interface YourMovesSectionProps {
   focusGoal: GoalSummary | null;
@@ -31,45 +19,12 @@ const CHOICE_LABEL: Record<string, string> = {
   keep_reviewing: "Keep reviewing",
 };
 
-/** A factual status chip — the exact choice value the user recorded, never colored to imply good/bad (Monatriq doesn't judge a Decision's choice). */
+/** A factual status chip — the exact choice value the user recorded, never colored to imply good/bad (Monitriq doesn't judge a Decision's choice). */
 function ChoiceChip({ choice }: { choice: string | null }) {
   const label = choice ? (CHOICE_LABEL[choice] ?? choice) : "No choice recorded yet";
   return (
     <span className="inline-flex shrink-0 items-center rounded-full bg-surface-strong px-2 py-0.5 text-[11px] font-semibold text-text-secondary">{label}</span>
   );
-}
-
-/**
- * Returns a fully-formed icon element for the decision's own real
- * decisionTypeCode — never a stored component reference, and never a
- * numbered priority badge (the reference's leading "1/2/3" circle implies
- * an urgency ranking Monatriq has never computed for Decisions; a
- * type-identity icon fills the same visual slot with real, non-ranking
- * data instead).
- */
-function DecisionTypeIcon({ typeCode }: { typeCode: DecisionTypeCode }) {
-  switch (typeCode) {
-    case "buy_asset":
-      return <ShoppingCart size={14} aria-hidden="true" />;
-    case "sell_asset":
-      return <Tag size={14} aria-hidden="true" />;
-    case "repair_improve_asset":
-      return <Wrench size={14} aria-hidden="true" />;
-    case "business_investment":
-      return <Briefcase size={14} aria-hidden="true" />;
-    case "large_personal_purchase":
-      return <ShoppingBag size={14} aria-hidden="true" />;
-    case "use_savings":
-      return <PiggyBank size={14} aria-hidden="true" />;
-    case "take_debt":
-      return <Landmark size={14} aria-hidden="true" />;
-    case "pay_down_debt":
-      return <CreditCard size={14} aria-hidden="true" />;
-    case "start_new_venture":
-      return <Rocket size={14} aria-hidden="true" />;
-    default:
-      return <CircleDollarSign size={14} aria-hidden="true" />;
-  }
 }
 
 /**
@@ -86,7 +41,7 @@ function DecisionTypeIcon({ typeCode }: { typeCode: DecisionTypeCode }) {
  * reserves for a scenario-specific amount, since DecisionSummary carries
  * no such amount (evaluating one requires reading a specific scenario,
  * not the Home-level list). The reference's bottom-row status line (e.g.
- * "Draft & valuation completed") has no Monatriq equivalent and is
+ * "Draft & valuation completed") has no Monitriq equivalent and is
  * dropped in favor of the decision's real linked-asset/liability name
  * when one exists. The inner highlight box uses the reference's own
  * actual padding (p-2, ~8px, matching code.html's `p-space-sm` for this

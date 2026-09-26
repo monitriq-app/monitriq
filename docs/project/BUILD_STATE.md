@@ -1,4 +1,4 @@
-# Monatriq — Build State
+# Monitriq — Build State
 
 Canonical implementation checkpoint. Updated at the end of every phase.
 Do not mark future phases complete ahead of time.
@@ -25,9 +25,199 @@ of prior phases.
 
 ## Current phase
 
-P0-E4-S2A — UX Simplification: Final Corrections.
+P0-E3-S1B — Controlled Product Rebrand: Monatriq → Monitriq.
 
 ## Current status
+
+**COMPLETE (identity-only rebrand).** Canonical product name is now
+**Monitriq**; the former name was **Monatriq**. The approved Monitriq 2D
+brand pack (`docs/reference/monitriq brand/`) is installed in
+`public/brand/` byte-for-byte and used directly — logo artwork was not
+redrawn, recolored, typed as text, or modified (the header mark, the
+auth/landing horizontal logo, favicons, PWA icons and Apple touch icon
+all reference supplied files; `BrandLogo` no longer types the wordmark as
+text). Page title, title template, PWA `name`/`short_name`, auth and
+app-shell branding, accessibility labels, current UI copy, package name
+(`monitriq`), CSS token prefix (`--monitriq-*`, values unchanged) and
+living docs now say Monitriq. Financial architecture, schema, RLS,
+calculations and user data are unchanged: zero migrations created or
+modified, `lib/domain` untouched except one user-facing copy string in
+`lib/domain/decisions/presentation.ts` (and its one pinning test string).
+Historical reports and phase narratives below intentionally keep the name
+in use when they were written. Repo folder remains
+`/Users/datamatics/Monatriq`; Supabase ref remains
+`mvnwrkfcszazqqccmmxq` (dashboard name "Monatriq Dev" unchanged,
+deferred). Audit: `docs/rebrand/MONATRIQ_TO_MONITRIQ_AUDIT.md`. Report:
+`docs/reports/P0-E3-S1B-controlled-monitriq-rebrand.txt`.
+
+## Prior phase: P0-E4-S3C — Decisions Calculation UX: Final Polish
+
+**COMPLETE.** Three small UX fixes on top of P0-E4-S3B's calculation
+transparency, found in manual browser QA: (1) the legacy Pay Down Debt
+"Link a debt" repair action no longer dead-ends into an empty selector
+when the user has no liabilities tracked at all — it now routes to the
+real existing debt-creation flow at `/liabilities`, itself still
+foundation-level (flagged as an open item, not fixed this pass — out of
+scope); (2) "Not Yet Calculated" no longer repeats a reason the
+expanded "How this was calculated" section already gives for the same
+missing calculation (new `coveredMissingInfoCodes()` helper); (3) a
+simple Pay Down Debt payment (principal only) is now labeled "Your
+assumption · Payment amount" instead of the confusing "Calculated ·
+Total payment" — the latter is now reserved for when interest/fee
+components genuinely make the total a real sum, still read verbatim
+from the canonical `totalCashRequired` field, never recomputed. No
+schema/RLS/RPC/calculation change. Full detail: `docs/reports/
+P0-E4-S3-decisions-production-ui.txt`, section "P0-E4-S3C — FINAL
+CALCULATION UX POLISH".
+
+Verified against the existing local Supabase stack (schema unchanged):
+Decisions suite 90/90 (was 86/86, +4); full regression 571/571 (was
+567/567). `npm run lint`, `npm run typecheck`, and `npm run build` all
+pass clean. Real-browser visual verification still has NOT happened
+this session.
+
+## Prior phase: P0-E4-S3B — Decisions Calculation Transparency + Required Input Integrity
+
+**COMPLETE.** Manual browser QA on P0-E4-S3/S3A found the calculations
+themselves correct but hard to trace — a user couldn't tell where a
+number came from, why another said "Not calculated," or what to add to
+make it calculable. This phase adds an explanatory layer over the
+EXISTING canonical evaluation — it does not compute anything new.
+
+New "How this was calculated" progressive-disclosure section inside
+Decision Review, collapsed by default, driven by a new pure function,
+`buildDecisionCalculationExplanation()` in `lib/domain/decisions/
+presentation.ts`. It explains up to four blocks (Cash, Debt, Profit/
+Loss, Safe to Deploy) depending on decision type, each showing the
+Tracked/Your-assumption/Calculated inputs that fed the result — but the
+RESULT itself is always copied verbatim from the canonical `evaluate_
+decision_scenario()` field (`bucketBalanceAfter`, `hypotheticalLiability
+OutstandingAfter`, `projectedGrossProfitLoss`, `currencySafeToDeployAfter`)
+never re-summed from the displayed terms — proven by new tests that
+deliberately construct a fake evaluation where the terms' sum does NOT
+match the canonical result, then assert the UI shows the canonical
+figure anyway. Safe to Deploy deliberately shows NO equation (only the
+canonical result plus the user's real configured minimum as read-only
+context) because the real formula operates on liquid cash across EVERY
+bucket in a currency, while the evaluation only exposes one bucket's
+balance — showing an equation using that mismatched figure would be a
+silently wrong second formula, not an explanation of the real one.
+
+"Not Yet Calculated" reasons are now genuinely specific per missing-
+information code (extended `MISSING_INFO_LABELS`) instead of a flat
+"Insufficient information." New required-input enforcement (client-side
+only, no schema change): Pay Down Debt cannot be newly created without
+selecting a real liability; Sell Asset/Repair Improve Asset require a
+capability-eligible linked asset; Use Savings requires a source account
+— all via new `assetLinkRequired`/`liabilityLinkRequired`/
+`sourceBucketRequired` presentation flags. Legacy decisions created
+before this rule existed (e.g. a Pay Down Debt with no linked liability)
+remain fully readable and evaluable — never deleted or auto-mutated —
+and now offer a real "Link a debt to complete this calculation" repair
+action inside Decision Review, using the domain's existing `updateDecision
+()` (decisions are not append-only, unlike scenarios/choices/
+evaluations), tenant-isolation-tested exactly like decision creation.
+
+Full rationale, every explanation block's logic, and every test added:
+`docs/reports/P0-E4-S3-decisions-production-ui.txt`, section "P0-E4-S3B
+— CALCULATION TRANSPARENCY + REQUIRED INPUT INTEGRITY".
+
+Verified against the existing local Supabase stack (schema unchanged,
+no reset needed): Decisions suite 86/86 (up from 70/70 — 16 new
+assertions, zero regressions); full regression 567/567, all 12 suites
+(up from 551/551). `npm run lint`, `npm run typecheck`, and `npm run
+build` all pass clean. Real-browser visual verification has still NOT
+happened this session (no browser tool was available) — this remains
+the most important open item before treating Decisions/Rules as
+launch-ready.
+
+## Prior phase: P0-E4-S3A — Decisions Browser-QA Corrections + Rules Production Experience
+
+**COMPLETE.** A targeted correction pass on top of P0-E4-S3 (below) —
+P0-E4-S3's structure (header, Decision Position card, tabs, Test a
+Decision CTA, Active Decisions cards, Test New grid, Decision Review
+sheet composition) was frozen and NOT redesigned. Fixed: a double-
+negative "Cash Required NGN -500,000.00" display (new centralized
+`directionalCashAmount()`/`signPrefix()` helpers in `lib/domain/
+decisions/presentation.ts` — the signed `netImmediateCashDelta` itself
+is unchanged); a flat "Insufficient information" message that made a
+partially-missing evaluation read as fully failed (now specific,
+per-code "Not Yet Calculated" cards, shown after the figures that DID
+calculate); three remaining jargon-adjacent copy lines. Also
+productionized `/rules` (previously "Foundation-level view — not the
+final design," now directly linked from Decisions' "Set Financial
+Rules") — new `SafeToDeployCard`, `MinimumCashSection` (compact
+per-currency card + inline edit, replacing one giant always-open form),
+`CommitmentsSection` + `AddCommitmentSheet` (progressive disclosure,
+replacing an always-expanded form) — using only existing Monatriq
+card/sheet/token patterns, no new design language, no Rules/Obligations
+domain change. Full rationale, every correction, and every file
+touched: `docs/reports/P0-E4-S3-decisions-production-ui.txt`, section
+"P0-E4-S3A — MANUAL BROWSER QA CORRECTIONS".
+
+Verified against the existing local Supabase stack (schema unchanged,
+no reset needed): Decisions suite 70/70 (unchanged); full regression
+551/551, all 12 suites, zero failures. `npm run lint`, `npm run
+typecheck`, and `npm run build` all pass clean. Real-browser visual
+verification has still NOT happened this session (no browser tool was
+available) — this remains the most important open item before treating
+Decisions/Rules as launch-ready.
+
+## Prior phase: P0-E4-S3 — Decisions Production UI + Canonical Evaluation Experience
+
+**COMPLETE.** Replaced the "foundation-level" Decisions screens
+(self-documented as "not the final design," P0-E2-S7) with a production
+UI matching the approved reference (`docs/reference/05-decisions/`).
+Presentation-only phase — no schema, migration, or RLS change; a domain
+audit found the full calculation/tenancy layer already implemented and
+tested (5 tables, `evaluate_decision_scenario()`, `record_decision_
+choice()`, 70 passing assertions, all from P0-E2-S7), so this phase
+consumed that layer as-is rather than rebuilding it.
+
+New centralized presentation config, `lib/domain/decisions/
+presentation.ts` — the Decisions equivalent of Assets'
+`assetDisplayConfig()`/`assetCreationConfig()` pattern — decides which
+of `decision_scenarios`' fields are relevant per decision type and what
+to call them, read by both the new creation sheet and the review sheet
+(closing an open question the P0-E2-S7 report had flagged about
+centralizing this). New screen composition: `DecisionPositionCard`
+(reuses `getFinancialPositionSummary()`, the exact function Home's
+`PositionSection` already calls — no second calculation),
+`DecisionsWorkspace` (Active / Test New / Compare Scenarios / Journal /
+Financial Rules tabs), `CreateDecisionSheet` (name + first scenario,
+fields gated by decision type), `DecisionReviewSheet` (Facts /
+Assumptions / What This Changes / Rules / Scenario Comparison / choice
+recording, all read from `evaluate_decision_scenario()` — nothing
+recomputed client-side). `DecisionTypeIcon` was extracted from Home's
+`YourMovesSection.tsx` into a shared component so Home and the full
+Decisions screen use the identical type→icon mapping (Home's own
+behavior/visuals are otherwise untouched).
+
+Two reference elements were deliberately NOT built, both because no
+canonical domain calculation exists for them and building one
+client-side would have meant fabricating a formula: a "Worst-Case
+Stress Test" toggle pair, and a synthesized "Mathematical Trade-Off"
+comparison paragraph between two scenarios (a made-up "incremental
+return %"). Scenario Comparison instead shows each scenario's own real
+derived figures side by side with no synthesized verdict. The
+reference's "From Your Assets" section — an automated suggestion engine
+surfacing hardcoded "Audi A5 Coupe"/"White BMW F30 335i" candidates —
+was intentionally omitted entirely: it is close to a literal match for
+this phase's own explicit "do not populate the screen with invented
+suggestions" prohibition. Full rationale for every omission: `docs/
+reports/P0-E4-S3-decisions-production-ui.txt` §51.
+
+Verified against the existing local Supabase stack (schema unchanged,
+no reset needed): Decisions suite 70/70 (unchanged — no domain code
+touched); full regression 551/551, all 12 suites, zero failures. `npm
+run lint`, `npm run typecheck`, and `npm run build` all pass clean.
+Real-browser visual verification against the approved screenshot has
+NOT happened yet (no browser tool was available this session) — the
+same category of open item prior phases have also carried forward
+explicitly; this is the required next step before treating Decisions as
+launch-ready rather than structurally complete.
+
+## Prior phase: P0-E4-S2A — UX Simplification: Final Corrections
 
 **COMPLETE.** A small, targeted correction pass on top of P0-E4-S2 (see
 "Prior phase" below) — manual report review found four P0-E4-S2 items
@@ -1124,23 +1314,37 @@ push, never `supabase db reset` against it.
 
 ## Next approved step
 
-Do not begin automatically. Decisions production UI is explicitly NOT
-started (restated across every prior Assets phase, including
-P0-E4-S2/P0-E4-S2A). Offers remains unimplemented (no canonical model,
-deliberately deferred). Both previously-pending migrations
+Do not begin automatically. Decisions production UI, calculation
+transparency, and Rules & Obligations production UI are now COMPLETE
+(P0-E4-S3/S3A/S3B/S3C) but NOT yet visually verified in a real browser
+— see P0-E4-S3C's "Current status" and the report's "P0-E4-S3C — FINAL
+CALCULATION UX POLISH" section for the exact gap. A real, known,
+documented (not fixed) gap: `/liabilities` remains a foundation-level
+screen ("Foundation-level view — not the final design") that Decisions'
+legacy-repair flow now links to as its only real debt-creation entry
+point — a Liabilities production-UI pass is a reasonable candidate for
+a future phase. Goals redesign and Offers were explicitly NOT started.
+Offers remains unimplemented (no canonical model, deliberately
+deferred). Both previously-pending migrations
 (`20260930090000_restrict_asset_status_to_vehicle.sql` (P0-E3-S4R) and
-`20261001090000_create_asset_disposition_domain.sql` (P0-E4-S1)) are
-now confirmed synchronized to Monatriq Dev (P0-E4-S2A, manual terminal
-verification) — this is no longer an outstanding blocker. P0-E4-S2/
-P0-E4-S2A stop for manual browser review per their own phase
-instruction — the wording/progressive-disclosure changes are
-presentation-only and have not yet been visually verified in a real
-browser. Recommended next step (pending user review): (a) manual
-browser review of P0-E4-S2/P0-E4-S2A's changes across Light/Dark/System
-and 320-430px+ viewports, including the MoreDetails touch-target fix
-and Vehicle's now-neutral default card, (b) real browser/device QA
-across Home, Money, and Assets (including the Sell Asset flow) before
-building further UI on an unverified visual foundation, (c) an Offers
-domain phase — the smallest remaining Assets capability gap — or (d)
-continuing the production-UI rollout to Decisions — or the user's own
-priority.
+`20261001090000_create_asset_disposition_domain.sql` (P0-E4-S1)) remain
+confirmed synchronized to Monatriq Dev (P0-E4-S2A) — not an outstanding
+blocker. Recommended next step (pending user review): (a) manual
+browser review of Decisions AND `/rules` against `docs/reference/
+05-decisions/screen.png`, across Light/Dark/System and 320-430px+
+viewports, including the new "How this was calculated" disclosure, the
+deduplicated "Not Yet Calculated" section, and the Pay Down Debt
+required-liability/legacy-repair/no-debts-tracked flows — the single
+most important open item across the last six phases (P0-E4-S2/S2A/S3/
+S3A/S3B/S3C all share this same unverified-in-a-real-browser gap), (b)
+a Liabilities production-UI phase, (c) a Goals production-UI or
+redesign phase, (d) an Offers domain phase — the smallest remaining
+Assets capability gap — or (e) the user's own priority.
+
+## P0-E5-S1 — Budget domain + Everyday Money foundation (current phase, awaiting review)
+
+Local-only migration `20261002090000_create_budget_domain.sql` (NOT pushed to Monitriq Dev): `budgets`, `budget_category_allocations`, 4 mutation RPCs, 4 derived read functions incl. `budget_facts_for_date` for a future Decisions phase. `lib/domain/budget/{types,repository}.ts`, `supabase/tests/budget/run.ts` (30 checks, `npm run test:budget`). Full regression 601/601, lint/typecheck/build clean. No Budget UI. Nothing committed. Report: `docs/reports/P0-E5-S1-budget-domain-everyday-money-foundation.txt`.
+
+## P0-E5-S2 — Budget production UI + Quick Add (awaiting review)
+
+/budget screen, Quick Add regrouped into Record/Plan (Budget, Goal, Commitment), Home budget card, account-menu entry. No schema change. Budget migration must be applied to Monitriq Dev (unconfirmed). Tests: budget 30, budget-ui 20. Report: docs/reports/P0-E5-S2-budget-production-ui.txt. Nothing committed.

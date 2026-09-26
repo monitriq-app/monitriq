@@ -1,0 +1,139 @@
+P0-E5-S2 — BUDGET PRODUCTION UI + QUICK ADD INTEGRATION
+================================================================
+
+PHASE
+P0-E5-S2 — Budget production UI and Quick Add integration.
+
+STATUS
+COMPLETE, with two caveats: (1) the remote migration could not be confirmed (see MIGRATION STATUS); (2) one manual browser review is requested. Nothing committed or pushed.
+
+OBJECTIVE
+Let a non-financial user create a monthly budget, plan amounts per category, see spent / left / over, see unbudgeted spending and upcoming commitments, and update it easily. No new Budget engine.
+
+VISUAL STRATEGY
+No new design. Existing tokens, cards, bottom-sheet pattern (same wrapper as AddCommitmentSheet), MoreDetails disclosure, 48px targets, theme tokens (no Budget-specific theme). Progress rail is a plain bar with a text label ("65% used", "Over budget", "Planned zero"), so meaning never relies on color alone. No scores, gauges, advice.
+
+QUICK ADD CHANGES
+Modal heading "Quick Add", subtitle "What would you like to do?", centered modal preserved. Two groups: RECORD (Money Received, Money Spent, Move Money, Asset / Investment) and PLAN (Budget, Goal, Commitment). Compact 48px rows. Plan group is available even with no cash bucket (Record still shows the "add a cash bucket" note). Structure lives in components/quick-add/options.ts. Nav "+" aria-label is now "Quick Add". Also fixed a pre-existing invalid nesting (a link inside a button) for the Asset row.
+- Budget -> /budget?quick=1: opens the current budget if one exists; otherwise the empty state with the Create sheet open. Never auto-creates.
+- Goal -> /goals#add-goal (anchor added to the existing Add Goal section). The Goals screen is still the foundation-level UI; only the anchor was added.
+- Commitment -> /rules?add=commitment: opens the existing AddCommitmentSheet (defaultAdding prop). No duplicate obligation flow.
+- Asset -> /assets#add-asset (unchanged existing route).
+
+BUDGET EMPTY STATE
+"No budget for this month yet. Create a simple plan for what you want to spend." + Create Budget. No seeded amounts, no 50/30/20, no invented income.
+
+CREATION FLOW
+Sheet: Month (last month, this month, next six), Currency (all supported currencies; profile preferred currency preselected but changeable), optional Expected money in (planning only, labelled "not recorded income"). Duplicate month+currency gives a friendly message. After creating, the user lands on the new budget.
+
+SUMMARY
+Planned / Spent / Left (or "Over by") from budget_summary, with the month and currency shown. Before anything is planned: Planned "Not set yet", Left "—" (never a fake zero). Expected money in is shown as planning context only.
+
+CATEGORY UX
+One compact card per budgeted category: name, Left/Over by, rail, Planned, Spent, status text. Tap opens a sheet: Set / Change budget amount, Remove budget amount. Explicit zero is accepted and shown as "Planned zero"; removing returns the category to Not budgeted. Add category lists only canonical Money spending categories not yet allocated. Amount validation is a string check against the currency's decimal places; no Number/parseFloat.
+
+UNBUDGETED SPENDING
+Own section listing spending in categories with no allocation, with "Add to budget" per row. The budget is never changed automatically.
+
+COMMITMENTS
+From budget_upcoming_commitments (real obligations only): "Known payments still coming this month. They are not counted as spent." Calm empty state with an "Add commitment" link. Due dates use deterministic formatting (see OPEN ISSUES).
+
+MULTI-CURRENCY
+Each budget is one currency. Currency pills switch between same-month budgets; month arrows move between existing budgets. No cross-currency total anywhere. Verified with NGN and USD budgets.
+
+MONEY INTEGRATION
+Budget has no transaction entry. Money Spent, and voiding, change Budget on the next server render via the canonical read model (tested: spend 10,000 raises Spent by 10,000; void removes it). Budget Remaining is not labelled or styled as Available Cash or Safe to Deploy, and Safe to Deploy is omitted.
+
+STATUS HANDLING
+Closed: read-only banner + Reopen. Archived: hidden from default selection and navigation, reachable by id, banner + Restore. Close/Archive live under "Close or archive this budget" (MoreDetails).
+
+HOME INTEGRATION
+Compact "This Month's Budget" section (BudgetHomeCard): per current-month currency budget, Spent and Left/Over by, linking to it; or a simple "Plan this month's spending" link when none exist. Failure-isolated (Home still renders if Budget fails). No Home redesign.
+Also added: Budget in the account menu.
+
+MOBILE
+Verified in headless Chrome against a local scratch build: 320, 360, 375, 393, 412, 430, 768, 1280 px, /budget and /home, dark and light: no horizontal overflow. Currency values wrap (break-words). Bottom nav padding unchanged (pb-24 on main); sheets use safe-area padding.
+Not verified: physical devices; the empty-state and Create sheet were checked for opening/structure only.
+
+LIGHT / DARK
+Uses the existing theme tokens; both themes checked at the viewports above. Progress over-budget uses the existing "attention" token plus text.
+
+ACCESSIBILITY
+48px targets (category cards, pills, buttons, arrows), labelled dialogs, form labels, progressbar role with label and values, aria-current on the selected currency, visible focus from the global style. Category cards have full accessible labels. Not run: screen-reader pass.
+
+TESTS
+New supabase/tests/budget-ui/run.ts (npm run test:budget-ui): 20 checks against the real local database and the presentation layer: no budget, create, existing/preferred selection, planned/spent/remaining, over budget, explicit zero, unbudgeted, add / edit / remove allocation, addable categories, commitments + none, NGN vs USD separation, Money spend reflected, void removed, closed read-only, archived handling, validation, deterministic due date, Quick Add structure and routes (Budget, Goal, Commitment), no money arithmetic / advice copy in Budget React, RLS. These are presentation/domain tests, not a rendered-DOM test framework (the repo has none).
+
+REGRESSION
+Existing 12 suites unchanged and passing (20/48/11/114/27/25/56/86/90/33/30/31 = 571), Budget 30/30, Budget UI 20/20.
+
+LINT / TYPECHECK / BUILD
+Lint clean; app and test-harness typecheck clean; production build clean (/budget route present).
+
+SCHEMA STATUS
+No migration, RLS or table change in this phase.
+
+MIGRATION STATUS
+20261002090000_create_budget_domain.sql is present locally and applied on the local database. I could NOT confirm it on Monitriq Dev: `supabase migration list --linked` returned 403 (this CLI login lacks privileges on the linked project). Nothing was pushed or reset. Budget will not work on the remote project until that migration is applied (`supabase db push` after your approval, or confirm it in the dashboard).
+
+FILES CHANGED
+New: app/(app)/budget/page.tsx; components/budget/{BudgetWorkspace,CategoryAmountSheet,CreateBudgetSheet}.tsx; components/home/BudgetHomeCard.tsx; components/quick-add/options.ts; lib/domain/budget/presentation.ts; supabase/tests/budget-ui/run.ts; this report.
+Modified: components/quick-add/QuickAddProvider.tsx; components/layout/{MobileBottomNav,DesktopNav,AccountMenu}.tsx; app/(app)/home/page.tsx; app/(app)/rules/page.tsx; components/rules/CommitmentsSection.tsx; app/(app)/goals/page.tsx; package.json (test:budget-ui).
+
+OPEN ISSUES
+- A hydration mismatch (locale date formatting of a commitment due date) was found in the browser and fixed with deterministic formatting; I did not get a clean confirmation from the dev log afterwards, so please glance at the browser console during review.
+- Overall Remaining includes unbudgeted spending (canonical S1 rule: planned total minus all actual spending), so it can show "Over by" while every budgeted category is under; the Unbudgeted section explains the gap.
+- "Quick Add > Budget" opens the current-month budget (preferred currency first); it does not choose among several currencies.
+- Budget is not a primary bottom-nav tab (reachable from Home, Quick Add, account menu, desktop Add).
+- The doc comment in QuickAddProvider now sits above HubRow rather than the provider.
+
+RISKS
+Router cache: Budget refresh after recording Money relies on server re-render; if a stale client cache is ever seen, add revalidation. No rendered-DOM automated tests. Goals page is still foundation-level.
+
+GIT STATUS
+108 changed/untracked entries including prior phases; nothing staged, committed or pushed.
+
+RECOMMENDED NEXT PHASE
+Manual browser review (including empty state, Create sheet, and the console), confirm/apply the Budget migration on Monitriq Dev, then P0-E5-S3 (Spending Decision Assistant) using budget_facts_for_date.
+
+
+================================================================
+P0-E5-S2A — FINAL MOBILE QA POLISH
+================================================================
+
+STATUS
+COMPLETE. Two changes requested; one needed a code fix, one turned out not to be present in the code. Nothing committed. No Budget domain, schema, RLS, calculation or Budget UI change.
+
+1. QUICK ADD HORIZONTAL OVERFLOW
+Measured before changing anything (headless Chrome, local scratch build): at every width (320-430) the hub's scroll container had scrollWidth exceeding clientWidth by exactly 4px (e.g. 258 vs 254 at 320), while no element box extended past the dialog and the page itself did not scroll. Root cause: the Close button used a `before:absolute before:-inset-1` pseudo-element to enlarge its hit area; that pseudo-element sits at the right edge of the hub's `overflow-y-auto` container (which makes overflow-x auto), so it overflowed it by 4px and produced the scrollbar. It was also the only target below 48px (40px).
+Fix (structural, one file, components/quick-add/QuickAddProvider.tsx): the Close control is now a real 48x48 button (h-12 w-12, shrink-0) containing the 40px visible circle, so the hit area is genuine and nothing extends outside its container. The header row also got gap-2 and min-w-0 on the title block so text can wrap. overflow-x was NOT hidden.
+Re-measured after the fix at 320, 360, 375, 393, 412, 430 in Light and Dark: scrollWidth == clientWidth at all 12 combinations (no horizontal scroll), no page-level overflow, no clipped text, minimum interactive height 48px, RECORD/PLAN grouping and centered modal unchanged. Screenshots reviewed at 320 (light) and 360 (dark): chevrons fully visible; longer descriptions wrap to two lines inside their rows (visible at 320 for Asset / Budget / Commitment).
+Manual verification widths requested (320, 360, 393, 430): all covered, both themes, by scripted browser measurement plus screenshots. A human eyeball on a real device is still recommended.
+
+2. PRODUCT TITLE / OLD NAME
+Audited runtime metadata only. Findings:
+- app/layout.tsx title default is siteConfig.name = "Monitriq"; template "%s · Monitriq"; no page in app/ overrides metadata.
+- Verified rendered <title> on /login and, when signed in, /home, /money, /budget, /rules, /goals: exactly "Monitriq".
+- Served HTML of /login, /signup, /forgot-password and / on the scratch build, and /login on the running :3000 server: zero occurrences of "Monatriq" (case-insensitive). /manifest.webmanifest: name and short_name "Monitriq", zero old-name matches. Apple-touch/favicon paths are monitriq/favicon files.
+- Source search of app/, components/, lib/config, proxy.ts, package.json: no former-name string. The only remaining hits are in lib/domain comments, next.config.ts comment and .env.example prose (not user-visible, deliberately preserved earlier).
+Conclusion: the app does not emit "Monatriq - Monitriq"; no runtime change was needed or made. A title like that can only come from outside the served page: a browser history/bookmark entry or tab created before the rebrand, or an already-installed PWA/home-screen shortcut keeping its old name (called out as a risk in the S1B/S1C reports). Suggested check: remove/refresh that bookmark or history entry, or reinstall the PWA, and reload with a hard refresh. If the double title still appears on a fresh tab, please send the exact URL and I will trace it.
+No change made to historical reports, migrations, test fixture domains (monatriq.test), database identifiers or repo history.
+
+3. PRESERVED
+Budget empty state, summary, category cards, unbudgeted behaviour, commitments, currency separation, Quick Add RECORD/PLAN and the centered modal: untouched.
+
+4. TESTS ADDED
+Two guards in supabase/tests/budget-ui/run.ts (now 22 checks): Quick Add hub header must not use negative-inset/negative-margin extensions and the Close target is 48px; runtime brand metadata files contain no former-name string.
+
+5. VALIDATION
+npm run test:budget-ui 22/22. npm run test (all 14 suites: 20/48/11/114/27/25/56/86/90/33/30/31 + Budget 30 + Budget UI 22) all pass, exit 0. Lint clean. Typecheck (app + harness) clean. Production build clean.
+
+6. FILES CHANGED IN S2A
+components/quick-add/QuickAddProvider.tsx; supabase/tests/budget-ui/run.ts; this report.
+
+7. OPEN ISSUES / RISKS
+- The stale "Monatriq - Monitriq" title source is external to the codebase (see 2) and could not be reproduced.
+- Budget migration on Monitriq Dev is still unconfirmed (carried over from S2).
+
+8. GIT STATUS
+Uncommitted; nothing staged or pushed.

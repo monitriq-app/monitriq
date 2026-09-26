@@ -20,9 +20,9 @@ interface AppShellProps {
  * Money/+/Assets/Decisions/Goals (docs/product/PRODUCT_DEFINITION.md
  * #3) — Financial Position/Rules/Receivables/Liabilities remain real
  * routes, surfaced from the account menu instead of primary navigation
- * (see AccountMenu.tsx). Header height is 64px (h-16) on every
- * breakpoint, matching the approved Home reference's own header
- * proportion (P0-E3-S2 gap-audit item [1]) — this shell is shared by
+ * (see AccountMenu.tsx). Header height is 56px (h-14) on every
+ * breakpoint (reduced from 64px in P0-E3-S1D when the repeated page
+ * label was removed from the header) — this shell is shared by
  * every (app) route, so the height applies everywhere, not just Home.
  * Bottom padding on <main> reserves room for the fixed mobile nav so
  * content is never hidden behind it.
@@ -54,7 +54,7 @@ export async function AppShell({ children }: AppShellProps) {
     <QuickAddProvider buckets={buckets} balances={balances} receivedCategories={receivedCategories} spendingCategories={spendingCategories}>
       <div className="flex min-h-dvh flex-col bg-background text-text-primary">
         <header className="sticky top-0 z-30 border-b border-border bg-background/90 pt-[max(env(safe-area-inset-top),0px)] backdrop-blur">
-          <PageContainer className="flex h-16 items-center justify-between gap-4">
+          <PageContainer className="flex h-14 items-center justify-between gap-3">
             <HeaderBrand />
             <DesktopNav />
             <AccountMenu email={user?.email ?? null} />

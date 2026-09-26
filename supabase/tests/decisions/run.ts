@@ -27,6 +27,8 @@ import {
   getDecisionScenarioEvaluationHistory,
 } from "../../../lib/domain/decisions/repository.ts";
 import { convertScenarioNetDeltaToReportingCurrency } from "../../../lib/domain/decisions/aggregate.ts";
+import { decisionTypePresentation, buildDecisionCalculationExplanation, directionalCashAmount, coveredMissingInfoCodes } from "../../../lib/domain/decisions/presentation.ts";
+import type { DecisionScenarioEvaluation } from "../../../lib/domain/decisions/types.ts";
 import { createBucket, getBucketBalances, recordMoneyReceived } from "../../../lib/domain/money/repository.ts";
 import { createAsset, getAssetSummaries } from "../../../lib/domain/assets/repository.ts";
 import { createLiability, getLiabilitySummaries } from "../../../lib/domain/liabilities/repository.ts";
@@ -203,6 +205,51 @@ async function main() {
         threw = true;
       }
       assert(threw, "linking user B's liability to user A's decision should be rejected");
+    });
+
+    // --- P0-E4-S3B: legacy incomplete Pay Down Debt decisions + the repair path ------
+    // The required-liability rule for NEW Pay Down Debt decisions (P0-E4-S3B
+    // item 9) is enforced client-side only — no CHECK constraint was added,
+    // so the RPC itself still permits a null linked_liability_id here. These
+    // tests prove that an already-existing decision in that state remains
+    // safely readable/evaluable (never crashes, never fabricates a debt
+    // figure), and that the real repair path (updateDecision) works and
+    // stays tenant-isolated.
+    const legacyPayDownDecision = await runner.runValue("Setup: legacy Pay Down Debt decision with NO linked liability (simulates pre-S3B data)", () =>
+      createDecision(userA.client, { decisionTypeCode: "pay_down_debt", name: "Old Unlinked Payoff" }),
+    );
+    if (!legacyPayDownDecision) throw new Error("legacy pay_down_debt decision setup failed");
+
+    const legacyPayDownScenario = await runner.runValue("Setup: scenario under the legacy unlinked Pay Down Debt decision", () =>
+      createDecisionScenario(userA.client, { decisionId: legacyPayDownDecision.id, name: "Base", currencyCode: "USD", debtPrincipalPayment: "500" }),
+    );
+    if (!legacyPayDownScenario) throw new Error("legacy pay_down_debt scenario setup failed");
+
+    await runner.run("Legacy Pay Down Debt with no linked liability evaluates safely — no crash, no fabricated remaining debt", async () => {
+      const evaluation = await evaluateDecisionScenario(userA.client, legacyPayDownScenario.id);
+      assert(evaluation.linkedLiabilityId === null, "expected no linked liability on this legacy decision");
+      assert(evaluation.hypotheticalLiabilityOutstandingAfter === null, "remaining debt must stay null, never fabricated, with no liability linked");
+      assert(evaluation.missingInformation.includes("no_liability_linked"), "expected no_liability_linked in missing information for the legacy decision");
+    });
+
+    await runner.run("Repair path: linking a real liability to the legacy decision afterward makes remaining debt calculable", async () => {
+      const updated = await updateDecision(userA.client, legacyPayDownDecision.id, { linkedLiabilityId: liabilityA.id });
+      assert(updated.linked_liability_id === liabilityA.id, "expected updateDecision to persist the new liability link");
+      const evaluation = await evaluateDecisionScenario(userA.client, legacyPayDownScenario.id);
+      assert(evaluation.linkedLiabilityId === liabilityA.id, "expected the evaluation to now see the linked liability");
+      assert(evaluation.linkedLiabilityOutstandingPrincipal === "5000.000000", `expected liability A's real outstanding principal, got ${evaluation.linkedLiabilityOutstandingPrincipal}`);
+      assert(evaluation.hypotheticalLiabilityOutstandingAfter === "4500.000000", `expected 5000 - 500 = 4500 from the canonical RPC, got ${evaluation.hypotheticalLiabilityOutstandingAfter}`);
+      assert(!evaluation.missingInformation.includes("no_liability_linked"), "no_liability_linked must no longer be present once a liability is linked");
+    });
+
+    await runner.run("Repair path cannot be used to link User B's liability (updateDecision stays tenant-isolated)", async () => {
+      let threw = false;
+      try {
+        await updateDecision(userA.client, legacyPayDownDecision.id, { linkedLiabilityId: liabilityB.id });
+      } catch {
+        threw = true;
+      }
+      assert(threw, "updateDecision must reject linking another user's liability, exactly like createDecision does");
     });
 
     // --- 17-19: facts vs assumptions vs derived remain distinguishable ---------------
@@ -708,6 +755,229 @@ async function main() {
       assert(evaluation.missingInformation.includes("no_bucket_linked"), "expected no_bucket_linked in missing information");
       assert(evaluation.missingInformation.includes("no_amount_specified"), "expected no_amount_specified in missing information");
       assert(evaluation.overallStatus === "insufficient_information", `expected insufficient_information, got ${evaluation.overallStatus}`);
+    });
+
+    // --- P0-E4-S3B: required-input presentation config (pure functions, no DB) -------
+    await runner.run("decisionTypePresentation: Pay Down Debt requires a linked liability; Sell/Repair require a linked asset; Use Savings requires a source account", async () => {
+      assert(decisionTypePresentation("pay_down_debt").liabilityLinkRequired === true, "pay_down_debt must require a linked liability");
+      assert(decisionTypePresentation("sell_asset").assetLinkRequired === true, "sell_asset must require a linked asset");
+      assert(decisionTypePresentation("repair_improve_asset").assetLinkRequired === true, "repair_improve_asset must require a linked asset");
+      assert(decisionTypePresentation("use_savings").sourceBucketRequired === true, "use_savings must require a source account");
+    });
+
+    await runner.run("decisionTypePresentation: buy_asset/business_investment/take_debt/pay_down_debt do not wrongly require an asset link", async () => {
+      assert(decisionTypePresentation("buy_asset").assetLinkRequired === false, "buy_asset's asset doesn't exist yet — must not require a link");
+      assert(decisionTypePresentation("business_investment").assetLinkRequired === false, "business_investment's asset link stays optional");
+      assert(decisionTypePresentation("take_debt").liabilityLinkRequired === false, "take_debt is new borrowing — no existing liability to require");
+      assert(decisionTypePresentation("large_personal_purchase").sourceBucketRequired === false, "large_personal_purchase's account stays optional");
+    });
+
+    // --- P0-E4-S3B: buildDecisionCalculationExplanation (pure functions, no DB) ------
+    // Deliberately constructs `bucketBalanceAfter`/`hypotheticalLiabilityOutstandingAfter`
+    // to NOT equal (before - assumption) in a couple of cases below, specifically to
+    // prove the explanation's `result` is always copied verbatim from the canonical
+    // field and never re-summed from the explanatory `terms` — the core "no second
+    // financial engine" guarantee this phase requires.
+    function baseEvaluation(overrides: Partial<DecisionScenarioEvaluation>): DecisionScenarioEvaluation {
+      return {
+        scenarioId: "test-scenario", decisionId: "test-decision", decisionTypeCode: "large_personal_purchase", currencyCode: "USD",
+        linkedAssetId: null, linkedAssetCostBasis: null, linkedAssetLatestValue: null, linkedAssetQuickSaleEstimate: null, linkedAssetTargetValue: null,
+        linkedLiabilityId: null, linkedLiabilityOutstandingPrincipal: null, sourceBucketBalance: null, destinationBucketBalance: null,
+        cashRequired: null, acquisitionCosts: null, grossProceeds: null, proceedsCosts: null,
+        debtPrincipalPayment: null, debtInterestPayment: null, debtFeePayment: null,
+        expectedValueAssumption: null, expectedFutureSaleValue: null,
+        totalCashRequired: null, netProceeds: null, netImmediateCashDelta: null, hypotheticalBucketId: null,
+        bucketBalanceBefore: null, bucketBalanceAfter: null, currencySafeToDeployBefore: null, currencySafeToDeployAfter: null,
+        retainedDeficitBefore: null, retainedDeficitAfter: null, projectedGrossProfitLoss: null,
+        hypotheticalLiabilityOutstandingAfter: null, basisAfterCapitalizedImprovement: null,
+        minimumCashFloorStatus: null, protectedGoalStatus: null, protectedObligationStatus: null, overallStatus: "insufficient_information",
+        missingInformation: [],
+        ...overrides,
+      };
+    }
+
+    await runner.run("buildDecisionCalculationExplanation: cash outflow — result comes verbatim from bucketBalanceAfter, never re-summed from terms", async () => {
+      const presentation = decisionTypePresentation("large_personal_purchase");
+      const evaluation = baseEvaluation({
+        hypotheticalBucketId: "b1", bucketBalanceBefore: "850100.000000", cashRequired: "500000.000000",
+        bucketBalanceAfter: "111.000000", // deliberately NOT 850100-500000, to prove no re-derivation
+      });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const cashBlock = blocks.find((b) => b.key === "cash");
+      assert(cashBlock !== undefined, "expected a cash block");
+      assert(cashBlock!.calculated === true, "cash block should be calculated when bucketBalanceAfter is present");
+      assert(cashBlock!.result?.amount === "111.000000", `result must be copied verbatim from bucketBalanceAfter, got ${cashBlock!.result?.amount}`);
+      const trackedTerm = cashBlock!.terms.find((t) => t.kind === "tracked");
+      assert(trackedTerm?.amount === "850100.000000", "expected the tracked 'Cash before' term to equal bucketBalanceBefore exactly");
+      const assumptionTerm = cashBlock!.terms.find((t) => t.kind === "assumption");
+      assert(assumptionTerm?.amount === "500000.000000" && assumptionTerm?.sign === "-", "expected the outflow assumption term to carry a '-' sign");
+    });
+
+    await runner.run("buildDecisionCalculationExplanation: cash inflow uses a '+' calculated term (net proceeds), result still verbatim from bucketBalanceAfter", async () => {
+      const presentation = decisionTypePresentation("sell_asset");
+      const evaluation = baseEvaluation({
+        decisionTypeCode: "sell_asset", hypotheticalBucketId: "b1", bucketBalanceBefore: "1000.000000",
+        grossProceeds: "600.000000", proceedsCosts: "50.000000", netProceeds: "550.000000", bucketBalanceAfter: "1550.000000",
+        linkedAssetId: "a1", linkedAssetCostBasis: "400.000000", projectedGrossProfitLoss: "150.000000",
+      });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const cashBlock = blocks.find((b) => b.key === "cash");
+      const inflowTerm = cashBlock!.terms.find((t) => t.kind === "calculated" && t.sign === "+");
+      assert(inflowTerm?.amount === "550.000000", "expected the inflow term to be net proceeds (gross minus costs), never gross alone");
+      assert(cashBlock!.result?.amount === "1550.000000", "cash-after result must come from bucketBalanceAfter verbatim");
+
+      const profitBlock = blocks.find((b) => b.key === "profitLoss");
+      assert(profitBlock !== undefined && profitBlock!.calculated === true, "expected a calculated profit/loss block");
+      assert(profitBlock!.result?.amount === "150.000000", "profit/loss result must come from projectedGrossProfitLoss verbatim, never recomputed as netProceeds-costBasis in JS");
+    });
+
+    await runner.run("buildDecisionCalculationExplanation: Pay Down Debt — remaining debt verbatim from hypotheticalLiabilityOutstandingAfter, never (current - payment) in JS", async () => {
+      const presentation = decisionTypePresentation("pay_down_debt");
+      const evaluation = baseEvaluation({
+        decisionTypeCode: "pay_down_debt", linkedLiabilityId: "l1", linkedLiabilityOutstandingPrincipal: "5000.000000",
+        debtPrincipalPayment: "500.000000", hypotheticalLiabilityOutstandingAfter: "0.000000", // greatest(...,0) floor case — NOT 4500
+      });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const debtBlock = blocks.find((b) => b.key === "debt");
+      assert(debtBlock !== undefined && debtBlock!.calculated === true, "expected a calculated debt block");
+      assert(debtBlock!.result?.amount === "0.000000", "remaining-debt result must be copied verbatim from hypotheticalLiabilityOutstandingAfter (proves the domain's own greatest(...,0) floor is respected, not re-derived)");
+      const tracked = debtBlock!.terms.find((t) => t.kind === "tracked");
+      assert(tracked?.amount === "5000.000000", "expected the tracked current-debt term to equal linkedLiabilityOutstandingPrincipal exactly");
+    });
+
+    await runner.run("buildDecisionCalculationExplanation: missing liability produces the specific 'choose a debt' reason, never a fabricated remaining balance", async () => {
+      const presentation = decisionTypePresentation("pay_down_debt");
+      const evaluation = baseEvaluation({ decisionTypeCode: "pay_down_debt", linkedLiabilityId: null, missingInformation: ["no_liability_linked"] });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const debtBlock = blocks.find((b) => b.key === "debt");
+      assert(debtBlock !== undefined, "expected a debt block to render even with no liability linked, since pay_down_debt always shows one");
+      assert(debtBlock!.calculated === false, "debt block must not be calculated with no linked liability");
+      assert(debtBlock!.result === null, "no remaining-debt figure may be fabricated when no liability is linked");
+      assert(debtBlock!.reason === "Choose a debt to evaluate its remaining balance.", `unexpected reason: ${debtBlock!.reason}`);
+    });
+
+    // --- P0-E4-S3C: payment provenance + Not-Yet-Calculated deduplication -----------
+    await runner.run("buildDecisionCalculationExplanation: a simple Pay Down Debt payment (no separate interest/fees) is labeled 'Your assumption · Payment amount', not 'Calculated · Total payment'", async () => {
+      const presentation = decisionTypePresentation("pay_down_debt");
+      const evaluation = baseEvaluation({
+        decisionTypeCode: "pay_down_debt", hypotheticalBucketId: "b1", bucketBalanceBefore: "850100.000000",
+        debtPrincipalPayment: "500000.000000", debtInterestPayment: null, debtFeePayment: null,
+        totalCashRequired: "500000.000000", bucketBalanceAfter: "350100.000000",
+      });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const cashBlock = blocks.find((b) => b.key === "cash");
+      assert(cashBlock !== undefined && cashBlock!.calculated === true, "expected a calculated cash block");
+      const paymentTerm = cashBlock!.terms.find((t) => t.label === "Payment amount");
+      assert(paymentTerm !== undefined, "expected a 'Payment amount' term for a simple single-field payment");
+      assert(paymentTerm!.kind === "assumption", `a plain payment is the user's own single assumption — expected kind 'assumption', got '${paymentTerm!.kind}'`);
+      assert(paymentTerm!.amount === "500000.000000", "expected the payment term to equal debtPrincipalPayment exactly");
+      assert(cashBlock!.terms.find((t) => t.label === "Total payment") === undefined, "must not also show a 'Total payment' calculated term when nothing was actually summed");
+      assert(cashBlock!.result?.amount === "350100.000000", "cash-after result must still come from bucketBalanceAfter verbatim");
+    });
+
+    await runner.run("buildDecisionCalculationExplanation: Pay Down Debt with separate interest/fee components shows 'Calculated · Total payment' from totalCashRequired verbatim", async () => {
+      const presentation = decisionTypePresentation("pay_down_debt");
+      const evaluation = baseEvaluation({
+        decisionTypeCode: "pay_down_debt", hypotheticalBucketId: "b1", bucketBalanceBefore: "10000.000000",
+        debtPrincipalPayment: "500.000000", debtInterestPayment: "50.000000", debtFeePayment: "10.000000",
+        totalCashRequired: "560.000000", bucketBalanceAfter: "9440.000000",
+      });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const cashBlock = blocks.find((b) => b.key === "cash");
+      const totalTerm = cashBlock!.terms.find((t) => t.label === "Total payment");
+      assert(totalTerm !== undefined, "expected a 'Total payment' term when interest/fee components are present");
+      assert(totalTerm!.kind === "calculated", `a genuine sum of components must be labeled 'calculated', got '${totalTerm!.kind}'`);
+      assert(totalTerm!.amount === "560.000000", "the total must be totalCashRequired verbatim (560), never recomputed as principal+interest+fee in JS");
+      assert(cashBlock!.terms.find((t) => t.label === "Payment amount") === undefined, "must not show a plain 'Payment amount' assumption term when the payment is actually composed of separate parts");
+    });
+
+    await runner.run("coveredMissingInfoCodes: a missing debt link is explained once — the debt block's reason suppresses the duplicate 'Not Yet Calculated' card", async () => {
+      const presentation = decisionTypePresentation("pay_down_debt");
+      const evaluation = baseEvaluation({ decisionTypeCode: "pay_down_debt", linkedLiabilityId: null, missingInformation: ["no_liability_linked"] });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const covered = coveredMissingInfoCodes(blocks);
+      assert(covered.has("no_liability_linked"), "expected the debt block's own reason to mark no_liability_linked as already explained");
+      const uncovered = evaluation.missingInformation.filter((code) => !covered.has(code));
+      assert(uncovered.length === 0, `expected no remaining uncovered codes for 'Not Yet Calculated', got: ${JSON.stringify(uncovered)}`);
+    });
+
+    await runner.run("coveredMissingInfoCodes: a code no rendered block actually explains stays uncovered — coverage is never a blanket clear", async () => {
+      const presentation = decisionTypePresentation("sell_asset");
+      // Cash IS fully calculated here (bucketBalanceAfter present), so the
+      // cash block renders `calculated: true` and reports NO covered
+      // codes at all. An unrelated code injected into missingInformation
+      // (something no block in this evaluation's state actually explains)
+      // must therefore remain uncovered — proving coverage reflects only
+      // what was genuinely rendered, never a blanket assumption that all
+      // missing-information codes are somehow addressed once any block
+      // renders.
+      const evaluation = baseEvaluation({
+        decisionTypeCode: "sell_asset", hypotheticalBucketId: "b1", bucketBalanceBefore: "1000.000000",
+        grossProceeds: "500.000000", netProceeds: "500.000000", bucketBalanceAfter: "1500.000000",
+        missingInformation: ["some_unrelated_future_code"],
+      });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const covered = coveredMissingInfoCodes(blocks);
+      assert(!covered.has("some_unrelated_future_code"), "an unrecognized/unrelated code must never be marked covered just because other blocks rendered");
+      const uncovered = evaluation.missingInformation.filter((code) => !covered.has(code));
+      assert(uncovered.length === 1 && uncovered[0] === "some_unrelated_future_code", "the unrelated code must still surface in 'Not Yet Calculated'");
+    });
+
+    await runner.run("buildDecisionCalculationExplanation: profit/loss not-calculated reasons are specific to which fact is missing", async () => {
+      const presentation = decisionTypePresentation("sell_asset");
+      const noAsset = buildDecisionCalculationExplanation(presentation, baseEvaluation({ decisionTypeCode: "sell_asset", linkedAssetId: null }), { configured: false, amount: null });
+      assert(noAsset.find((b) => b.key === "profitLoss")?.reason === "Link an asset to calculate this.", "expected the no-asset-linked reason");
+
+      const noBasis = buildDecisionCalculationExplanation(
+        presentation,
+        baseEvaluation({ decisionTypeCode: "sell_asset", linkedAssetId: "a1", linkedAssetCostBasis: null, grossProceeds: "500.000000", netProceeds: "500.000000" }),
+        { configured: false, amount: null },
+      );
+      assert(noBasis.find((b) => b.key === "profitLoss")?.reason === "Add what you originally paid or invested to calculate this.", "expected the no-cost-basis reason");
+
+      const noSalePrice = buildDecisionCalculationExplanation(
+        presentation,
+        baseEvaluation({ decisionTypeCode: "sell_asset", linkedAssetId: "a1", linkedAssetCostBasis: "400.000000", grossProceeds: null, netProceeds: null }),
+        { configured: false, amount: null },
+      );
+      assert(noSalePrice.find((b) => b.key === "profitLoss")?.reason === "Add a possible sale price to calculate this.", "expected the no-sale-price reason");
+    });
+
+    await runner.run("buildDecisionCalculationExplanation: Safe to Deploy — not-configured reason names the currency and offers a real action to /rules", async () => {
+      const presentation = decisionTypePresentation("large_personal_purchase");
+      const evaluation = baseEvaluation({ currencyCode: "NGN", hypotheticalBucketId: "b1", currencySafeToDeployAfter: null });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      const stdBlock = blocks.find((b) => b.key === "safeToDeploy");
+      assert(stdBlock !== undefined && stdBlock!.calculated === false, "expected a not-calculated Safe to Deploy block");
+      assert(stdBlock!.reason === "Set your Minimum Cash to Keep for NGN before Monitriq can calculate this.", `unexpected reason: ${stdBlock!.reason}`);
+      assert(stdBlock!.actionLabel === "Set minimum cash" && stdBlock!.actionHref === "/rules", "expected a real action pointing at the Rules & Obligations screen");
+    });
+
+    await runner.run("buildDecisionCalculationExplanation: Safe to Deploy — configured minimum shown as context only, never combined into an equation with a bucket-scoped cash figure", async () => {
+      const presentation = decisionTypePresentation("large_personal_purchase");
+      const evaluation = baseEvaluation({ currencyCode: "NGN", hypotheticalBucketId: "b1", currencySafeToDeployAfter: "250000.000000" });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: true, amount: "500000.000000" });
+      const stdBlock = blocks.find((b) => b.key === "safeToDeploy");
+      assert(stdBlock !== undefined && stdBlock!.calculated === true, "expected a calculated Safe to Deploy block");
+      assert(stdBlock!.result?.amount === "250000.000000", "Safe to Deploy result must be copied verbatim from currencySafeToDeployAfter");
+      assert(stdBlock!.terms.length === 0, "Safe to Deploy must never show equation terms — the real formula spans every bucket in the currency, not one bucket");
+      assert(stdBlock!.context[0]?.label === "Minimum cash to keep" && stdBlock!.context[0]?.amount === "500000.000000", "expected the configured minimum shown as read-only context");
+    });
+
+    await runner.run("buildDecisionCalculationExplanation: no block renders for a decision type with no cash/asset/liability relevance", async () => {
+      const presentation = decisionTypePresentation("other");
+      const evaluation = baseEvaluation({ decisionTypeCode: "other" });
+      const blocks = buildDecisionCalculationExplanation(presentation, evaluation, { configured: false, amount: null });
+      assert(blocks.find((b) => b.key === "debt") === undefined, "no debt block should render when nothing suggests a liability is relevant");
+      assert(blocks.find((b) => b.key === "profitLoss") === undefined, "no profit/loss block should render for a type that doesn't show one");
+    });
+
+    await runner.run("directionalCashAmount / no float arithmetic: exact high-precision magnitude via Decimal, never Number()/parseFloat()", async () => {
+      const { label, magnitude } = directionalCashAmount("-500000.555555", "Cash Received", "Cash Required");
+      assert(label === "Cash Required", "a negative delta must resolve to the negative-direction label");
+      assert(magnitude === "500000.555555", `expected the exact decimal magnitude preserved, got ${magnitude} (a Number()-based .abs() would risk float drift on a value like this)`);
+      const positive = directionalCashAmount("250000.10", "Cash Received", "Cash Required");
+      assert(positive.label === "Cash Received" && positive.magnitude === "250000.1", `unexpected positive-direction result: ${JSON.stringify(positive)}`);
     });
   } finally {
     await fixtures.cleanup();

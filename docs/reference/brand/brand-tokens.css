@@ -1,12 +1,12 @@
 :root {
-  --monatriq-midnight-navy: #0B1F3B;
-  --monatriq-obsidian: #071820;
-  --monatriq-deep-teal: #0E6F62;
-  --monatriq-electric-teal: #00D1B2;
-  --monatriq-cool-aqua: #7EE3E0;
-  --monatriq-deep-blue: #0A5EA8;
-  --monatriq-warm-off-white: #F8F7F2;
-  --monatriq-mist-grey: #D8DEE4;
-  --monatriq-ink: #0B172A;
-  --monatriq-gradient-mark: linear-gradient(135deg, #7EE3E0 0%, #00D1B2 52%, #0A5EA8 100%);
+  --monitriq-midnight-navy: #0B1F3B;
+  --monitriq-obsidian: #071820;
+  --monitriq-deep-teal: #0E6F62;
+  --monitriq-electric-teal: #00D1B2;
+  --monitriq-cool-aqua: #7EE3E0;
+  --monitriq-deep-blue: #0A5EA8;
+  --monitriq-warm-off-white: #F8F7F2;
+  --monitriq-mist-grey: #D8DEE4;
+  --monitriq-ink: #0B172A;
+  --monitriq-gradient-mark: linear-gradient(135deg, #7EE3E0 0%, #00D1B2 52%, #0A5EA8 100%);
 }

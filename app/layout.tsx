@@ -19,8 +19,11 @@ export const metadata: Metadata = {
   description: siteConfig.description,
   manifest: "/manifest.webmanifest",
   icons: {
-    icon: [{ url: "/brand/favicon.svg", type: "image/svg+xml" }],
-    apple: [{ url: "/brand/apple-touch-icon.png" }],
+    icon: [
+      { url: "/brand/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/brand/favicon-64.png", sizes: "64x64", type: "image/png" },
+    ],
+    apple: [{ url: "/brand/monitriq-app-icon-192.png" }],
   },
 };
 

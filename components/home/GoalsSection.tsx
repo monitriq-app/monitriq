@@ -68,7 +68,7 @@ function ProgressBar({ percentage }: { percentage: number }) {
  * own distinct progress concepts. Card composition (icon + name, a
  * percentage/status readout, a progress rail, a Current/Target line)
  * matches the reference's goal-card structure; the reference's single
- * cross-goal "Target Horizon" journey headline has no Monatriq
+ * cross-goal "Target Horizon" journey headline has no Monitriq
  * equivalent (no canonical "financial freedom date" exists across all
  * goals) and is not reproduced — each goal instead shows its own real
  * required-pace months-remaining figure when Goals has actually

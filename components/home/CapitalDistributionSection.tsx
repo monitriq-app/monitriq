@@ -79,7 +79,7 @@ function barColorFor(key: string): string {
  * label/amount/percentage sharing one line) while matching the
  * reference's own row composition exactly — amount above percentage,
  * both right-aligned. The reference's per-row descriptive subline (e.g.
- * "3 registered motor units") has no real Monatriq equivalent —
+ * "3 registered motor units") has no real Monitriq equivalent —
  * CapitalDistributionCategory carries no per-category count or
  * description — so it is omitted rather than fabricated. Cash on Hand
  * gets the reference's accent treatment (icon + label + amount in the

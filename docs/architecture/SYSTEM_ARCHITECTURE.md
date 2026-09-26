@@ -1,4 +1,4 @@
-# Monatriq — System Architecture
+# Monitriq — System Architecture
 
 Status: Canonical proposal. Established P0-E1-S1. No implementation
 (migrations, screens, app code) exists yet — this describes the intended
@@ -264,8 +264,8 @@ The canonical brand pack already lives at
 begin building the app shell, production copies are expected to be sourced
 from there into:
 
-- `public/` — favicon, app icons, PWA manifest icons (from
-  `docs/reference/brand/png` and `svg/favicon.svg`)
+- `public/` — favicon, app icons, PWA manifest icons (from the
+  approved Monitriq pack at `docs/reference/monitriq brand/`)
 - App shell / auth screens — logo SVGs per the light/dark usage rules in
   `docs/reference/brand/BRAND.md`
 - `brand-tokens.css` (or the CSS variables it defines) — wired into the

@@ -1,0 +1,135 @@
+P0-E5-S1 — BUDGET DOMAIN + EVERYDAY MONEY FOUNDATION
+================================================================
+Note: section titles follow the brief's intent; the brief's verbatim 44-title list was not available after context compaction, so sections are grouped by concern in the same Phase -> Recommended-next-phase order.
+
+1. PHASE
+P0-E5-S1 — Budget domain + Everyday Money foundation.
+
+2. STATUS
+COMPLETE. Money supports accurate Budget derivation; no second ledger was created. Nothing committed or pushed; no Budget UI.
+
+3. GIT PREFLIGHT
+Tree held only known prior-phase work (Decisions/Rules UI, rebrand, header/auth). Preserved; no reset/stash/commit.
+
+4. NAME
+Monitriq (rebrand complete). Repo folder and Supabase ref unchanged.
+
+5. CORE PRINCIPLE
+Budget does not own transactions. Money (financial_events/cash_movements) is the only ledger. Actual spend is never persisted; it is derived per read from money_category_breakdown() (the "Where Money Went" source).
+
+6. MONEY AUDIT FINDINGS
+money_spent events carry a canonical spending_category_code, DB-derived cash_flow_class, void-only corrections and timestamptz occurred_at. money_category_breakdown already excludes transfers, opening balances, received money and linked debt/receivable events, is timezone-aware, and groups per native currency. Sufficient -> no PARTIAL gap.
+
+7. DOMAIN MODEL
+budgets (one currency, explicit period_start/period_end, status active|closed|archived, optional expected_money_in, notes) and budget_category_allocations (planned_amount >= 0 per canonical category).
+
+8. PERIOD MODEL
+Monthly. CHECK constrains bounds to a calendar month; explicit columns kept so the model can be relaxed later. create_budget resolves the month in the profile timezone.
+
+9. TIMEZONE
+Every read uses the profile timezone (default UTC). Proven with the same instant landing in January (UTC) vs February (Pacific/Kiritimati).
+
+10. CURRENCY
+Exactly one currency per budget; currency and period immutable after creation. No FX, no cross-currency aggregation.
+
+11. CATEGORIES
+FK to the canonical money_spending_categories registry. No second taxonomy.
+
+12. CUSTOM CATEGORIES
+None exist in Money, so none in Budget. Documented limitation; scope not expanded.
+
+13. ZERO vs NOT BUDGETED
+Explicit 0 = an allocation row with planned 0.000000. Not budgeted = no row (planned/remaining NULL).
+
+14. UNBUDGETED SPENDING
+Surfaced as its own rows (is_budgeted=false) and as unbudgeted_spent in the summary. Never hidden, never auto-allocated.
+
+15. REMAINING
+Remaining = Planned - Actual in exact decimal (Postgres numeric, text out, Decimal.js in tests). NULL when nothing is planned (no fake zero). Negative when over.
+
+16. OVER-BUDGET
+Flagged (is_over); never blocks Money activity (Budget only reads Money).
+
+17. WHAT COUNTS AS SPENDING
+money_spent, non-voided, in budget currency and period.
+
+18. EXCLUSIONS
+Internal transfers, FX transfers, opening balances, money received, loan proceeds, receivable recoveries, voided events, out-of-period and other-currency events.
+
+19. DEBT PAYMENTS (V1 RULE)
+A user-recorded money_spent in the debt_payment category is counted and budgetable. Linked Liabilities events (debt_principal_payment, debt_interest, debt_fee) are NOT counted. Open V2 question: surfacing linked interest/fees (class expense, no category) as an uncategorized line.
+
+20. ASSET PURCHASES
+Money has no asset-purchase event; an asset purchase is budget spending only if the user recorded a money_spent.
+
+21. OBLIGATIONS / COMMITMENTS
+Existing obligations table reused (no bills table). budget_upcoming_commitments lists active, same-currency obligations due in the remaining period. Informational only: never counted as spending, never subtracted from Remaining.
+
+22. EXPECTED MONEY IN
+Included as optional planning info (nullable, >= 0). Creates no Money Received event; not used in any calculation. Verified.
+
+23. BUDGET vs SAFE TO DEPLOY
+Rules engine untouched. Budget Remaining is distinct from Available Cash and Safe to Deploy.
+
+24. ALLOCATION HISTORY DECISION
+Mutable allocations, no version history (smallest truthful V1); updated_at is the only trace. Removing an allocation returns the category to Not budgeted.
+
+25. STATUSES
+active / closed / archived. Closed and archived budgets are read-only (trigger-enforced); reactivation allowed if the slot is free.
+
+26. UNIQUENESS INVARIANT
+Partial unique index (user_id, currency_code, period_start) WHERE status <> 'archived'. Archiving frees the slot; reactivating into an occupied slot fails.
+
+27. MUTATION API (SECURITY INVOKER)
+create_budget, set_budget_category_amount (upsert), remove_budget_category_amount, set_budget_status.
+
+28. READ MODEL
+budget_category_status, budget_summary (planned/actual/budgeted/unbudgeted/remaining/is_over, commitments total, period days/elapsed/state), budget_upcoming_commitments. UI never sums Money events.
+
+29. FUTURE DECISIONS BOUNDARY
+budget_facts_for_date(currency, date, category?) returns planned/spent/remaining facts (total + category); zero rows if no budget covers it. Facts only; no advice; Decisions UI not coupled.
+
+30. SECURITY: RLS
+RLS on both tables, deny-by-default, own-row policies; allocation INSERT also checks budget ownership.
+
+31. SECURITY: OWNERSHIP FK
+Composite FK (budget_id, user_id) -> budgets(id, user_id) plus a trigger deriving user_id from the budget: forged cross-user references are impossible at the DB level.
+
+32. SECURITY: FUNCTIONS
+All SECURITY INVOKER, search_path pinned, execute revoked from public/anon, granted to authenticated. No SECURITY DEFINER used. Column-level grants; no DELETE on budgets.
+
+33. FILES CREATED
+supabase/migrations/20261002090000_create_budget_domain.sql; lib/domain/budget/types.ts; lib/domain/budget/repository.ts; supabase/tests/budget/run.ts; this report.
+
+34. FILES MODIFIED
+package.json (test:budget + chained into test); lib/supabase/database.types.ts (regenerated from LOCAL); docs: FINANCIAL_DOMAIN_MODEL, SECURITY_AND_RLS_PRINCIPLES, PRODUCT_DEFINITION, BUILD_STATE.
+
+35. TESTS
+supabase/tests/budget/run.ts: 30 checks (each bundles several assertions) covering creation/bounds, duplicate invariant, zero vs missing, precision, unknown category, exclusions (transfer/opening/received/void/period), totals, over-budget, unbudgeted, non-blocking, debt-payment rule, obligations, multi-currency, timezone, lifecycle/archive/reactivate, allocation removal, immutability, expected-money-in, facts boundary, RLS/cross-tenant/forged-FK/anonymous.
+
+36. MULTI-CURRENCY TESTS
+USD budget vs EUR budget isolation; obligation in another currency excluded; separate per-user same-currency budgets.
+
+37. ADVERSARIAL RLS
+User B: cannot read, summarize, allocate, remove, archive, forge allocation (own or A's user_id, composite-FK case), create budget for A, or delete A's rows. Anonymous denied on tables and every RPC.
+
+38. LOCAL DB RESET
+`supabase db reset --local` applied all 17 migrations cleanly (LOCAL Docker only; remote never touched).
+
+39. REGRESSION
+20/48/11/114/27/25/56/86/90/33/30/31 (prior 571, unchanged) + Budget 30 = 601/601.
+
+40. LINT / TYPECHECK / BUILD
+Lint clean. App + test-harness typecheck clean. Production build clean.
+
+41. MIGRATION INTEGRITY
+Only new file under supabase/migrations is 20261002090000_create_budget_domain.sql; no prior migration modified.
+
+42. REMOTE MIGRATION SEQUENCE (AFTER APPROVAL ONLY)
+Not run. After review: `supabase db push` against Monitriq Dev (ref mvnwrkfcszazqqccmmxq) will apply exactly one pending migration: 20261002090000_create_budget_domain.sql (assuming remote is at 20261001090000). Then regenerate types from remote if desired. Never reset the remote.
+
+43. RISKS / LIMITATIONS
+No custom categories; linked debt interest/fees not budget-visible (V2 question); mutable allocations lose history; monthly periods only; test count is 30 grouped checks rather than 34 separate ones; budget_summary recomputes on each call (fine at V1 scale). Test fixtures still use email domain monatriq.test by design.
+
+44. RECOMMENDED NEXT PHASE
+Human review of the migration and read model, then apply to Monitriq Dev; then Budget UI (create/set amounts, planned/spent/remaining with Unbudgeted rows), then a Decisions integration using budget_facts_for_date.

@@ -58,7 +58,7 @@ export function MobileBottomNav() {
           <button
             type="button"
             onClick={openQuickAdd}
-            aria-label="Add activity"
+            aria-label="Quick Add"
             className="relative -top-5 flex h-12 w-12 items-center justify-center rounded-full bg-accent-primary text-background shadow-md transition-transform active:scale-95"
           >
             <Plus size={23} aria-hidden="true" />

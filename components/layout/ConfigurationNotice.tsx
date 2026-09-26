@@ -12,7 +12,7 @@ export function ConfigurationNotice() {
       <PageContainer className="max-w-lg text-center">
         <h1 className="text-lg font-semibold text-text-primary">Not configured</h1>
         <p className="mt-2 text-sm text-text-secondary">
-          Monatriq isn&apos;t connected to a Supabase project yet. Copy{" "}
+          Monitriq isn&apos;t connected to a Supabase project yet. Copy{" "}
           <code>.env.example</code> to <code>.env.local</code> and add your project
           URL and anon key to continue.
         </p>

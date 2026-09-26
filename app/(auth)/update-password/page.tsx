@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { FormField } from "@/components/ui/FormField";
-import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
 
 export default function UpdatePasswordPage() {
@@ -38,10 +38,9 @@ export default function UpdatePasswordPage() {
     <AuthCard title="Set a new password" description="Choose a new password for your account.">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         <FormField label="New password" htmlFor="password">
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="new-password"
             minLength={8}
             required

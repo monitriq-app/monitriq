@@ -1,0 +1,166 @@
+P0-E3-S1C — MONITRIQ REBRAND VISUAL & PWA QA
+================================================================
+
+PHASE
+P0-E3-S1C — Monitriq Rebrand Visual & PWA QA (narrow QA/remediation
+following P0-E3-S1B).
+
+STATUS
+COMPLETE. One proven defect and one sizing issue were found and fixed with
+CSS/layout sizing only. No logo artwork, financial code, schema,
+migration, RLS, or user data was touched. Nothing committed or pushed.
+
+METHOD (what "browser" means here)
+No browser-automation tool was available in the session, so QA used the
+installed Google Chrome (headless) driven by playwright-core installed in a
+scratchpad directory OUTSIDE the repo (no repo dependency change). The
+user's own dev server (port 3000, pointed at the remote project) was left
+running and untouched. QA ran against a scratch COPY of the repo built with
+env overrides pointing at the LOCAL Supabase stack (127.0.0.1:54321) — the
+remote Monatriq Dev project was never contacted. For authenticated screens
+a throwaway LOCAL auth user was created (admin API, local only), onboarded
+through the real UI (profile name/currency/timezone only) and deleted at
+the end. No financial data was seeded; app screens were inspected in their
+real empty states. Screenshots live in the scratchpad (not committed).
+
+PAGES INSPECTED
+Unauthenticated: /login, /signup, /forgot-password, /update-password, /
+(landing). Authenticated: /home, /money, /assets, /receivables,
+/liabilities, /goals, /rules, /decisions, /financial-position (app shell +
+mobile bottom nav present on all). 54 authenticated + 30 unauthenticated
+page renders, twice (before and after remediation).
+
+VIEWPORT SIZES INSPECTED
+390x844 (mobile), 768x1024 (tablet), 1280x800 (desktop); deviceScaleFactor 2.
+
+LIGHT-THEME RESULT: PASS
+Every logo location renders the DARK-wordmark supplied file
+(monitriq-logo-horizontal-transparent.svg) on the auth/landing pages and the
+mark in the header badge. Wordmark contrast is strong on the warm off-white
+background. Theme set via the real `theme` localStorage key + emulated
+color scheme; `data-theme="light"` confirmed on <html>.
+
+DARK-THEME RESULT: PASS
+White-wordmark supplied file (monitriq-logo-horizontal-white-transparent.svg)
+renders on every auth/landing page; strong contrast on the obsidian
+background. Only the visible variant occupies layout (the other is
+display:none); the generated `[[data-theme=light]_&]:hidden/:block` rules
+were confirmed in the built CSS. Theme switching causes no broken image
+references and no old-brand fallback: both variants are always in the DOM
+and were fetched with 200; the theme-init script is in <head> before paint;
+measured cumulative layout shift = 0.0000 on all 30 unauthenticated renders.
+Note: the mark's own dark-navy facets are lower-contrast against the darkest
+surface — that is the approved artwork and was not altered.
+
+LOGO RESULT: PASS after fix (see defects)
+Correct "Monitriq" spelling; supplied files only; no Monatriq artwork
+rendered anywhere; alt text "Monitriq". Aspect ratio of the horizontal logo
+(1138x318 = 3.579) verified in rendered boxes: 128.8x36 (auth), 143.1x40
+(landing) — exact. No clipping, stretching, pixelation, background, or
+whitespace problems observed.
+
+FAVICON RESULT: PASS
+<head> serves favicon-32.png and favicon-64.png (rel=icon) and the 192 app
+icon as apple-touch-icon; all return 200 image/png and are byte-identical
+(SHA) to the pack. Rendered preview on light and dark backgrounds shows the
+recognizable Monitriq M + arrow mark. No old favicon path is referenced;
+old favicon.svg / apple-touch-icon.png no longer exist.
+
+PWA MANIFEST RESULT: PASS
+/manifest.webmanifest (content-type application/manifest+json):
+name "Monitriq", short_name "Monitriq", display "standalone",
+start_url "/", background_color/theme_color "#071820" (unchanged),
+description unchanged. Chrome DevTools Page.getAppManifest: 0 parse errors.
+Page.getInstallabilityErrors returned only "in-incognito" (an artifact of
+the fresh headless test context) — no manifest, icon, or name error.
+
+PWA ICON RESULT: PASS
+/brand/monitriq-app-icon-192.png -> 200, PNG 192x192; /brand/monitriq-app-
+icon-512.png -> 200, PNG 512x512; both byte-identical to the pack.
+
+OLD-NAME RUNTIME SEARCH: PASS
+Rendered text + <title> of all 54 authenticated renders: no "Monatriq".
+Source search of app/, components/, lib/, public/: zero matches except three
+comments in lib/domain (already classified/preserved in S1B; not runtime).
+Built-output/source URL check: every /brand/ URL referenced by the rendered
+HTML and manifest is monitriq-* / favicon-*.
+
+ASSET-PATH VALIDATION: PASS
+108 brand/manifest/favicon network responses across authenticated renders
+and the unauthenticated set: 0 non-200 (no 404). Unique asset URLs verified
+individually with status, content-type, and checksum-vs-pack (section
+above): all IDENTICAL to the supplied pack.
+
+DEFECTS FOUND
+1. (Proven, fixed) Header mark distorted. HeaderBrand rendered the mark in
+   a square 20x20 box (`h-5 w-5`) while the supplied mark is 699x545
+   (aspect 1.28) with default object-fit: fill — the artwork was squeezed
+   horizontally in the app shell on every authenticated page and theme
+   (measured: natural 699x545, rendered 20x20). Visible in the crop as a
+   narrow M. Fix (CSS only): mark now `h-6 w-6 object-contain`, and
+   BrandLogo's mark variant adds `object-contain` itself so no caller can
+   distort the artwork. Re-verified: rendered 24x24 box, fit=contain,
+   proportions correct in dark and light.
+2. (Sizing, fixed) Wordmark too small relative to surrounding UI. The
+   supplied horizontal logo at the old `h-7`/`h-8` classes gave a
+   ~100px-wide lockup whose wordmark was visibly smaller than the typed-text
+   lockup it replaced and small next to the 24px "Sign in" heading. Fix
+   (CSS only): auth layout `h-7` -> `h-9`, landing `h-8` -> `h-10`. Re-verified
+   no layout shift, no overflow.
+3. (Observed, NOT logo-related, not fixed) At 768px every authenticated
+   page overflows horizontally by 2px: the header's right-hand 48px account
+   button ends at x=770 in a 768px viewport (header content is wider than
+   the viewport at the md breakpoint). The brand mark box is fixed-width and
+   "Monitriq" is not wider than "Monatriq", so the rebrand is not the cause;
+   this is pre-existing header-cluster crowding at the tablet breakpoint.
+   Out of scope for this phase (no unrelated redesign). Logged as a
+   follow-up.
+Stale text missed by S1B: none found.
+
+FILES MODIFIED (this phase)
+components/brand/BrandLogo.tsx (mark: object-contain),
+components/layout/HeaderBrand.tsx (mark box h-6 w-6 object-contain),
+app/(auth)/layout.tsx (wordmark h-9), app/page.tsx (wordmark h-10),
+docs/reports/P0-E3-S1C-monitriq-rebrand-visual-pwa-qa.txt (this report).
+No asset file was touched (all public/brand files remain byte-identical to
+the pack).
+
+SCREENSHOTS / OBSERVATIONS
+Captured in the scratchpad (not in the repo): before/after shots for every
+page x width x theme, header crops (dark/light, pre- and post-fix showing
+the distortion and its correction), auth logo crops, favicon preview.
+Observations are summarized above.
+
+REGRESSION RESULTS
+Full suite from the S1B baseline state: 20/48/11/114/27/25/56/86/90/33/30/
+31 = 571/571, output IDENTICAL to the baseline; zero expected-value
+changes. Migration checksums (16 files) unchanged; `git status` shows no
+change under supabase/migrations; lib/domain untouched this phase.
+Lint clean; app typecheck clean; harness typecheck clean; production build
+clean (19 static pages).
+
+GIT DIFF SUMMARY
+This phase's code diff: 4 files, 29 insertions / 16 deletions (BrandLogo,
+HeaderBrand, auth layout, landing page) — sizing/aspect classes only.
+Working tree still also holds all uncommitted prior-phase work.
+
+GIT STATUS
+87 changed/untracked entries in total (prior phases + S1B + this phase);
+nothing staged, committed, or pushed.
+
+REMAINING RISKS
+- Installability was checked via DevTools manifest/installability APIs in
+  headless Chrome; a real installed-PWA pass on a device (icon on home
+  screen, splash) was not possible here.
+- Existing installed PWAs keep the old name/icon until updated.
+- Header mark SVG is ~424 KB (image-preserving wrapper), loaded on every
+  app page (cacheable); the pack's PNG mark is a lighter option.
+- The 2px tablet overflow (defect 3) is pre-existing.
+- The scratch QA build used local-Supabase env; real remote-backed
+  authenticated data screens were not viewed (no credentials, and no
+  data is to be created on the remote project).
+
+RECOMMENDED NEXT PHASE
+Small follow-up to fix the pre-existing 768px header overflow (separate,
+unrelated to branding), then the next product phase the user selects
+(e.g., Home). No product work was started here.

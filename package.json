@@ -1,5 +1,5 @@
 {
-  "name": "monatriq",
+  "name": "monitriq",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -25,7 +25,9 @@
     "test:financial-position": "node --env-file-if-exists=.env.test.local supabase/tests/financial-position/run.ts",
     "test:home-readiness": "node --env-file-if-exists=.env.test.local supabase/tests/home-readiness/run.ts",
     "test:home": "node --env-file-if-exists=.env.test.local supabase/tests/home/run.ts",
-    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets && npm run test:receivables && npm run test:liabilities && npm run test:goals && npm run test:rules && npm run test:decisions && npm run test:financial-position && npm run test:home-readiness && npm run test:home"
+    "test:budget": "node --env-file-if-exists=.env.test.local supabase/tests/budget/run.ts",
+    "test:budget-ui": "node --env-file-if-exists=.env.test.local supabase/tests/budget-ui/run.ts",
+    "test": "npm run test:rls && npm run test:money && npm run test:currency && npm run test:assets && npm run test:receivables && npm run test:liabilities && npm run test:goals && npm run test:rules && npm run test:decisions && npm run test:financial-position && npm run test:home-readiness && npm run test:home && npm run test:budget && npm run test:budget-ui"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",

@@ -1,4 +1,4 @@
-# Monatriq — Security & Row Level Security Principles
+# Monitriq — Security & Row Level Security Principles
 
 Status: Canonical. Established P0-E1-S1. This is a constitution for
 data-layer phases — §10 records the first concrete implementation
@@ -636,3 +636,7 @@ every one of the checks above must be verifiable by reading the
 migration alone, not asserted after the fact — the DEFINER function
 itself becomes the ENTIRE security boundary for its table, since RLS can
 no longer be assumed to apply.
+
+## Budget tables (P0-E5-S1)
+
+`budgets` and `budget_category_allocations` have RLS enabled, deny-by-default, own-row policies. Allocations carry a composite FK `(budget_id, user_id) → budgets(id, user_id)` and a BEFORE trigger derives `user_id` from the budget, so a forged cross-user reference is impossible; the INSERT policy additionally checks budget ownership. Column-level grants only; no DELETE on `budgets`. All Budget RPCs are SECURITY INVOKER with pinned `search_path`, execute revoked from public/anon and granted to authenticated only; a foreign budget id yields "not found".

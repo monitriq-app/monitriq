@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { AuthCard } from "@/components/auth/AuthCard";
 import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
+import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
 
 export default function LoginPage() {
@@ -41,7 +42,7 @@ export default function LoginPage() {
   }
 
   return (
-    <AuthCard title="Sign in" description="Sign in to your Monatriq workspace.">
+    <AuthCard title="Sign in" description="Sign in to your Monitriq workspace.">
       <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
         <FormField label="Email" htmlFor="email">
           <Input
@@ -55,10 +56,9 @@ export default function LoginPage() {
           />
         </FormField>
         <FormField label="Password" htmlFor="password">
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             autoComplete="current-password"
             required
             value={password}

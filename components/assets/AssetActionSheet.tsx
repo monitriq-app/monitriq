@@ -22,7 +22,7 @@ interface AssetActionSheetProps {
 }
 
 /**
- * One shared sheet for every real per-asset mutation Monatriq's Assets
+ * One shared sheet for every real per-asset mutation Monitriq's Assets
  * domain actually supports — but its COMPOSITION is dynamic, not
  * universal: a generic section (valuation update, archive) every asset
  * type gets, plus subtype sections gated by `assetCapabilities(asset.

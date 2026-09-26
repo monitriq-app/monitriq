@@ -51,7 +51,7 @@ function dateLabel(occurredAt: string): string {
  * subline is the real occurredAt timestamp plus the event's own real
  * category code (received/spending), when one exists — the reference's
  * settlement-status caption ("Cleared", "Direct Payment") has no
- * Monatriq equivalent (events here are already-recorded, not pending) and
+ * Monitriq equivalent (events here are already-recorded, not pending) and
  * is not reproduced. The "View all activity" link lives in the section
  * header (`app/(app)/home/page.tsx`), matching the reference's own
  * placement, rather than repeated inside this card. The outer card has

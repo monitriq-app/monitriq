@@ -52,7 +52,7 @@ export default async function GoalsPage() {
         <GoalList goals={goals} currencies={currenciesByCode} />
       </section>
 
-      <section className="flex flex-col gap-3">
+      <section id="add-goal" className="flex scroll-mt-20 flex-col gap-3">
         <h2 className="text-sm font-medium text-text-secondary">Add Goal</h2>
         <CreateGoalForm goalTypes={goalTypes} currencies={currencies} liabilities={activeLiabilities} />
       </section>

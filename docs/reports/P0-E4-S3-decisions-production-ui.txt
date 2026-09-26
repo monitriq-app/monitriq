@@ -1,0 +1,1557 @@
+P0-E4-S3 — DECISIONS PRODUCTION UI + CANONICAL EVALUATION EXPERIENCE
+================================================================
+
+1. PHASE
+P0-E4-S3 — Decisions Production UI + Canonical Evaluation Experience.
+
+2. STATUS
+COMPLETE. Decisions is usable end-to-end for all 10 canonical decision
+types against the existing, unmodified domain layer built in P0-E2-S7.
+No schema or migration change was made this phase (none was needed — a
+gap audit found the full calculation/RLS layer already implemented and
+tested). A small number of reference elements were deliberately NOT
+reproduced because building them would have required either inventing a
+calculation the domain doesn't support, or reintroducing an
+invented-suggestion pattern the brief explicitly prohibits — see §8 and
+§51 for the complete list and rationale for each.
+
+3. OBJECTIVE
+Replace the "foundation-level" Decisions screens (`app/(app)/decisions/
+page.tsx` and `app/(app)/decisions/[decisionId]/page.tsx`, both
+self-documented as "not the final design") with a production UI matching
+the approved reference's composition, while strictly preserving: (a) a
+Decision as a plan/simulation that never executes a transaction, (b) no
+ranking/recommendation/score anywhere, (c) facts vs. assumptions vs.
+derived values kept visually distinct, (d) multi-currency truthfulness,
+(e) full tenant isolation, (f) the plain-language discipline established
+in P0-E4-S2/S2A.
+
+4. GIT PREFLIGHT
+At the start of this phase, `git status` showed a clean working tree
+except one new, expected, untracked directory: `docs/reference/
+05-decisions/` — the reference bundle this phase's own instructions
+point at, not an unrelated change. Nothing else was modified. (The
+initial attempt at this phase, in an earlier turn, correctly BLOCKED
+because `docs/reference/05-decisions/screen.png` was a failed-download
+placeholder — literal text `<FIFE Image failed to fetch>`, not PNG
+data. The user then replaced it with a real PNG and asked this phase to
+resume from the reference gate; `file` confirmed genuine "PNG image
+data, 448 x 1600" before any further work proceeded.)
+
+5. REFERENCES INSPECTED
+`docs/reference/05-decisions/screen.png` (primary visual authority,
+re-verified as a genuine PNG this turn and read/viewed in full),
+`docs/reference/05-decisions/code.html` (728 lines, full markup/Tailwind
+config read), `docs/reference/05-decisions/DESIGN.md` (design tokens —
+same "Obsidian Wealth Cockpit" export-tool naming already established as
+normal/expected precedent for every other approved reference in this
+repo, not a red flag). Also read in full: `docs/product/
+PRODUCT_DEFINITION.md`, the relevant sections of `docs/architecture/
+FINANCIAL_DOMAIN_MODEL.md` (§10, Decisions domain), `docs/security/
+SECURITY_AND_RLS_PRINCIPLES.md` (§19, Decisions RLS), `docs/design/
+VISUAL_CONSTITUTION.md`, `docs/project/BUILD_STATE.md`'s full Decisions
+history, and every existing Decisions-domain migration/repository/types/
+test file (see §7).
+
+6. APPROVED DECISIONS REFERENCE ANATOMY
+Header (small pulsing-dot eyebrow + "Decisions" title + tagline) →
+"Decision Position" summary card (4-cell grid: Liquid Cash / Protected
+Cash / Safe to Deploy / Upcoming Obligations, each with an honest "Not
+configured"/"Not set"/"Not calculated" empty state) → segmented pill tab
+bar (Active (0) / Test New / Compare Scenarios / Journal (0) / Financial
+Constitution) → a full-width "Test a Decision" primary CTA → tab panes:
+Active Decisions (empty state + "From Your Assets" candidate cards),
+Test New (a 9-tile decision-type grid), Compare Scenarios (a hardcoded
+two-scenario comparison for one specific vehicle plus a synthesized
+"Mathematical Trade-Off" paragraph), Journal (empty state), Financial
+Constitution (4 static rule cards, all "Not configured", plus a
+"Configure Rules" CTA) → a bottom-sheet "Decision Review" drawer
+containing a 4-category Facts/Estimates/Assumptions/Derived grid, "What
+Changes in Your Position," "Financial Constitution Check" (4 status
+rows), a "Worst-Case Stress Test" toggle pair, and "Your Decision"
+recording (Proceed/Wait/Decline/Keep Reviewing + note + a "Review Again"
+date field) → bottom navigation (Home/Money/[+]/Assets/Decisions/Goals).
+
+7. EXISTING DECISIONS DOMAIN AUDIT
+A read-only research pass (delegated to an Explore subagent, then
+independently verified by reading every file directly) found the FULL
+domain layer already implemented and tested, from P0-E2-S7:
+- Migration `20260924100000_create_decisions_domain.sql` (1173 lines):
+  5 RLS-enabled tables (`decision_types`, `decisions`,
+  `decision_scenarios`, `decision_choices`, `decision_scenario_
+  evaluations`), all following this codebase's established
+  ownership-through-trigger + EXISTS-policy + column-level-grant RLS
+  pattern (see the Assets-domain precedent excerpt the audit pulled from
+  `asset_basis_events`).
+- RPCs: `create_decision`, `create_decision_scenario`,
+  `record_decision_choice` (append-only, zero side effects — this is the
+  literal, code-level enforcement of "Proceed never executes"),
+  `evaluate_decision_scenario` (pure read, ~40 columns split into
+  FACTS/ASSUMPTIONS/DERIVED/RULE RELATIONSHIPS + `missing_information`),
+  `save_decision_scenario_evaluation` (immutable snapshot), plus read
+  models `decision_summary()`, `decision_choice_history()`,
+  `decision_scenario_evaluation_history()`.
+- `lib/domain/decisions/types.ts` (173 lines) and `repository.ts` (345
+  lines) — full, already camelCase-mapped, Decimal-string-safe TypeScript
+  surface over every RPC above.
+- `lib/domain/decisions/aggregate.ts` — reporting-currency conversion for
+  a scenario's net delta, reusing the shared `convertToReportingCurrency
+  ()` (never a second FX formula).
+- `supabase/tests/decisions/run.ts` (732 lines, 70 assertions) — verifies
+  cross-tenant isolation on all 5 tables, forged-ownership rejection,
+  facts/assumptions/derived distinctness with exact decimal assertions,
+  "sell scenario never auto-fills price from target/quick-sale value,"
+  Safe-to-Deploy reuse (not re-derived), zero-mutation proofs for every
+  scenario type and every choice (including Proceed), an explicit
+  advisory-language blocklist check, and immutable snapshot behavior.
+- `lib/domain/rules/*` — the Safe-to-Deploy/Protected-Cash domain
+  Decisions reuses for every liquidity figure: `getSafeToDeployByCurrency
+  ()`, `RuleConflictStatus` (the same 5-value neutral vocabulary,
+  confirmed identical to Decisions' own `RuleRelationshipStatus`).
+- Home's `YourMovesSection.tsx` already consumes `DecisionSummary` rows
+  from the same `getFinancialPositionSummary()` this phase's new
+  `DecisionPositionCard` also reads from.
+`docs/architecture/FINANCIAL_DOMAIN_MODEL.md` §10 independently confirms
+all of the above as "Implemented (P0-E2-S7)." `docs/project/
+BUILD_STATE.md` confirms: "Decisions production UI is explicitly NOT
+started" — i.e. no prior "production" UI attempt exists to reconcile
+against; the old `/decisions` pages were intentionally throwaway.
+
+8. DOMAIN GAPS FOUND
+Two real gaps, both handled per the brief's own "if a calculation is
+incomplete, do not fake it" instruction — see §51 for the full list of
+every reference element this affected:
+(a) No canonical Stress Test capability exists (no RPC computes a
+"repairs overrun +25%" or "sale price 10% discount" hypothetical) — the
+reference's toggle pair was OMITTED rather than built as a new
+frontend-only forecasting formula, per the brief's explicit "do not
+build an entirely new forecasting engine in this UI phase."
+(b) No canonical "incremental return on additional capital" comparison
+metric exists between two scenarios — the reference's synthesized
+"Mathematical Trade-Off" paragraph (e.g. "11.1%... unmodeled until a
+time assumption is provided") was OMITTED; Scenario Comparison instead
+shows each scenario's own already-canonical derived figures side by
+side with no synthesized verdict.
+Neither gap required a schema change to work around, and neither
+affects any OTHER capability — the rest of the domain (facts,
+assumptions, derived values, rule statuses, choice recording) is fully
+implemented and canonical, so this is NOT a "PARTIAL — DECISIONS DOMAIN
+GAP" phase.
+
+9. DOMAIN CHANGES INTRODUCED
+None. No migration was created or modified. No RPC, table, or RLS policy
+was touched. Every read/write in the new UI goes through the exact same,
+already-tested repository functions from P0-E2-S7.
+
+10. DECISION MENTAL MODEL
+"What happens to my money if I do this?" — never "what should I do?" —
+implemented literally: every screen shows facts and calculated
+consequences; nothing ranks, scores, or labels a scenario "better."
+Choice recording (Proceed/Wait/Decline/Keep Reviewing) records the
+user's own conclusion; Monatriq never suggests which one to pick.
+
+11. DECISIONS OVERVIEW
+`components/decisions/DecisionsWorkspace.tsx`'s Active tab shows: how
+many decisions are active (real count, in the tab label), the user's own
+real Decision rows (name, type icon, type label, linked asset/liability
+name if any, scenario count, current choice chip, a "Review Decision"
+action), and a calm empty state when there are none. Nothing here is
+generated — `decisions` is `getDecisionSummaries()`'s real output,
+passed down from the server component.
+
+12. EMPTY STATE
+Implemented exactly per the brief's own copy: "Nothing under review" /
+"Start a decision when you want to compare a purchase, investment,
+repair, sale or major expense." with a single "Test a Decision" action —
+no fake scenarios, no fake savings opportunities, no AI suggestions.
+
+13. NEW DECISION FLOW
+"Test a Decision" (the reference's own exact wording, used per the
+brief's explicit allowance to prefer "the exact approved reference
+wording if it differs" from "Evaluate a Decision") opens the Test New
+tab's type grid ("What are you considering?"). Tapping a type opens
+`CreateDecisionSheet` — name, optional linked asset/liability (filtered
+to real capability-eligible candidates, see §14), currency, and the
+type's primary assumption field(s), with secondary/advanced fields
+(additional costs, loan terms, expected value, repair target value)
+behind the shared `MoreDetails` "More details" disclosure. Submitting
+creates the Decision AND its first Scenario in one guided step (two real
+RPC calls — `create_decision` then `create_decision_scenario` — chosen
+over the old foundation UI's two separately-navigated forms because a
+Decision with zero scenarios has nothing to evaluate yet), then hands
+off directly into `DecisionReviewSheet` for the same decision.
+
+14. DECISION TYPES
+All 10 canonical `decision_type_code` values render as their own tile
+(Buy an Asset, Sell an Asset, Repair/Improve an Asset, Invest in a
+Business, Large Personal Purchase, Use Savings, Take a Loan/Debt, Pay
+Down Debt, Start a New Venture, Other) — a deliberate deviation from the
+reference's 9-tile grid, which merges Take Debt and Pay Down Debt into
+one "Take or Pay Debt" tile. They are kept separate here because they
+are two distinct `decision_type_code` values with different scenario
+semantics (new borrowing vs. paying down existing debt) — merging them
+in the UI would create ambiguity about which canonical code a tap
+should write, and the brief's own "NEW DECISION" section lists all 10
+as separate items. Asset-link eligibility is real, not assumed: Sell
+Asset only offers assets where `assetCapabilities(type).supportsSale`
+is true; Repair/Improve only offers assets where `assetCapabilities
+(type).supportsCapitalImprovement` is true (so a Financial Investment
+cannot be given a Repair decision, per the brief's explicit example) —
+both reuse the exact same capability flags Assets' own UI already
+relies on, not a second classification.
+
+15. PROGRESSIVE DISCLOSURE
+`lib/domain/decisions/presentation.ts` (new) is the single source for
+which of `decision_scenarios`' ~18 columns are relevant to a given type,
+and what to call them — the Decisions equivalent of Assets'
+`assetDisplayConfig()`/`assetCreationConfig()` pattern. A Repair/Improve
+scenario asks for "Planned Repair / Improvement Cost" and (behind "More
+details") a target value after repair; it never asks for loan interest,
+business ownership, or a property deposit. Both `CreateDecisionSheet`
+and `DecisionReviewSheet` read from this one config — no duplicated
+per-type field-visibility logic exists in two places (the old
+foundation UI's `CreateScenarioForm.tsx` had its own local
+`OUTFLOW_TYPES`/`INFLOW_TYPES`/`VALUE_ASSUMPTION_TYPES` arrays with no
+counterpart on the read side; that duplication is resolved by this
+file, and the open question BUILD_STATE.md's prior report flagged about
+centralizing this is now closed).
+
+16. FACTS
+`DecisionReviewSheet`'s "Tracked Fact" category shows only real,
+currently-true figures read live by `evaluate_decision_scenario()`:
+linked asset's cost basis and current value, linked liability's
+outstanding principal, and the relevant cash account's current balance
+— never copied, never user-editable, never present when nothing is
+actually linked.
+
+17. ASSUMPTIONS
+The "Your Assumption" category echoes back exactly what the user typed
+into the scenario — cash required, proceeds, costs, expected value,
+loan terms — never auto-filled from a fact (the domain's own test suite
+already proves, e.g., that a Sell Asset scenario never silently copies
+the linked asset's target/quick-sale value into the sale-price
+assumption; the UI does nothing that could defeat that guarantee, since
+it only ever calls `createDecisionScenario()` with exactly what the
+user typed).
+
+18. DERIVED VALUES
+"What This Changes" shows only fields the evaluation actually returned
+non-null: net cash effect (labeled "Cash Required" or the type's own
+net-proceeds label depending on sign), cash after, Safe to Deploy
+before/after, the type's profit/loss label (Sell Asset only — see §21
+of the brief and §20 below), expected final amount invested (Repair
+only), and remaining debt (Pay Down Debt / Take Debt). A missing
+derived value never renders as a blank or zero — it's simply omitted
+from the list, and the standard `fmt()` helper prints "Not calculated"
+for any null the code path does still choose to show.
+
+19. CURRENT POSITION
+`components/decisions/DecisionPositionCard.tsx` — Cash Position,
+Protected Cash, Safe to Deploy, Upcoming Obligations, in the reference's
+exact 2x2 grid composition. Reuses `getFinancialPositionSummary()`
+directly — the SAME function Home's `PositionSection` calls — so this is
+not a second calculation; it is the identical canonical read, invoked
+from a second server component. Multi-currency-safe: each cell renders
+one line per native currency the user actually has (never blended),
+matching Home's own `NativeAmountList`/`SafeToDeployList` pattern rather
+than assuming a single reporting currency the way the reference's
+"Base Currency: NGN" chip implicitly does (that chip was NOT
+reproduced — see §51).
+
+20. WHAT THIS CHANGES
+See §18. Sale-specific language is exact per the brief: "Possible Sale
+Price," "Selling Costs," "Money You'd Receive After Costs," "What You
+Have Invested" (fact), "Estimated Profit / Loss" (derived, explicitly
+"Estimated" because the sale hasn't happened) — all sourced from
+`presentation.ts`'s `sell_asset` entry. Repair scenarios intentionally
+never show a profit/loss label (`showsProfitLoss: false` for
+`repair_improve_asset`) — per the brief, a repair is not a sale, so its
+derived figure is "Expected Final Amount Invested"
+(`basisAfterCapitalizedImprovement`), never "profit."
+
+21. SAFE TO DEPLOY
+Reused verbatim from `getSafeToDeployByCurrency()`/
+`getFinancialPositionSummary()`'s `nativePositions[].safeToDeploy`/
+`safeToDeployStatus` — never recalculated. Supporting copy is the exact
+P0-E4-S2A sentence: "Money you can use after protected savings and
+commitments." "Not configured"/"Not calculated" render honestly when
+`safeToDeployStatus !== 'calculated'` rather than a fabricated number.
+No "liquidity buffer" or "capital deployment" language appears anywhere
+in the new UI (verified — see §56).
+
+22. RULES
+`DecisionReviewSheet`'s Rules section shows exactly the 3 real
+rule-relationship fields `evaluate_decision_scenario()` returns —
+Minimum Cash Floor, Protected Goal, Protected Obligation — using the
+neutral vocabulary (`Aligned`/`Attention`/`Conflict`/`Not configured`/
+`Insufficient information`), never Pass/Fail. The reference's separate
+"Financial Constitution" TAB shows only the one real, user-configurable
+`RuleType` that exists today (`minimum_cash_floor`, via
+`getFinancialRuleSummaries()`), per real currency, with real "Not
+configured"/threshold-value states, plus a link to the existing `/rules`
+screen to configure it — see §8 and §51 for why the reference's other 3
+static rule cards ("Vehicle Concentration Limit," "Minimum Expected
+Margin," "Protected Goals" as a separately-configurable rule) were not
+reproduced: no canonical `rule_type` exists for any of them.
+
+23. GOALS IMPACT
+Surfaced exactly as the domain computes it — `protectedGoalStatus` in
+each decision's Rules section (see §22), and `protectedGoalCash`/
+`protectedCommitments` in the Decision Position card's Protected Cash
+cell. No new "this would use $X protected for [goal]" sentence was
+added, because `evaluate_decision_scenario()` returns a STATUS
+(aligned/attention/conflict/etc.), not the specific dollar amount at
+risk for a specific goal — inventing that sentence would require either
+a new domain calculation or guessing at which goal is implicated, both
+out of scope this phase (documented as an open question, §61).
+
+24. COMMITMENTS IMPACT
+Same treatment as Goals — `protectedObligationStatus` per scenario, and
+the Decision Position card's "Upcoming Obligations" cell (count + the
+nearest one's name), read straight from `getFinancialPositionSummary
+().upcomingObligations` — no hypothetical/invented obligation is ever
+shown.
+
+25. CONCENTRATION
+No canonical concentration-analysis capability exists in this domain
+(no denominator — "% of asset value" vs. "% of deployed capital" — is
+computed anywhere). Per the brief's own explicit instruction ("If no
+reliable denominator exists: do not display a concentration
+percentage"), no concentration figure appears anywhere in this phase's
+UI. The reference's own vehicle-concentration figures were not
+reproduced for this reason (see §8, §22, §51).
+
+26. SCENARIOS
+A Decision may have one or many scenarios, all user-created via the
+real "+ Add another scenario" affordance inside `DecisionReviewSheet`
+(reusing `createDecisionScenario()`, driven by the same
+`decisionTypePresentation()` field set as the initial creation sheet).
+Nothing auto-generates a "Best Case"/"Worst Case" — scenario names are
+entirely user-typed.
+
+27. SCENARIO COMPARISON
+When a decision has 2+ scenarios, `DecisionReviewSheet` shows each
+scenario's own real derived figures (net cash effect, profit/loss where
+relevant, Safe to Deploy after) side by side, with the explicit note
+"Shown side by side for comparison only — Monatriq does not rank or
+recommend a scenario." No score, no highlighted "winner," no synthesized
+verdict (see §8b for what was intentionally omitted here).
+
+28. STRESS TEST
+Omitted entirely — see §8a. Building one would have required inventing
+a new frontend-only forecasting formula, explicitly forbidden by the
+brief ("do not build an entirely new forecasting engine in this UI
+phase").
+
+29. USER CHOICE
+`DecisionReviewSheet`'s "Your Decision" panel offers exactly Proceed /
+Wait / Decline / Keep Reviewing (the brief's allowed vocabulary,
+verbatim) plus an optional note, calling `recordDecisionChoice()` —
+the same append-only RPC the domain audit already proved has zero
+financial side effects, including for Proceed.
+
+30. CHOICE VS TRANSACTION SEPARATION
+No code path in this phase's UI calls `record_asset_sale()`,
+`recordMoneyReceived`/`recordMoneySpent`/`recordTransfer`,
+`createAsset`, `createLiability`, `recordDebtPayment`, or any other
+real-transaction mutation. Every write from the Decisions screen is one
+of exactly 4 RPCs: `create_decision`, `create_decision_scenario`,
+`record_decision_choice`, `save_decision_scenario_evaluation` — all of
+which are already proven, by the domain's own 70-assertion test suite,
+to touch nothing outside the 5 Decisions tables.
+
+31. DECISION JOURNAL/HISTORY
+The Journal tab lists every decision that has a recorded choice
+(`currentChoice !== null`), sorted by `currentChoiceAt` descending,
+using data already present on `DecisionSummary` — no new RPC needed.
+Tapping a row reopens the same `DecisionReviewSheet`, which itself shows
+the full per-decision choice history via `getDecisionChoiceHistory()`
+(every past choice, its date, and its note — append-only, nothing
+overwritten).
+
+32. HOME INTEGRATION
+Unchanged in behavior. `components/home/YourMovesSection.tsx` still
+reads `DecisionSummary` rows from the exact same
+`getFinancialPositionSummary()` Home always has. The ONLY change to this
+file is import-level: its own local icon-mapping switch statement was
+extracted to the new shared `components/decisions/DecisionTypeIcon.tsx`
+(byte-identical case list) so Home and the full Decisions screen render
+the same type icon for the same type — not a second copy of the mapping.
+No visual, layout, or data change to Home.
+
+33. MONEY INTEGRATION
+None of this phase's writes touch Money (`financial_events`/
+`cash_movements`) — confirmed both by the domain's own test suite and by
+this phase's UI never calling a Money mutation function (§30). The
+Decision Position card reads Money's cash totals only via the shared
+Financial Position summary, exactly as Home already does.
+
+34. ASSETS INTEGRATION
+Read-only: `getAssetSummaries()` supplies the candidate list for linking
+an asset to a decision, filtered through `assetCapabilities()` (§14).
+No asset is created, valued, or archived from this screen.
+
+35. ASSET SALE SEPARATION
+Explicitly and structurally enforced: no file in `components/decisions/`
+imports `recordAssetSale` from `lib/domain/assets/repository.ts`, and
+none of the 4 RPCs this phase's UI calls can reach `asset_dispositions`.
+A Sell Asset decision's "Estimated Profit / Loss" is computed by
+`evaluate_decision_scenario()` from the linked asset's live cost basis
+and the user's own hypothetical sale-price assumption — a completely
+separate code path and separate formula from `record_asset_sale()`'s
+real, realised "Profit / Loss on Sale." Recording "Proceed" on a Sell
+Asset decision does not execute a sale; the real sale, when it happens,
+is recorded separately from Assets' own Sell Asset action (unchanged,
+untouched this phase).
+
+36. DEBT INTEGRATION
+Read-only: `getLiabilitySummaries()` supplies the candidate list for
+Pay Down Debt's required liability link. Take Debt intentionally has NO
+liability link (the debt doesn't exist yet — see `presentation.ts`).
+Loan proceeds are never treated as income (the derived label for
+`netImmediateCashDelta` on a `take_debt` scenario is "Cash Received,"
+never "Income" — matching the brief's explicit prohibition).
+
+37. MULTI-CURRENCY
+Every currency-bearing figure in this phase's UI is rendered per its own
+native `currencyCode` via `formatCurrencyAmount()` — never summed or
+blended across currencies. The Decision Position card explicitly lists
+one line per currency rather than assuming a single reporting figure
+(§19). A scenario's own currency is fixed at creation (matching the
+domain's own constraint) and every bucket picker is filtered to
+`currency_code` match. No new FX conversion path was introduced; the
+existing `convertScenarioNetDeltaToReportingCurrency()` aggregate helper
+was not wired into this pass's UI (a scenario's own native currency is
+always shown, so no rate lookup was needed to satisfy this phase's
+requirements) — flagged as a reasonable future enhancement, not a gap
+(§61).
+
+38. NO-ADVICE REVIEW
+Grepped the full set of new/modified files for "recommended," "best
+option," "worst option," "strong buy," "weak buy," "approved,"
+"rejected," "good decision," "bad decision," "do this," "don't do
+this," and "decision score" — zero matches in actual UI copy (3 doc-
+comment matches on the word "approved" all refer to "the approved
+[design] reference," not a decision verdict — see §56 for the full
+audit output). No numeric decision score is computed or displayed
+anywhere; `RuleRelationshipStatus`/`CHOICE_LABELS` are the only
+vocabulary used for any judgment-adjacent copy, and both are the
+existing, already-tested neutral vocabularies.
+
+39. DYNAMIC-USER REVIEW
+Grepped every new/modified file for "Victor," "Vee," "BMW," "Audi,"
+"Lakowe," "Autodrip," "Capital Compass," "Nigeria," and this session's
+own git-config email — zero matches (see §55 for the exact command and
+output). The reference screenshot itself contains "CAPITAL COMPASS"
+branding and hardcoded "Audi A5 Coupe"/"White BMW F30 335i" content
+(the reference's own "From Your Assets" candidate-suggestion section) —
+neither was reproduced; see §51 for why, and confirmation that this was
+a deliberate application of the brief's own explicit dynamic-user rule,
+not an oversight.
+
+40. RLS
+No RLS policy was added, removed, or modified. All access continues to
+flow through the existing 5 tables' existing policies (`auth.uid() =
+user_id` + EXISTS ownership joins for every foreign reference), already
+covering: forged cross-tenant asset/liability/bucket references in a
+scenario, direct decision/scenario/choice/evaluation row access, and
+anonymous access — all independently re-verified this turn by re-running
+the existing 70-assertion Decisions suite (§52) rather than assumed.
+
+41. CROSS-TENANT TESTS
+Already covered by the pre-existing, unmodified test suite:
+`decision_scenarios` referencing another user's asset/liability/bucket
+is rejected at the RPC layer; User A cannot insert a choice for User B's
+decision; User A cannot read User B's journal/evaluations; anonymous
+access is denied. Re-ran `npm run test:decisions` this turn: 70/70
+passed, unchanged from the P0-E2-S7 baseline (no schema/RLS was touched,
+so no new test was needed or added).
+
+42. MOBILE
+Built mobile-first against the reference's 448px-wide screenshot,
+translated to the same `max-w-md` sheet/`px-margin`-equivalent container
+width used by every other Monatriq screen (Home/Assets/Money). Primary
+touch targets (tab pills, "Test a Decision," decision-type tiles, Review
+Decision, choice-recording buttons, close buttons) all carry an explicit
+48px+ effective interactive target — see §48. No horizontal-scroll
+container was introduced except the tab bar's own intentional
+`overflow-x-auto` (needed because 5 tab labels don't fit 320-360px, the
+same technique Money's `PeriodSelector` and Assets' `AssetTypeSelector`
+already use elsewhere in this codebase).
+
+43. NARROW/FOLD
+Not verified in a real browser at 320px this turn (no browser tool was
+available in this session — see §50). Structurally, every card/grid in
+the new components uses the same `grid-cols-2`/`flex flex-col` patterns
+already proven at 320-360px on Home/Assets, and long decision/scenario
+names use `truncate`/`min-w-0` exactly like the existing `AssetCard`/
+`YourMovesSection` cards. This is a code-level expectation, not a
+verified one — flagged explicitly as an open item for manual review
+(§63).
+
+44. TABLET
+Not verified in a real browser this turn — same open item as §43. No
+tablet-specific breakpoint override was added; the layout relies on the
+same single-column `max-w-md`-equivalent container every other screen
+in this app uses at all viewport widths above mobile (Monatriq's shell
+does not currently branch layout by tablet width anywhere else either).
+
+45. DESKTOP
+Same as §44 — relies on the existing app shell's own container width
+behavior, unmodified by this phase.
+
+46. LIGHT
+No new hardcoded color was introduced anywhere in this phase — every
+class used is one of Monatriq's existing semantic tokens
+(`bg-surface-raised`, `bg-surface-strong`, `text-text-primary`,
+`text-text-secondary`, `text-text-muted`, `text-accent-primary`,
+`text-attention`, `text-focus`, `text-danger`, `bg-background`,
+`border-border`), which already have real Light-mode values defined in
+`lib/styles/tokens.css`. Not visually re-verified in a real browser this
+turn (§50).
+
+47. DARK
+Same token-only discipline as §46 — Dark is this app's default theme
+and its values are the ones every class above already resolves to; not
+visually re-verified in a real browser this turn (§50).
+
+48. ACCESSIBILITY
+Every new interactive element was audited for a 48px+ effective touch
+target, per this phase's explicit requirement (stricter than earlier
+phases, which only required this for the single `MoreDetails` control).
+Fixes applied: both bottom-sheet close (X) buttons (`CreateDecisionSheet
+.tsx`, `DecisionReviewSheet.tsx`) now use the same `::before`
+pseudo-element hit-area expansion technique P0-E4-S2A established for
+`MoreDetails.tsx` and `AssetCard.tsx`'s "Manage" button (visible size
+stays a compact 36px circle; actual tap area is 48x48px). The 5-item tab
+bar's pills use the same technique, expanded vertically only (pills are
+already wide enough horizontally). Every full-width/rectangular action
+button (Review Decision, Open Scenario Comparison, + Add another
+scenario, the 4 choice-recording buttons, Add/Cancel scenario buttons,
+the empty-state "Test a Decision" button) now carries an explicit
+`min-h-12` (Tailwind's `48px`, the SAME utility `components/ui/Button
+.tsx` already standardizes on app-wide). All form inputs use the
+existing `FormField`/`Input`/`Select` primitives, which already provide
+associated `<label htmlFor>` pairing, `min-h-12` inputs, and visible
+focus rings (via the global `*:focus-visible` rule in `tokens.css`) —
+unchanged by this phase. Every dialog/sheet uses `role="dialog"
+aria-modal="true" aria-label="..."`, matching `AssetActionSheet`'s
+established pattern exactly. `MoreDetails`'s own `aria-expanded` is
+unmodified and reused as-is inside `CreateDecisionSheet`.
+
+49. EMPTY/LOADING/ERROR STATES
+Empty: Active tab ("Nothing under review"), Compare tab ("No
+comparisons yet"), Journal tab ("No decisions recorded yet") — all
+calm, factual, single-CTA states with no fabricated figures. Loading:
+`DecisionReviewSheet` shows a plain "Loading…" line while its own
+client-side fetch (scenarios + evaluations + choice history) resolves —
+no skeleton with fake money values was built (per the brief's explicit
+prohibition). Error: every write path (`CreateDecisionSheet`,
+`DecisionReviewSheet`'s add-scenario and record-choice actions) has its
+own `role="alert"` error message on failure, matching the existing
+`AssetActionSheet`/`SellAssetSheet` convention exactly; a failed initial
+load in `DecisionReviewSheet` shows a plain error line rather than a
+blank/broken sheet.
+
+50. REFERENCE FIDELITY
+Section-by-section comparison against the approved screenshot: header
+(eyebrow + title + tagline) — matched, with "MONATRIQ" conventions
+(the existing `HeaderBrand`'s own eyebrow, already present in the app
+shell above this page) standing in for the reference's own
+"CAPITAL COMPASS" tag, which is a prohibited legacy name (see §51,
+§39). Decision Position card — matched (2x2 grid, same 4 metrics, same
+"Not configured"/"Not calculated" empty-state language). Tab bar —
+matched (5 tabs, same labels except "Financial Rules" vs. the
+reference's "Financial Constitution" — see §51). Primary CTA — matched
+verbatim ("Test a Decision," same icon-badge + arrow composition). Test
+New grid — same tile composition (icon badge, name, subtitle), 10 tiles
+instead of 9 (§14). Decision review sheet — same 4-category fact grid
+composition, same "What This Changes"/Rules section structure, same
+choice-recording button row. Journal, Rules tabs — matched at the
+structural level with real data substituted for the reference's static
+placeholders. NOT independently visually verified against the
+screenshot pixel-for-pixel in a real browser this turn — no browser
+tool was available in this session (checked via ToolSearch; none of the
+Chrome/built-in-browser MCP tools were connected). This is the single
+most significant open item for the user's own manual review before this
+phase is considered launch-ready rather than structurally complete —
+same category of gap prior phases (e.g. Home, P0-E3-S2) have also
+carried forward explicitly rather than silently.
+
+51. REFERENCE ELEMENTS INTENTIONALLY OMITTED
+(1) "CAPITAL COMPASS" brand tag — prohibited legacy prototype name per
+PRODUCT_DEFINITION.md §1; the app shell's own real "MONATRIQ" header
+eyebrow (unchanged, already present above every page) fills the same
+visual role. (2) The "From Your Assets" candidate-suggestion section
+(hardcoded "Audi A5 Coupe"/"White BMW F30 335i" cards with pre-filled
+"Evaluate Repair Impact"/"Compare Sell As-Is vs Repair" prompts) — this
+is an automated suggestion engine surfacing decisions the user never
+asked to consider, which is close to a textbook match for the brief's
+own explicit example of what NOT to do ("Do not populate the screen
+with invented suggestions such as: Sell BMW..."); omitted entirely, not
+reduced. (3) "Base Currency: NGN" chip — Monatriq is multi-currency-
+first and never assumes one base currency; the Decision Position card
+shows every native currency instead (§19, §37). (4) The 4-tab
+"Financial Constitution" tab's 3 non-existent rule types (Vehicle
+Concentration Limit, Minimum Expected Margin, Protected Goals as a
+separately-configurable rule) — no canonical `rule_type` exists for any
+of them (§8, §22, §25); only the one real configurable rule (Minimum
+Cash Floor) is shown. (5) "Worst-Case Stress Test" toggles — no
+canonical calculation exists (§8a, §28). (6) The "Mathematical
+Trade-Off" synthesized comparison paragraph (a fabricated "incremental
+return %" metric) — no canonical calculation exists (§8b, §27). (7)
+"Review Again" date field in the choice-recording panel — `record_
+decision_choice()` has no such parameter; adding one would require a
+migration, explicitly out of scope this phase. (8) The reference's
+merged "Take or Pay Debt" single tile — kept as two separate canonical
+types instead (§14). Every omission above was a deliberate, documented
+"data truth"/"unsupported canonical capability" deviation explicitly
+permitted by the brief's own Standing Visual Rule, never a silent or
+accidental one.
+
+52. TESTS
+No new test was added — this phase touched no schema/domain code, so
+the existing 70-assertion Decisions suite (`supabase/tests/decisions/
+run.ts`, unmodified) remains the correct and sufficient coverage;
+re-ran it this turn to confirm zero regression: 70/70 passed. Also
+re-ran the full 12-suite regression (§53). No UI-level test framework
+exists in this codebase to add component tests to (the established
+precedent, confirmed across every prior phase, is that presentation-only
+changes are verified via lint/typecheck/build plus manual/agent code
+review, not a new test harness).
+
+53. REGRESSION
+Full suite: `npm run test` — 20 (RLS/Profile) + 48 (Money) + 11
+(Currency) + 114 (Assets) + 27 (Receivables) + 25 (Liabilities) + 56
+(Goals) + 86 (Rules/Obligations) + 70 (Decisions) + 33 (Financial
+Position) + 30 (Home Readiness) + 31 (Home) = **551/551 assertions
+passed**, all 12 suites, zero failures — identical to the pre-phase
+baseline, confirming this phase's changes are presentation-only with no
+side effect on any domain suite.
+
+54. LINT/TYPECHECK/BUILD
+`npm run lint` — clean (one real issue was found and fixed during this
+phase: `DecisionReviewSheet.tsx`'s initial data-load `useEffect`
+triggered `react-hooks/set-state-in-effect`; resolved by inlining the
+fetch as a cancellable async IIFE inside the effect body, the same
+pattern already used safely elsewhere in this codebase, rather than
+calling a named component-scope async function directly from the
+effect). `npm run typecheck` (`tsc --noEmit` for the app, plus the
+tests tsconfig) — clean, after deleting the stale `.next` build-type
+cache that still referenced the just-deleted `[decisionId]` route.
+`npm run build` (`next build`, Turbopack) — compiles successfully, all
+18 routes generated with no errors (`/decisions/[decisionId]` correctly
+no longer appears in the route list, having been deleted — see §60).
+
+55. PROTOTYPE-DATA AUDIT
+`grep -rniE "victor|\bvee\b|bmw|audi|lakowe|autodrip|capital compass|
+nigeria|maaklinapp|info@zenward" app/\(app\)/decisions/ components/
+decisions/ lib/domain/decisions/presentation.ts` — zero matches. The
+reference screenshot/code.html's own "Audi A5 Coupe"/"White BMW F30
+335i"/"CAPITAL COMPASS" content was read and understood (§6) but never
+copied into runtime code — see §51 items 1-2 for the specific, deliberate
+omissions this produced.
+
+56. AI-COPY AUDIT
+`grep -rniE "unlock|optimize|\bsmart\b|intelligent|ai-powered|financial
+intelligence|wealth engine|supercharge|master your finances|
+recommended|best option|worst option|strong buy|weak buy|approved\b|
+rejected\b|good decision|bad decision|do this|don't do this|decision
+score"` across the same file set — 3 matches, all false positives: doc
+comments referring to "the approved [design] reference," never a
+decision verdict. Zero matches for any AI-slop or advisory-language
+term in actual rendered UI copy.
+
+57. FINANCIAL-SEMANTICS AUDIT
+No calculation was changed, duplicated, or reimplemented in this phase.
+Every number shown anywhere in the new UI is either (a) a raw field
+already returned by `evaluate_decision_scenario()`/`getSafeToDeployBy
+Currency()`/`getFinancialPositionSummary()`, formatted for display, or
+(b) a raw field from `getDecisionSummaries()`/`getDecisionChoiceHistory
+()`. No `Number()`/`parseFloat()`/`toFixed()` arithmetic exists anywhere
+in the new files — `formatCurrencyAmount()` (the existing, trusted
+display layer) is the only thing that ever touches a numeric string, and
+only for formatting, never for computing a new value. Confirmed no
+sign-flip, rounding, or blending logic was added anywhere client-side.
+
+58. SCHEMA/MIGRATION STATUS
+No migration created or modified this phase — confirmed via `git status`
+(§64): `supabase/migrations/` is untouched. Per this phase's own
+instruction, the two previously-pending migrations
+(`20260930090000_restrict_asset_status_to_vehicle.sql`,
+`20261001090000_create_asset_disposition_domain.sql`) were NOT reapplied
+or re-verified — BUILD_STATE.md already records Monatriq Dev as
+synchronized through both as of P0-E4-S2A, and this phase's own
+instruction explicitly said not to touch that.
+
+59. FILES CREATED
+`lib/domain/decisions/presentation.ts` (per-decision-type field/label
+config + shared `RULE_STATUS_LABELS`/`CHOICE_LABELS`/
+`MISSING_INFO_LABELS` vocabularies); `components/decisions/
+DecisionTypeIcon.tsx` (shared icon mapping, extracted from Home);
+`components/decisions/DecisionPositionCard.tsx`; `components/decisions/
+CreateDecisionSheet.tsx`; `components/decisions/DecisionReviewSheet
+.tsx`; `components/decisions/DecisionsWorkspace.tsx` (tab controller +
+Active/Test New/Compare/Journal/Rules panes); this report.
+
+60. FILES MODIFIED
+`app/(app)/decisions/page.tsx` — fully rewritten server component
+(fetches decisions/types/assets/liabilities/currencies/buckets/rule
+summaries/financial-position summary, renders `DecisionPositionCard` +
+`DecisionsWorkspace`). `components/home/YourMovesSection.tsx` — import-
+only change, extracting its icon-mapping switch statement to the new
+shared `DecisionTypeIcon.tsx` (§32); no visual/behavioral change.
+DELETED (fully superseded, confirmed unreferenced elsewhere before
+removal — §7, §13): `app/(app)/decisions/[decisionId]/page.tsx`,
+`components/decisions/DecisionList.tsx`, `components/decisions/
+CreateDecisionForm.tsx`, `components/decisions/CreateScenarioForm.tsx`,
+`components/decisions/ScenarioEvaluationPanel.tsx`, `components/
+decisions/DecisionJournal.tsx`.
+
+61. ASSUMPTIONS
+That a Decision without a scenario yet is not worth a separate
+create-then-add-scenario two-step flow, since the reference itself never
+shows an intermediate "decision created, no scenario" state (§13). That
+"Test a Decision" (the reference's literal wording) should be preferred
+over "Evaluate a Decision," per the brief's own explicit allowance.
+That Goals/Commitments impact should surface as the existing
+`protectedGoalStatus`/`protectedObligationStatus` fields rather than a
+new "this would use $X from [goal]" sentence, since no domain field
+carries that specific attribution (§23). That linking a business
+interest asset to a `business_investment` decision should be optional
+and unfiltered by capability (no dedicated capability flag exists for
+"is a business interest"), rather than filtered to `assetType ===
+'business_interest'` only, to avoid silently hiding a legitimately
+relevant asset of a different type.
+
+62. OPEN QUESTIONS
+Should `evaluate_decision_scenario()` eventually return the SPECIFIC
+goal/obligation implicated by a `protectedGoalStatus`/
+`protectedObligationStatus` conflict (name + amount), so the UI could
+show the brief's example sentence ("This would use NGN 2,000,000
+currently protected for [goal]") instead of just a status label? Should
+`convertScenarioNetDeltaToReportingCurrency()` be wired into the
+Decision Position card or Scenario Comparison for users who want one
+consolidated-currency view, given it already exists but wasn't needed
+to satisfy this phase's own requirements? Should a genuine Stress Test
+or scenario-comparison "incremental return" capability be built as a
+real, tested domain calculation in a future phase, now that the UI has
+an obvious place to put it?
+
+63. RISKS
+No real-browser/device visual verification has happened yet for this
+entire phase — no browser tool was available in this session (checked
+via ToolSearch). This is the single biggest open risk before calling
+this phase launch-ready rather than structurally complete; the same
+category of risk prior phases (Home, P0-E3-S2; the P0-E4-S2/S2A UX
+pass) have also explicitly carried forward rather than silently
+skipping. Client-side data fetching in `DecisionReviewSheet` (scenarios
++ evaluations + choice history, fetched on mount via the browser
+Supabase client) introduces a brief "Loading…" state on every open —
+acceptable for a bottom sheet, but worth watching for perceived latency
+on a slow connection; no caching/revalidation strategy beyond a plain
+`router.refresh()` + local refetch was built this phase. The two
+domain-capability gaps in §8 (Stress Test, scenario-comparison synthesis)
+remain permanently absent from Decisions until a future phase adds the
+underlying calculation — this is a known, documented, accepted scope
+boundary, not a silent regression.
+
+64. GIT STATUS
+At the end of this phase (`git status --short`): modified —
+`app/(app)/decisions/page.tsx`, `components/home/YourMovesSection.tsx`;
+deleted — the 6 files listed in §60; new/untracked — the 6 files listed
+in §59, plus `docs/reference/05-decisions/` (the reference bundle itself,
+supplied by the user this phase, not authored by this agent). Nothing
+else in the working tree changed. Nothing has been committed or pushed.
+
+65. RECOMMENDED NEXT PHASE
+Manual browser review of this phase's Decisions screen — Light/Dark/
+System, 320/360/393/430px+ and tablet/desktop, keyboard navigation
+through both sheets, and a direct side-by-side comparison against
+`docs/reference/05-decisions/screen.png` — is the essential next step
+before anything else builds on top of Decisions. After that: (a) resolve
+the two open domain-capability questions in §62 if a Stress Test or
+scenario-comparison synthesis is wanted, (b) an Offers domain phase (not
+started this phase, per instruction), or (c) the user's own next
+priority. Goals redesign was explicitly not started, per instruction.
+
+================================================================
+P0-E4-S3A — MANUAL BROWSER QA CORRECTIONS
+================================================================
+
+STATUS: COMPLETE. P0-E4-S3's structure (header, Decision Position card,
+tab navigation, Test a Decision CTA, Active Decisions cards, Test New
+grid, Decision Review sheet composition, Facts/Assumptions separation,
+What This Changes, Rules status rows, Scenario Comparison structure,
+Your Decision controls) was frozen and NOT redesigned — every change
+below is a targeted correction inside that existing structure, plus one
+larger, explicitly-scoped piece of new work: productionizing `/rules`
+(previously untouched foundation-level UI that Decisions' own "Set
+Financial Rules" link sends users into). No schema, RLS, or calculation
+change anywhere in this pass — confirmed by re-running the full
+regression suite unchanged (§ VALIDATION below).
+
+CASH REQUIRED SIGN-DISPLAY CORRECTION
+Manual QA found `DecisionReviewSheet`'s "What This Changes" row reading
+"Cash Required NGN -500,000.00" — a double-negative: the label already
+means "money going out," so repeating the minus sign on the number read
+as confusing rather than precise. The underlying figure
+(`netImmediateCashDelta`, a signed Decimal string from `evaluate_
+decision_scenario()`) was NOT changed. Fixed at the presentation layer:
+a new centralized helper, `directionalCashAmount()` in `lib/domain/
+decisions/presentation.ts`, takes the signed delta and returns the
+correct directional label (the type's own `netProceedsLabel` — "Cash
+Received," "Money You'd Receive After Costs," etc. — for a non-negative
+delta, or the generic "Cash Required" for a negative one) paired with
+the ABSOLUTE magnitude, computed via `Decimal.abs()` — never `Math.abs()`
+and never a second `.abs()` call scattered in JSX; this is the one place
+that logic lives, used by `DecisionReviewSheet`'s "What This Changes"
+row. A second helper, `signPrefix()`, was added for the one place a
+genuinely signed value under a NEUTRAL label is intentionally shown —
+Scenario Comparison's "Net cash effect" row, which per this correction's
+own instruction is allowed to stay signed (e.g. "+NGN 500,000" / "-NGN
+500,000") because "Net cash effect" doesn't itself imply a direction the
+way "Cash Required" does; that row now also gets an explicit "+" prefix
+for non-negative values (previously it silently relied on
+`formatCurrencyAmount()`'s own lack of a "+" prefix, which is correct
+for a directional label but was inconsistent for a neutral one).
+"Estimated Profit / Loss" was deliberately left as a plain signed value
+in both places — a loss is genuinely negative and "Estimated Profit /
+Loss -NGN 200,000" is not a double negative, so `directionalCashAmount()`
+was not applied there.
+
+CONTEXTUAL MISSING-INFORMATION CORRECTION
+Manual QA found the Decision Review sheet showing a flat "Insufficient
+information / Link a debt to this decision to calculate this." message
+even when Cash Required and Cash After had already calculated
+successfully — reading as though the whole evaluation had failed.
+`MISSING_INFO_LABELS` in `presentation.ts` was restructured from
+`Record<string, string>` to `Record<string, { title, body }>`, one
+specific title + one specific plain-language fix per canonical
+`missing_information` code (e.g. `no_liability_linked` → "Debt impact
+not calculated" / "Link a debt to this decision to calculate the
+remaining balance."). `DecisionReviewSheet` renders these under a
+"Not Yet Calculated" heading (not "Insufficient information"), as a
+list of separate cards — one per missing item — positioned AFTER the
+"What This Changes" section, so already-valid figures stay visible and
+first. No calculation was invented to fill these gaps, and no valid
+calculation was removed or hidden.
+
+PLAIN-LANGUAGE CORRECTIONS
+Three copy replacements, all presentation-only: `DecisionsWorkspace.tsx`'s
+primary CTA subtitle, "Model cash, liquidity and goal impact before
+committing." → "See how it could affect your cash, goals and commitments
+before you decide."; `CreateDecisionSheet.tsx`'s own subtitle, "Model the
+impact before you commit." → "See what this could change before you
+commit."; `DecisionPositionCard.tsx`'s explanatory note, "Establishes
+financial room before deploying capital." → "Set the cash you want to
+keep protected and your upcoming commitments to calculate Safe to
+Deploy." "Safe to Deploy," "Net Worth," "Cash Position," and "Protected
+Cash" were all kept exactly as-is, per instruction, as established
+Monatriq concepts. Re-grepped the full Decisions + Rules file set for
+"liquidity"/"capital deployment"/"financial room" after these changes —
+zero remaining matches.
+
+RULES & OBLIGATIONS PRODUCTION REDESIGN
+`/rules` previously rendered "Financial Rules & Obligations / Foundation-
+level view — not the final design." with one giant always-visible
+`MinimumCashFloorForm`, a raw `<dl>`-grid `SafeToDeployPanel`, and a
+plain divided-list `ObligationList` + permanently-expanded
+`CreateObligationForm` beneath it — no longer acceptable once Decisions
+itself started linking here via "Set Financial Rules." Rebuilt using
+ONLY Monatriq's existing card/spacing/typography/sheet/button/token
+language (the same `rounded-xl bg-surface-raised p-4` card idiom, the
+same bottom-sheet wrapper `AssetActionSheet`/`CreateDecisionSheet`
+established, the same `MoreDetails` disclosure control) — no new design
+language was invented. New page header answers the brief's two plain
+questions directly ("What money do you want to keep protected, and
+what's coming up?") and the "Foundation-level view — not the final
+design" line is gone. No Rules/Obligations RPC, table, or calculation
+was touched — `getSafeToDeployByCurrency()`, `getFinancialRuleSummaries
+()`, `createFinancialRule()`, `recordFinancialRuleVersion()`,
+`getObligationSummaries()`, `createObligation()` are all called exactly
+as before, just from new presentational components.
+
+SAFE TO DEPLOY CONFIGURATION UX
+New `components/rules/SafeToDeployCard.tsx` replaces the old `<dl>`-grid
+panel with one card per currency showing exactly the 4 fields this
+correction specifies — Cash Position, Minimum Cash to Keep, Protected
+Goals & Commitments, Safe to Deploy — each pulled verbatim from
+`SafeToDeployResult` (`liquidCash`, `minimumCashFloor`,
+`protectedCommitments`, `safeToDeploy`), never recalculated. "Not
+calculated" renders honestly (with a one-line plain explanation) when
+`status !== 'calculated'`, never a fabricated number. No currency is
+ever blended into another — one card per real `SafeToDeployResult` row,
+nothing more, nothing summed. New `components/rules/MinimumCashSection
+.tsx` replaces the single always-open form with a compact per-currency
+card (currency, current "Minimum cash to keep" value or "Not set," an
+"Edit" action) whose inline edit reveals only an amount field —
+progressive disclosure, never a giant form. A "Set for another
+currency" action, itself progressively disclosed, covers currencies
+with no rule yet, listing only currencies not already configured. The
+prior label "Minimum Cash Floor (0 is a valid explicit choice)" is
+gone; the new label is plain ("Minimum cash to keep"), with the
+zero-is-valid clarification moved to small helper text under the input,
+exactly matching this correction's own "use subtle help text" guidance.
+Zero remains a fully valid, saveable value — `createFinancialRule()`/
+`recordFinancialRuleVersion()` are called with whatever the user typed,
+including "0," completely unchanged. `DecisionsWorkspace.tsx`'s own
+embedded "Financial Rules" tab was updated for terminology consistency
+only (label → "Minimum Cash to Keep," threshold now rendered through
+`formatCurrencyAmount()` instead of a raw decimal string) — its
+underlying read (`getFinancialRuleSummaries()`) and its "Configure" link
+to `/rules` are unchanged.
+
+OBLIGATION UX
+New `components/rules/CommitmentsSection.tsx` + `AddCommitmentSheet.tsx`
+replace the old plain list + always-expanded form. Only real,
+non-archived, `getObligationSummaries()`-returned obligations ever
+render — never a seeded rent/insurance/school-fees example, exactly per
+instruction. Each row shows name, amount (via `formatCurrencyAmount()`),
+due date, an overdue flag when `isOverdue` is true, a "Protected" chip
+when `isProtected`, and — new, using data the domain already returns
+but the old UI never resolved — the linked goal's real NAME when
+`fundingGoalId` is set (resolved from the already-fetched `GoalSummary[]`
+list; no new query). The empty state is the brief's own suggested
+copy almost verbatim: "No upcoming commitments" / "Add payments or
+obligations you already know are coming so Monatriq can include them
+when calculating Safe to Deploy." Adding one now opens
+`AddCommitmentSheet`, a bottom sheet matching the established
+`AssetActionSheet`/`CreateDecisionSheet` wrapper, with the EXACT same
+fields `CreateObligationForm` always had (name, currency, amount, due
+date, protected checkbox, funding goal) — no recurrence, merchant,
+autopay, bank account, or tax field was added; none of those are
+canonical. `createObligation()` is called unchanged.
+
+BOTTOM-NAV / SAFE-AREA HANDLING
+`/rules` renders inside the same `(app)` layout/`AppShell` every other
+production screen (Home, Assets, Decisions) already uses, whose `<main>`
+already carries `pb-24` (96px) bottom clearance on mobile specifically
+so fixed bottom-nav content never overlaps the last form control — this
+phase did not need to add page-specific padding, since that clearance is
+shared, already-proven infrastructure, not something the old foundation
+page had opted out of. The new `AddCommitmentSheet` bottom sheet
+independently carries its own `pb-[max(env(safe-area-inset-bottom),
+16px)]`, matching every other Monatriq bottom sheet (`AssetActionSheet`,
+`SellAssetSheet`, `CreateDecisionSheet`) byte-for-byte, so its own last
+form control clears the device safe area regardless of the page behind
+it.
+
+ACCESSIBILITY
+Every new interactive element in `components/rules/*` and the two
+Decisions-tab label changes was built with (not retrofitted with) the
+same 48px-effective-touch-target discipline P0-E4-S2A/S3 established:
+full-width/rectangular actions carry `min-h-12`; the one compact close
+(X) button (`AddCommitmentSheet`) uses the same `::before` pseudo-
+element hit-area expansion as every other Monatriq sheet's close
+button. All fields use the existing `FormField`/`Input`/`Select`
+primitives (associated `<label htmlFor>`, `min-h-12` controls, existing
+global focus-visible ring). Every write path has its own `role="alert"`
+error message.
+
+MOBILE / LIGHT / DARK
+Built against the same `flex flex-col gap-*` single-column container
+and `grid-cols-2` card patterns already proven at 320-430px on Home/
+Assets/Decisions; no new breakpoint or layout primitive was introduced.
+Every class used is one of Monatriq's existing semantic tokens
+(`bg-surface-raised`, `bg-surface-strong`, `text-text-primary`, etc.) —
+no Rules-specific theme fork, no new hardcoded color. As with P0-E4-S3
+itself, this was NOT independently re-verified pixel-for-pixel in a real
+browser this pass (no browser tool was available in this session) —
+still the single most important open item for manual review.
+
+FILES CHANGED
+Modified: `app/(app)/decisions/page.tsx` (unchanged from P0-E4-S3, only
+re-confirmed via full re-test), `app/(app)/rules/page.tsx` (full
+rewrite), `components/decisions/DecisionReviewSheet.tsx` (Cash Required
+sign fix, contextual missing-information cards, Scenario Comparison
+sign-prefix), `components/decisions/DecisionsWorkspace.tsx` (CTA copy,
+embedded Rules tab terminology + currency formatting), `components/
+decisions/CreateDecisionSheet.tsx` (subtitle copy), `components/
+decisions/DecisionPositionCard.tsx` (explanatory copy), `lib/domain/
+decisions/presentation.ts` (`directionalCashAmount()`, `signPrefix()`,
+restructured `MISSING_INFO_LABELS`). New: `components/rules/
+SafeToDeployCard.tsx`, `components/rules/MinimumCashSection.tsx`,
+`components/rules/CommitmentsSection.tsx`, `components/rules/
+AddCommitmentSheet.tsx`. Deleted (fully superseded, confirmed
+unreferenced elsewhere before removal): `components/rules/
+SafeToDeployPanel.tsx`, `components/rules/MinimumCashFloorList.tsx`,
+`components/rules/MinimumCashFloorForm.tsx`, `components/obligations/
+ObligationList.tsx`, `components/obligations/CreateObligationForm.tsx`.
+Untouched, reused as-is: `components/rules/CashUseEvaluatorForm.tsx`
+(kept — a real, already-tested capability the brief didn't ask to
+remove — now presented behind a `MoreDetails` "Advanced: test a cash
+use" disclosure on `/rules` rather than always-visible, since it's a
+secondary tool, not one of the page's two primary questions),
+`components/obligations/UpcomingObligationsList.tsx` (left completely
+untouched — still used by Home and `/financial-position`, neither of
+which this pass was authorized to change), `components/goals/
+ShortfallBanner.tsx` (reused as-is on the new `/rules` page).
+
+VALIDATION
+`npm run lint` — clean. `npm run typecheck` (app + tests tsconfig) —
+clean. `npm run build` — compiles successfully, all 18 routes generated.
+`npm run test:decisions` — 70/70 passed (unchanged baseline). `npm run
+test` (full regression, all 12 suites) — 551/551 passed, zero failures
+— identical to both the pre-P0-E4-S3 and post-P0-E4-S3 baselines,
+confirming this correction pass changed presentation only. No local
+database reset was performed or needed (no schema/domain code changed).
+
+CONFIRMATION: NO FINANCIAL/DOMAIN CALCULATION CHANGED
+No migration was created or modified. No RPC (Decisions or Rules) was
+added, removed, or modified. No RLS policy was touched. Every number
+shown anywhere in this pass's changed files is a raw field already
+returned by `evaluate_decision_scenario()`, `getSafeToDeployByCurrency
+()`, `getFinancialRuleSummaries()`, or `getObligationSummaries()`,
+formatted (and, for the one directional-display case, split into
+label + absolute magnitude via `Decimal.abs()`) for display — never
+recomputed, re-derived, or invented. `directionalCashAmount()`/
+`signPrefix()` are display-only transforms of an already-canonical
+signed value; neither one produces a new number the domain didn't
+already return. No new financial rule type was created — the domain
+still supports exactly one (`minimum_cash_floor`) — and the reference's
+unsupported prototype rules (Vehicle Concentration Limit, Minimum
+Expected Margin, and any other configurable-rule type beyond Minimum
+Cash Floor) remain correctly omitted, per P0-E4-S3's own original
+decision, continued here without exception.
+
+Not committed. Stopping here for manual browser review, per instruction
+— the corrected Cash Required display, the contextual missing-
+information cards, and the full `/rules` production redesign are the
+three most important things to verify visually before this correction
+pass is considered done.
+
+================================================================
+P0-E4-S3B — CALCULATION TRANSPARENCY + REQUIRED INPUT INTEGRITY
+================================================================
+
+1. BROWSER-QA ISSUE
+Manual browser QA on P0-E4-S3/S3A found the calculations themselves
+correct but not comprehensible: a user reviewing a Decision could see a
+number like "Cash after: NGN 350,100" but had no way to see it came
+from "NGN 850,100 (tracked) minus NGN 500,000 (their own payment
+assumption)." A flat "Insufficient information" message (already
+partly addressed in S3A for the general case) still didn't distinguish
+WHICH specific thing was missing when several different figures on the
+same scenario were each blocked for a different reason. And a real,
+pre-existing Pay Down Debt decision with no linked liability (created
+before this phase's own required-link rule existed) surfaced in QA as
+"Develop Land / Pay Down Debt" — an understandable user-chosen title,
+but with no visible connection to which debt, if any, it was about.
+
+2. ROOT CAUSE
+Not a calculation bug — every underlying figure from `evaluate_decision_
+scenario()` was already correct (confirmed by re-running the unmodified
+70-assertion baseline with zero changes needed). The gap was entirely
+presentational: the UI displayed RESULTS without displaying the
+PROVENANCE of those results, and displayed absence-of-data as one
+generic phrase regardless of which specific canonical fact was missing.
+Separately, Pay Down Debt's evaluation formula has always been built
+around a linked liability (`hypothetical_liability_outstanding_after`
+reads `v_decision.linked_liability_id` directly, per the migration) —
+but nothing in the UI ever required selecting one before creating a new
+Pay Down Debt decision, so a user could create one that could never
+produce a debt figure without realizing why.
+
+3. CALCULATION TRANSPARENCY PATTERN
+New pure function, `buildDecisionCalculationExplanation(presentation,
+evaluation, minimumCashFloor)` in `lib/domain/decisions/presentation
+.ts`. Given an already-fetched `DecisionScenarioEvaluation`, it returns
+up to four `CalculationExplanationBlock`s (`cash`, `debt`, `profitLoss`,
+`safeToDeploy`), each either `calculated: true` (with explanatory
+`terms` plus a `result` copied VERBATIM from the matching canonical
+evaluation field) or `calculated: false` (with a specific `reason` and,
+only when a real destination exists, an `actionLabel`/`actionHref`).
+Rendered inside Decision Review as a new "How this was calculated"
+section, using the existing shared `MoreDetails` disclosure component
+(collapsed by default — "Collapsed by default is acceptable," per
+instruction), positioned after "What This Changes" and before "Not Yet
+Calculated" — explaining the figures that DID calculate before
+explaining the ones that didn't, a natural reading order. This function
+is presentation-only: it is called with data the caller (`Decision
+ReviewSheet`) already fetched from `evaluateDecisionScenario()`/
+`getFinancialRuleSummaries()`; it performs zero Supabase/RPC calls of
+its own and computes zero new financial facts — see §17 for the
+explicit "no second engine" verification.
+
+4. PROVENANCE LABELS
+Exactly the three restrained labels specified: "Tracked," "Your
+assumption," "Calculated" (`TERM_KIND_LABELS`, `ExplanationTermKind =
+"tracked" | "assumption" | "calculated"`). Rendered as a small uppercase
+chip in front of each term's own label (e.g. "TRACKED  Cash before"),
+matching the visual weight of the existing `CategoryBlock`'s own
+"Tracked Fact"/"Your Assumption" chips elsewhere in the same sheet, so
+the new section reads as the same product rather than a bolted-on
+addition. No database field name (`bucket_balance_after`,
+`net_immediate_cash_delta`, etc.) is ever shown to the user.
+
+5. CASH EXPLANATION
+For any type with cash relevance (a `cashRequired`/`grossProceeds`
+field, or Pay Down Debt's payment split): Tracked "Cash before"
+(`bucketBalanceBefore`) → the type-appropriate middle term — an
+outflow's own assumption amount with a "−" sign, an inflow's `net
+Proceeds` (gross minus costs, itself already canonical — never
+gross-alone) with a "+" sign, or Pay Down Debt's `totalCashRequired`
+labeled "Calculated · Total payment" with a "−" sign — → the canonical
+result, "Cash after" (`bucketBalanceAfter`), always copied verbatim.
+Not-calculated reasons are specific: "Choose the cash account this
+decision would use." (no bucket linked) vs. "Add an amount to
+calculate this." (no amount entered) — never a generic fallback unless
+neither specific code is present in `missingInformation`.
+
+6. SAFE TO DEPLOY EXPLANATION — DELIBERATELY CONSERVATIVE
+This is the one area where the brief's own worked example (`Cash after
+/ Minimum cash to keep / Protected commitments / MAX(...) / Safe to
+Deploy after`) was NOT implemented literally, and the reasoning is
+important: `safe_to_deploy_by_currency()`/`evaluate_hypothetical_bucket_
+liquidity()` compute Safe to Deploy from LIQUID CASH ACROSS EVERY
+BUCKET the user holds in that currency — but `DecisionScenarioEvaluation`
+only exposes ONE bucket's `bucketBalanceBefore`/`bucketBalanceAfter`.
+Showing "Cash after (this one bucket) − Minimum cash to keep = Safe to
+Deploy after" would silently substitute a bucket-scoped number for the
+real currency-scoped number the engine actually used internally — which
+is not an explanation of the real formula, it is a DIFFERENT, WRONG
+formula that happens to share some terms with it. Per the CRITICAL
+ARCHITECTURE RULE's explicit "do not fork Safe to Deploy... into a
+frontend formula," this block therefore shows NO equation at all: only
+the canonical `currencySafeToDeployAfter` RESULT, plus the user's own
+real, static, non-hypothetical configured minimum (from
+`getFinancialRuleSummaries()`, newly threaded into `DecisionReviewSheet`
+as a `ruleSummaries` prop) as read-only CONTEXT — never as an
+arithmetic input, never combined into a displayed "=". "Protected
+commitments" (the brief's own `Z`) was deliberately left out of
+`context` too, for the same reason plus one more: it is only exposed
+for CURRENT state (`SafeToDeployResult.protectedCommitments`, a
+different type from a different function), not the hypothetical-after
+state this block is about — showing it next to an "after" result would
+misleadingly imply it were also hypothetical-after when it is not. This
+is a scoped, deliberate, documented omission — not a missed
+requirement — and is called out explicitly per the brief's own "if
+genuinely lacking information, identify the exact missing domain
+output, do not fabricate it" instruction: the missing domain output is
+a currency-wide "hypothetical liquid cash after" figure that
+`evaluate_decision_scenario()` does not currently return.
+
+7. DEBT EXPLANATION
+Rendered for any type that shows a liability link at all (Pay Down
+Debt) OR that happens to have one linked (covers legacy/edge cases):
+Tracked "Current debt" (`linkedLiabilityOutstandingPrincipal`) → Your
+assumption "Principal payment" (`debtPrincipalPayment`, "−") → the
+canonical result, "Remaining debt" (`hypotheticalLiabilityOutstanding
+After`), copied verbatim — proven by a new test that deliberately sets
+`hypotheticalLiabilityOutstandingAfter` to a value that does NOT equal
+`current − payment` (exercising the real domain's own `greatest(...,
+0)` floor, confirmed by reading the migration directly — see §17) and
+asserting the UI shows that exact canonical figure, not a recomputed
+one. Not-calculated reason: "Choose a debt to evaluate its remaining
+balance." when `linkedLiabilityId` is null (the `no_liability_linked`
+missing-information code the migration itself adds specifically for
+`pay_down_debt`), confirmed against the actual SQL rather than assumed.
+
+8. ASSET SALE EXPLANATION
+Profit/Loss block (Sell Asset only): Calculated "Money you'd receive
+after costs" (`netProceeds`, "+") → Tracked "What you have invested"
+(`linkedAssetCostBasis`, "−") → canonical result
+(`projectedGrossProfitLoss`), copied verbatim — confirmed against the
+migration's own `v_projected_profit_loss := v_net_proceeds - v_asset.
+cost_basis` to make sure the term ORDER/SIGNS match the real formula's
+own shape, not an assumed one. Three distinct not-calculated reasons,
+mapped from which specific fact is actually null: "Link an asset to
+calculate this." (no asset linked) → "Add what you originally paid or
+invested to calculate this." (asset linked, cost basis unknown) → "Add
+a possible sale price to calculate this." (cost basis known, no sale-
+price assumption entered yet) — all three independently tested.
+
+9. MISSING-INFORMATION MAPPING
+`MISSING_INFO_LABELS` (already restructured to `{title, body}` pairs in
+P0-E4-S3A) is the ONE place every `missing_information` code's plain-
+language explanation lives; `buildDecisionCalculationExplanation()`
+reads the same underlying nullness the codes represent (rather than
+re-deriving new reasons) so the two stay consistent. No string
+comparison against a missing-information code is scattered elsewhere in
+JSX — every reason in every block above is produced inside this one
+function.
+
+10. REQUIRED-INPUT DECISIONS BY DECISION TYPE
+Extended `DecisionTypePresentation` with `assetLinkRequired`/
+`liabilityLinkRequired`/`sourceBucketRequired` (plus a matching plain-
+language `*RequiredMessage` for each). Set to `true` only where the
+domain's own evaluation is largely meaningless without the link — audited
+against the actual migration, not guessed: `sell_asset`/
+`repair_improve_asset` need `linked_asset_id` for `evaluate_decision_
+scenario()`'s own `v_missing := array_append(v_missing, 'no_asset_
+linked')` branch to ever resolve; `pay_down_debt` needs `linked_
+liability_id` for the matching `no_liability_linked` branch; `use_
+savings` needs a source bucket for `bucketBalanceAfter`/protected-fund
+effects to mean anything (the brief's own explicit example). Everything
+else (`buy_asset` — the asset doesn't exist yet; `business_investment`
+— link stays optional per the brief; `take_debt` — new borrowing, no
+existing liability to require) was deliberately left optional,
+confirmed by a dedicated negative test (§18). Enforced in `CreateDecision
+Sheet.tsx`: the relevant `<Select>` gets `required`, its empty option is
+`disabled` when the link is required, a plain-language helper line
+appears under the field, and the submit button stays disabled until
+satisfied — the exact "Choose the debt you want to pay down." wording
+the brief specified, never a raw field name.
+
+11. LEGACY INCOMPLETE-DECISION BEHAVIOR
+Audited before building anything: `updateDecision()` (unlike `decision_
+choices`/`decision_scenario_evaluations`) is NOT append-only —
+`decisions.linked_liability_id`/`linked_asset_id` are ordinary, UPDATE-
+grantable columns (confirmed directly in the migration: `grant update
+(name, description, status, linked_asset_id, linked_liability_id)`),
+and the same ownership-validating `with check` clause the INSERT policy
+uses is ALSO present on the UPDATE policy. So a genuine, safe repair
+path already exists in the domain — no workaround, no "add a duplicate
+complete scenario" fallback was needed. `DecisionReviewSheet` now shows,
+for any decision where a liability/asset link is required or already
+present: "Paying down: [debt name]" when linked, or "Debt: Not linked"
+plus a "Link a debt to complete this calculation" action when missing.
+That action reveals an inline liability picker and calls `updateDecision
+(decisionId, { linkedLiabilityId })` — a real fix, not a cosmetic one:
+re-evaluating afterward genuinely returns a real `Remaining Debt`
+figure, proven end-to-end by a new test. Nothing about the legacy
+decision was deleted, hidden, or auto-mutated before the user explicitly
+chose to fix it.
+
+12. PAY DOWN DEBT LIABILITY REQUIREMENT
+Enforced exactly as specified: a NEW Pay Down Debt decision cannot be
+submitted from `CreateDecisionSheet` without a selected liability — no
+DB CHECK constraint was added (the RPC itself still accepts a null
+`linked_liability_id` for any type, unchanged), so this is a client-side
+guardrail only, consistent with "no schema change expected." A new test
+proves the RPC-level permissiveness is exactly what makes legacy-decision
+handling (§11) necessary and safe: `createDecision()` with
+`decisionTypeCode: "pay_down_debt"` and no liability still succeeds at
+the domain layer (simulating pre-S3B data), and evaluating it returns
+`hypotheticalLiabilityOutstandingAfter: null` plus `no_liability_linked`
+— never a crash, never a fabricated balance.
+
+13. MINIMUM CASH TO KEEP WORDING
+`DecisionReviewSheet`'s Rules section now labels the row "Minimum Cash
+to Keep" (was "Minimum Cash Floor," a P0-E4-S3A-era miss in this one
+specific sheet — the standalone `/rules` page and Decisions' own
+"Financial Rules" tab already used the corrected wording). The internal
+`RuleType`/rule concept remains exactly `minimum_cash_floor` — nothing
+in the schema or domain layer was renamed.
+
+14. RULE-STATUS EXPLANATION
+Same conservative reasoning as §6 applies here too: `RuleRow` gained an
+optional `context` line, but it is used ONLY for "Minimum Cash to
+Keep," showing the user's real configured threshold (from
+`getFinancialRuleSummaries()`) next to its Aligned/Attention/Conflict
+status — never a computed "how far below the minimum" difference. The
+brief's own worked example ("Difference: NGN 149,900 below your
+minimum") would require comparing the SAME bucket-scoped
+`bucketBalanceAfter` against a CURRENCY-scoped minimum, the identical
+scope mismatch flagged in §6 — so no difference is manufactured.
+Protected Goal/Protected Obligation rows show status only, with no
+`context`, since no canonically-available, correctly-scoped comparison
+value exists for either.
+
+15. MULTI-CURRENCY
+`buildDecisionCalculationExplanation()` never receives or combines data
+from more than one currency — every term/result it returns is already
+scoped to the single evaluation (and therefore single scenario
+currency) it was given; the Safe-to-Deploy "not configured" reason
+interpolates `evaluation.currencyCode` directly (tested explicitly with
+a fake NGN evaluation asserting the reason string says "NGN," not a
+hardcoded currency). No new FX conversion path was introduced anywhere
+in this phase.
+
+16. NO-ADVICE REVIEW
+Grepped every new/modified file for "too low," "too high," "can
+afford," "is safe," "is a good," "is a bad," "not safe," "don't do,"
+"do this," "you should," "we recommend," "this is fine," "this is
+risky" — zero matches. Rule status vocabulary remains exactly Aligned/
+Attention/Conflict/Not configured/Insufficient information throughout;
+no numeric score was introduced anywhere.
+
+17. NO-SECOND-CALCULATION-ENGINE REVIEW
+This was the primary architectural risk of the whole phase, so it was
+verified three independent ways rather than assumed: (a) every
+`ExplanationResult.amount` in `buildDecisionCalculationExplanation()`
+is a direct field read from the `DecisionScenarioEvaluation` parameter
+— grepped the function body to confirm no `.plus()`/`.minus()`/`+`/`-`
+Decimal or numeric operation ever produces a `result.amount`; the
+`terms` arrays are populated from canonical fields too, purely for
+display. (b) New tests deliberately construct evaluations where the
+canonical result does NOT equal (term1 ± term2), specifically to prove
+the UI shows the canonical figure regardless — this is the strongest
+possible regression guard against a future edit accidentally re-summing
+the terms. (c) Every formula referenced in this report's own prose (the
+Pay-Down-Debt `greatest(outstanding − payment, 0)`, the Sell-Asset
+`net_proceeds − cost_basis`, the Safe-to-Deploy `protected_commitments =
+protected_goal_cash + uncovered_protected_obligations` / `required_
+retained_cash = MAX(minimum_cash_floor, protected_commitments)` /
+`safe_to_deploy = MAX(liquid_cash − required_retained_cash, 0)`) was
+read directly from the migration SQL, not recalled from memory or
+assumed — confirming this report's own explanations match the real
+formulas exactly.
+
+18. TESTS
+16 new assertions added to `supabase/tests/decisions/run.ts` (70 → 86):
+3 real DB/RPC tests (legacy Pay Down Debt with no liability evaluates
+safely; the `updateDecision()` repair path works end-to-end and
+produces a real remaining-debt figure; the same repair path is rejected
+for another user's liability, proving the UPDATE-side RLS `with check`
+protects this new code path exactly like the INSERT-side one already
+did) plus 2 related setup steps; 2 pure-function tests for the new
+required-link presentation flags (both the positive cases — Pay Down
+Debt/Sell/Repair/Use Savings requiring their link — and a negative case
+proving Buy Asset/Business Investment/Take Debt/Large Personal Purchase
+correctly do NOT require one); 8 pure-function tests for
+`buildDecisionCalculationExplanation()` covering cash outflow, cash
+inflow, Pay Down Debt, missing-liability reason, all three profit/loss
+reasons, Safe-to-Deploy not-configured (reason names the currency, real
+`/rules` action), Safe-to-Deploy configured (context-only, no equation),
+and a type with no relevant blocks; 1 test for `directionalCashAmount()`
+using a high-precision decimal to prove exact (non-float) magnitude
+preservation. Every "verbatim, never re-derived" claim in §§5-8 above is
+backed by a test that would fail if a future change accidentally
+started re-summing terms instead of reading the canonical field. Items
+27's #3 (cross-tenant liability), #6-9 (capability-gated asset
+eligibility) were already covered by the pre-existing suite (asset/
+liability ownership at decision-creation time; `assetCapabilities()`'s
+own `supportsSale`/`supportsCapitalImprovement` flags, exercised
+identically to how Assets' own suite already tests them) and were not
+duplicated here.
+
+19. REGRESSION
+`npm run test:decisions` — 86/86 passed (was 70/70, +16, zero
+regressions). `npm run test` (full suite, all 12 domains) — 567/567
+passed (was 551/551, +16, zero regressions) — the Rules/Obligations
+suite's own count (86) is an unrelated coincidence, not evidence of any
+change to that domain's own tests.
+
+20. LINT/TYPECHECK/BUILD
+`npm run lint` — clean. `npm run typecheck` (app + tests tsconfig,
+after clearing the `.next` type cache) — clean. `npm run build` — 18
+routes generated with no errors.
+
+21. SCHEMA/RLS/RPC STATUS
+No migration created or modified. No RLS policy added, removed, or
+modified — this phase's new tests exercise EXISTING policies (the
+UPDATE-side `with check` on `decisions`) that had gone untested for the
+`linked_liability_id` column specifically, not new ones. No RPC was
+added, changed, or redesigned — `evaluate_decision_scenario()`,
+`create_decision()`, `update` on `decisions`, and every other function
+this phase touches are called exactly as P0-E2-S7 defined them.
+
+22. FILES CHANGED
+Modified: `lib/domain/decisions/presentation.ts` (`buildDecisionCalculation
+Explanation()`, `CalculationExplanationBlock`/`ExplanationTerm`/
+`ExplanationResult` types, `assetLinkRequired`/`liabilityLinkRequired`/
+`sourceBucketRequired` + messages on `DecisionTypePresentation`,
+restructured type imports); `components/decisions/DecisionReviewSheet
+.tsx` (new "How this was calculated" section, legacy-liability-link
+repair UI, linked-object context line, "Minimum Cash to Keep" rename +
+rule-status context, new `liabilities`/`ruleSummaries` props);
+`components/decisions/CreateDecisionSheet.tsx` (required-link
+enforcement: `required` attributes, disabled-empty-option, helper text,
+submit-button gating); `components/decisions/DecisionsWorkspace.tsx`
+(threads the two new props into `DecisionReviewSheet`);
+`supabase/tests/decisions/run.ts` (16 new assertions, §18);
+`docs/project/BUILD_STATE.md`. No files were created or deleted this
+phase (all new capability was added to existing files).
+
+23. RISKS
+Same top risk as every phase since P0-E4-S2: no real-browser visual
+verification has happened yet (no browser tool was available in this
+session) — now spanning five phases' worth of unverified UI (S2/S2A/S3/
+S3A/S3B). The Safe-to-Deploy and Rule-status explanations are
+deliberately less complete than the brief's own worked examples (§6,
+§14) — a real, documented scope boundary, not a bug, but worth
+confirming during manual review that the resulting copy still reads as
+useful rather than incomplete. The new "Link a debt" repair action
+updates local component state (`liabilityOverride`) immediately for a
+snappy UI, then also calls `router.refresh()` for server-state
+consistency — if a user closes the sheet before that refresh resolves,
+the Active/Journal list could theoretically show stale linked-liability
+info for one render until the next natural refresh; low-severity, not
+observed in testing, flagged for awareness.
+
+24. GIT STATUS
+Modified: `lib/domain/decisions/presentation.ts`, `components/decisions/
+DecisionReviewSheet.tsx`, `components/decisions/CreateDecisionSheet
+.tsx`, `components/decisions/DecisionsWorkspace.tsx`, `supabase/tests/
+decisions/run.ts`, `docs/project/BUILD_STATE.md`. All other files
+remain exactly as P0-E4-S3/S3A left them (git shows the still-new/
+untracked files from those phases as untracked, not modified, since
+none of them were touched this pass except the four listed above).
+Nothing committed or pushed.
+
+25. RECOMMENDED NEXT STEP
+Manual browser review of "How this was calculated" (all four block
+types, both calculated and not-calculated states), the Pay Down Debt
+required-liability validation on creation, and the legacy-decision
+"Link a debt" repair flow — across Light/Dark/System and 320-430px+ —
+is the essential next step. After that, the same three options as
+P0-E4-S3A's own recommendation stand: (a) a Goals production-UI or
+redesign phase, (b) an Offers domain phase, or (c) the user's own
+priority.
+
+================================================================
+P0-E4-S3C — FINAL CALCULATION UX POLISH
+================================================================
+
+STATUS: COMPLETE. Three small, targeted fixes on top of P0-E4-S3B's
+calculation transparency, all found in the same manual browser QA
+pass. No redesign, no schema/RLS/RPC/calculation change anywhere —
+confirmed by re-running the full regression suite with zero
+regressions (§5 below).
+
+1. NO DEBTS TRACKED — DEAD-END FIXED
+QA found the legacy Pay Down Debt repair UI (added in P0-E4-S3B)
+showing an enabled "Link debt" button over a `<select>` whose only
+option was the disabled placeholder "No debts tracked yet" — a genuine
+dead end, since submitting was impossible and nothing told the user
+what to do about it.
+
+Audited whether a canonical debt/liability creation flow already
+exists before deciding how to fix this, per instruction. It does:
+`app/(app)/liabilities/page.tsx` + `components/liabilities/
+CreateLiabilityForm.tsx`, backed by the same `createLiability()` this
+decision would eventually link to — a real, functional, RPC-backed
+flow, not a mock. It IS still cosmetically "foundation-level" (the page
+literally renders "Foundation-level view — not the final design," same
+as `/rules` and `/decisions` read before their own P0-E4-S3/S3A
+production passes) — but functionally complete and canonical, which is
+what this instruction's "does an existing flow exist" question turns
+on, not visual polish.
+
+Fix, in `DecisionReviewSheet.tsx`'s legacy-liability-link block: when
+`liabilities.length === 0`, the selector/"Link debt"/"Cancel" form is
+no longer shown at all (nothing to select, so no useless enabled
+action — per instruction). Instead: "Add the debt you want to evaluate
+before continuing." plus a real, immediate "Add a debt" link to
+`/liabilities` (no intermediate "Link a debt to complete this
+calculation" toggle step either, since there is nothing that toggle
+could reveal). When `liabilities.length > 0`, the existing selector +
+"Link debt" flow from P0-E4-S3B renders exactly as before, unchanged.
+
+`/liabilities`'s own remaining foundation-level status is explicitly
+NOT fixed this phase (would be a Liabilities redesign, out of scope
+for "do not redesign Decisions" and for a 3-item polish pass) — flagged
+as a real, documented gap in `docs/project/BUILD_STATE.md`'s "Next
+approved step" instead, exactly per this phase's own "document the
+missing production entry point" instruction.
+
+2. NOT-YET-CALCULATED DEDUPLICATION
+QA found the expanded "How this was calculated" section's debt block
+already showing "Remaining debt / Not calculated / Choose a debt to
+evaluate its remaining balance," while the separate "Not Yet
+Calculated" section, directly below, repeated the same unresolved
+calculation as "Debt impact not calculated / Link a debt to this
+decision to calculate the remaining balance." — the same fact, twice,
+in different words.
+
+Fix: `CalculationExplanationBlock` gained a new field,
+`coveredMissingInfoCodes: string[]` — populated, block by block, ONLY
+with the specific `missing_information` code that a not-calculated
+block's own `reason` text actually explains (never a blanket "this
+block exists so clear everything"). A new exported helper,
+`coveredMissingInfoCodes(blocks)`, unions these across all blocks.
+`DecisionReviewSheet` now filters `primaryEvaluation.missingInformation`
+through this union before rendering "Not Yet Calculated" — a code
+already explained by a visible transparency block no longer gets a
+second card; a code NOT explained by any block (e.g. Sell Asset's "Add
+what you originally paid or invested," which has no real
+`missing_information` code behind it at all — confirmed by reading the
+migration — so there is genuinely nothing to deduplicate against) still
+surfaces normally. Canonical `missing_information` data itself is
+completely unchanged — this is a display-time filter, not a data
+change, and a new test (§5) proves an unrecognized/unrelated code is
+never swept up by the filter, so this can never silently hide a
+genuinely-unexplained gap.
+
+3. PAYMENT PROVENANCE LABEL FIXED
+QA found a simple Pay Down Debt scenario (a single payment amount, no
+separate interest/fee components) labeled "CALCULATED / Total payment
+/ −NGN 500,000" in the cash explanation — technically not wrong
+(`totalCashRequired` does equal the payment here) but confusing,
+because nothing was actually calculated: the user typed that exact
+number as their one assumption.
+
+Fix, in `buildDecisionCalculationExplanation()`'s cash block for
+`showsDebtPaymentSplit` types: now checks whether `debtInterestPayment`
+or `debtFeePayment` is genuinely present. When neither is (the simple
+case), the term is now "YOUR ASSUMPTION / Payment amount," sourced
+directly from `debtPrincipalPayment` — not `totalCashRequired` — since
+that is literally where the number came from. When either is present
+(a real composed payment), the term remains "CALCULATED / Total
+payment," sourced from `totalCashRequired` exactly as before — never
+recomputed as principal+interest+fee in JSX; the brief's own "do not
+recalculate that total in JSX" instruction is satisfied by reading the
+same canonical field P0-E4-S3B already used, just gating which
+label/kind describes it. Two new tests cover both branches explicitly,
+including asserting the composed case's amount is `totalCashRequired`
+verbatim and NOT locally re-summed.
+
+4. APPROVED BEHAVIOR PRESERVED
+Confirmed unchanged: Cash before/after (`bucketBalanceBefore`/
+`bucketBalanceAfter`, read verbatim, same as P0-E4-S3B), Remaining Debt
+(`hypotheticalLiabilityOutstandingAfter`, read verbatim), Safe to
+Deploy (`currencySafeToDeployBefore`/`currencySafeToDeployAfter`, still
+shown with zero equation per P0-E4-S3B's own conservative design,
+untouched this phase), Minimum Cash to Keep behavior (`getFinancial
+RuleSummaries()`/`createFinancialRule()`/`recordFinancialRuleVersion()`
+— not called differently anywhere in this phase's diff), multi-currency
+behavior (no new cross-currency code path was added — the "Add a debt"
+link and the deduplication filter are both currency-agnostic
+presentation logic), and decision-choice behavior (`recordDecisionChoice
+()` untouched, Proceed remains non-executing — no code path in this
+phase's diff calls it differently or at all).
+
+5. VALIDATION
+4 new assertions added to `supabase/tests/decisions/run.ts` (86 → 90):
+a simple-payment case asserting "Your assumption · Payment amount"
+sourced from `debtPrincipalPayment`, never a "Total payment" term
+alongside it; a composed-payment case (interest + fee both present)
+asserting "Calculated · Total payment" sourced from `totalCashRequired`
+verbatim (560, not re-derived from 500+50+10 in JS); a deduplication
+case proving `no_liability_linked` is correctly marked covered and
+therefore absent from the filtered "Not Yet Calculated" list; and a
+negative deduplication case proving an unrelated/unrecognized code is
+NEVER swept up as "covered" just because other blocks rendered — the
+key regression guard against this filter ever silently hiding a
+genuinely-unexplained gap. `npm run test:decisions` — 90/90 passed (was
+86/86, +4, zero regressions). `npm run test` (full suite, all 12
+domains) — 571/571 passed (was 567/567, +4, zero regressions). `npm run
+lint` — clean. `npm run typecheck` (app + tests tsconfig) — clean.
+`npm run build` — 18 routes generated with no errors.
+
+FILES CHANGED THIS PASS
+Modified: `lib/domain/decisions/presentation.ts` (`coveredMissingInfo
+Codes()`, `CalculationExplanationBlock.coveredMissingInfoCodes`, the
+simple-vs-composed payment-provenance branch in the cash block);
+`components/decisions/DecisionReviewSheet.tsx` (no-debts-tracked empty
+state + "Add a debt" link to `/liabilities`, `uncoveredMissingInformation`
+filter feeding "Not Yet Calculated," `Link`/`ArrowRight` imports);
+`supabase/tests/decisions/run.ts` (4 new assertions, §5); `docs/project/
+BUILD_STATE.md`. No files created or deleted this phase.
+
+SCHEMA/RLS/RPC/CALCULATION STATUS
+Unchanged. No migration, no RLS policy, no RPC. Every fix in this phase
+is either a display-time filter over already-canonical data (item 2), a
+routing/empty-state change (item 1), or a relabeling of which already-
+canonical field a term is sourced from (item 3, still read verbatim,
+never recomputed).
+
+GIT STATUS
+Modified this pass: `lib/domain/decisions/presentation.ts`, `components/
+decisions/DecisionReviewSheet.tsx`, `supabase/tests/decisions/run.ts`,
+`docs/project/BUILD_STATE.md`. Every other file remains exactly as
+P0-E4-S3/S3A/S3B left it. Nothing committed or pushed.
+
+RECOMMENDED NEXT STEP
+Same as P0-E4-S3B's own recommendation, now also covering this phase's
+three fixes specifically: manual browser review of the no-debts-tracked
+empty state (including the `/liabilities` handoff), the deduplicated
+"Not Yet Calculated" section, and the corrected payment-provenance
+label — across Light/Dark/System and 320-430px+ — before treating
+Decisions as launch-ready. `/liabilities`'s own foundation-level status
+is a reasonable candidate for a dedicated future phase, now that both
+Decisions and Rules & Obligations route users there.
+
+Not committed. Stopping here for final manual review, per instruction.

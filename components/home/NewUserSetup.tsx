@@ -18,7 +18,7 @@ const TRACKED_ITEMS = [
  * spacing, alignment, dividers... before reaching for another card."
  * Progressive, not exhaustive: one primary action (cash is the most
  * foundational starting point), two restrained secondary links, never a
- * financial recommendation. The "What Monatriq will track" section below
+ * financial recommendation. The "What Monitriq will track" section below
  * is product orientation only — no numbers, no charts, nothing invented.
  */
 export function NewUserSetup() {
@@ -28,7 +28,7 @@ export function NewUserSetup() {
         <p className="text-xs font-medium uppercase tracking-wide text-text-muted">Your financial picture starts here</p>
         <p className="mt-3 text-lg font-medium text-text-primary">No balances recorded yet.</p>
         <p className="mt-2 max-w-sm text-sm leading-relaxed text-text-secondary">
-          Add the cash you actually have first. Monatriq will build your financial position as you add assets, goals, and
+          Add the cash you actually have first. Monitriq will build your financial position as you add assets, goals, and
           commitments.
         </p>
         <Link
@@ -51,7 +51,7 @@ export function NewUserSetup() {
       </div>
 
       <div className="border-t border-border pt-6">
-        <p className="text-xs font-medium uppercase tracking-wide text-text-muted">What Monatriq will track</p>
+        <p className="text-xs font-medium uppercase tracking-wide text-text-muted">What Monitriq will track</p>
         <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3.5 sm:grid-cols-3">
           {TRACKED_ITEMS.map(({ label, Icon }) => (
             <div key={label} className="flex items-center gap-2.5">

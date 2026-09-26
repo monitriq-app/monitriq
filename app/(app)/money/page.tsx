@@ -25,13 +25,13 @@ import { AddCashBalanceForm } from "@/components/money/AddCashBalanceForm";
 import { ManageCashSection } from "@/components/money/ManageCashSection";
 
 /**
- * Monatriq's production Money screen (P0-E3-S3). Every figure is read
+ * Monitriq's production Money screen (P0-E3-S3). Every figure is read
  * from Money's own canonical functions (money_period_summary(),
  * money_weekly_summary(), money_category_breakdown(),
  * money_bucket_balances(), money_currency_totals(),
  * money_recent_activity()) — no arithmetic happens in this file or in
  * any component it renders, and no currency is ever silently summed
- * with another. "Manually Tracked" below is real: Monatriq V1 has no
+ * with another. "Manually Tracked" below is real: Monitriq V1 has no
  * bank-sync/connect-bank capability of any kind, so this is a true
  * statement of current product state, not marketing copy.
  */
@@ -77,7 +77,7 @@ export default async function MoneyPage({ searchParams }: { searchParams: Promis
           <div className="rounded-xl bg-surface-raised p-4">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-text-muted">Your money starts here</p>
             <p className="mt-2 text-base font-medium text-text-primary">No cash tracked yet.</p>
-            <p className="mt-1 text-sm text-text-secondary">Add the cash you actually have — Monatriq builds everything else from there.</p>
+            <p className="mt-1 text-sm text-text-secondary">Add the cash you actually have — Monitriq builds everything else from there.</p>
           </div>
           <section id="create-bucket" className="flex flex-col gap-3 scroll-mt-20">
             <h2 className="text-lg font-semibold text-text-primary">Add Cash Balance</h2>

@@ -1,7 +1,7 @@
 /*
- * Monatriq semantic UI tokens.
+ * Monitriq semantic UI tokens.
  *
- * BRAND tokens (the --monatriq-* hex values) live in
+ * BRAND tokens (the --monitriq-* hex values) live in
  * docs/reference/brand/brand-tokens.css, imported before this file in
  * app/globals.css. That file is canonical and is never edited here.
  *
@@ -22,27 +22,27 @@
 
 @theme {
   /* Surfaces, darkest to lightest */
-  --color-background: var(--monatriq-obsidian);
-  --color-surface: var(--monatriq-ink);
-  --color-surface-raised: var(--monatriq-midnight-navy);
-  --color-surface-muted: color-mix(in srgb, var(--monatriq-ink) 65%, var(--monatriq-midnight-navy));
+  --color-background: var(--monitriq-obsidian);
+  --color-surface: var(--monitriq-ink);
+  --color-surface-raised: var(--monitriq-midnight-navy);
+  --color-surface-muted: color-mix(in srgb, var(--monitriq-ink) 65%, var(--monitriq-midnight-navy));
   /* One step lighter than surface-raised — nested/elevated elements sitting
      inside a raised card (icon badges, inner highlight boxes, bar tracks,
      neutral chip fills), matching the P0-E3-S2 reference's own
      surface-container-low → surface-container-high elevation direction. */
-  --color-surface-strong: color-mix(in srgb, var(--monatriq-midnight-navy) 88%, var(--monatriq-mist-grey));
+  --color-surface-strong: color-mix(in srgb, var(--monitriq-midnight-navy) 88%, var(--monitriq-mist-grey));
 
-  --color-border: color-mix(in srgb, var(--monatriq-mist-grey) 16%, var(--monatriq-obsidian));
+  --color-border: color-mix(in srgb, var(--monitriq-mist-grey) 16%, var(--monitriq-obsidian));
 
   /* Text */
-  --color-text-primary: var(--monatriq-warm-off-white);
-  --color-text-secondary: var(--monatriq-mist-grey);
-  --color-text-muted: color-mix(in srgb, var(--monatriq-mist-grey) 50%, var(--monatriq-obsidian));
+  --color-text-primary: var(--monitriq-warm-off-white);
+  --color-text-secondary: var(--monitriq-mist-grey);
+  --color-text-muted: color-mix(in srgb, var(--monitriq-mist-grey) 50%, var(--monitriq-obsidian));
 
   /* Action / state semantics (docs/design/VISUAL_CONSTITUTION.md #5) */
-  --color-accent-primary: var(--monatriq-electric-teal);
-  --color-positive: var(--monatriq-electric-teal);
-  --color-focus: var(--monatriq-cool-aqua);
+  --color-accent-primary: var(--monitriq-electric-teal);
+  --color-positive: var(--monitriq-electric-teal);
+  --color-focus: var(--monitriq-cool-aqua);
 
   /*
    * Approved application-state colors (P0-E2-S1), NOT brand colors: they
@@ -76,21 +76,21 @@
 :root[data-theme="light"] {
   color-scheme: light;
 
-  --color-background: var(--monatriq-warm-off-white);
-  --color-surface: color-mix(in srgb, white 88%, var(--monatriq-warm-off-white));
+  --color-background: var(--monitriq-warm-off-white);
+  --color-surface: color-mix(in srgb, white 88%, var(--monitriq-warm-off-white));
   --color-surface-raised: white;
-  --color-surface-muted: color-mix(in srgb, var(--monatriq-mist-grey) 35%, white);
-  --color-surface-strong: color-mix(in srgb, var(--monatriq-mist-grey) 55%, white);
+  --color-surface-muted: color-mix(in srgb, var(--monitriq-mist-grey) 35%, white);
+  --color-surface-strong: color-mix(in srgb, var(--monitriq-mist-grey) 55%, white);
 
-  --color-border: color-mix(in srgb, var(--monatriq-mist-grey) 70%, white);
+  --color-border: color-mix(in srgb, var(--monitriq-mist-grey) 70%, white);
 
-  --color-text-primary: var(--monatriq-ink);
-  --color-text-secondary: color-mix(in srgb, var(--monatriq-ink) 62%, white);
-  --color-text-muted: color-mix(in srgb, var(--monatriq-ink) 38%, white);
+  --color-text-primary: var(--monitriq-ink);
+  --color-text-secondary: color-mix(in srgb, var(--monitriq-ink) 62%, white);
+  --color-text-muted: color-mix(in srgb, var(--monitriq-ink) 38%, white);
 
-  --color-accent-primary: var(--monatriq-deep-teal);
-  --color-positive: var(--monatriq-deep-teal);
-  --color-focus: var(--monatriq-deep-blue);
+  --color-accent-primary: var(--monitriq-deep-teal);
+  --color-positive: var(--monitriq-deep-teal);
+  --color-focus: var(--monitriq-deep-blue);
 }
 
 @layer base {

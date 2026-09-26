@@ -16,7 +16,7 @@ import { SoldAssetsSection } from "@/components/assets/SoldAssetsSection";
 import { AddAssetButton } from "@/components/assets/AddAssetButton";
 
 /**
- * Monatriq's production Assets screen (P0-E3-S4). Every figure is read
+ * Monitriq's production Assets screen (P0-E3-S4). Every figure is read
  * from Assets' own canonical functions (asset_summary(),
  * asset_value_by_type()) or, for "Money You're Owed" — a real but
  * separate domain, composed here the same way Home composes Financial

@@ -1,4 +1,4 @@
-# Monatriq — Financial Domain Model
+# Monitriq — Financial Domain Model
 
 Status: Canonical. Established P0-E1-S1. The Money domain (§3, §16, §17,
 §18) is now implemented — see
@@ -194,7 +194,7 @@ Capital, Relocation/Milestones, Education, Vehicle, Event, Travel, Custom.
 
 ### 9.1 One naira, one purpose
 
-**Implemented (P0-E2-S5)** as "one unit of money, one purpose" — Monatriq
+**Implemented (P0-E2-S5)** as "one unit of money, one purpose" — Monitriq
 is multi-currency, so the rule is not NGN-specific. Enforced by
 construction: every allocate/release/reallocate RPC locks the target
 bucket row before computing available-to-allocate capacity, so the same
@@ -415,7 +415,7 @@ Full detail in `supabase/migrations/*_create_assets_domain.sql` and
   `create_asset()`, `record_asset_valuation()`, and
   `record_asset_basis_event()` never touch `financial_events` or
   `cash_movements` — there is no code path connecting them. An existing
-  asset (owned for years before the user started using Monatriq) can be
+  asset (owned for years before the user started using Monitriq) can be
   onboarded with a historical cost basis without fabricating today's Money
   Out — tested explicitly (`supabase/tests/assets/run.ts`).
 - **Potential Liquidity is never invented.** `lib/domain/assets/
@@ -623,7 +623,7 @@ assigns PURPOSE to cash that already exists in a bucket. Summary:
 - **At most one focus goal**, enforced by a partial unique index
   (`goals_one_focus_per_user`) that applies regardless of write path — not
   merely by the `set_focus_goal()` convenience RPC's unset-then-set
-  behavior. The user chooses; Monatriq never auto-selects the largest or
+  behavior. The user chooses; Monitriq never auto-selects the largest or
   nearest goal as focus.
 - **Milestones are lightweight and financially inert.** `goal_milestones`
   attach to any goal (not measurement-type-restricted — a cash_target goal
@@ -733,7 +733,7 @@ Monthly cadence is approximated via average days-per-month
 period (`ceil`), so the required pace is never understated by rounding
 down. "Today" is computed from the caller's `profiles.timezone` where set
 (falls back to UTC) — the one piece of "actual profile timezone" data
-Monatriq has — rather than the database server's own timezone. "At
+Monitriq has — rather than the database server's own timezone. "At
 Current Pace" forecasting (a predictive, contribution-history-based
 projection) is explicitly deferred: this phase has no contribution-history
 concept beyond the raw allocation ledger, and a real projection needs more
@@ -1116,7 +1116,7 @@ saving a scenario (verified explicitly).
 
 **Repair/improve asset**: `capitalization_classification`
 (`capital_improvement`/`expense`) is an explicit, required-where-
-relevant user choice — Monatriq never decides automatically whether
+relevant user choice — Monitriq never decides automatically whether
 repair spending capitalizes. Only when a scenario is explicitly
 classified `capital_improvement` does `basis_after_capitalized_
 improvement = cost_basis + cash_required` get computed, and even then
@@ -1637,3 +1637,20 @@ the same "exclude disposed" condition already applied for `is_archived`
 Assets' own active totals, and Net Worth reflects that transition
 automatically through the SAME functions Home/Assets already compose,
 with zero new arithmetic in either screen's own code.
+
+## Budget (P0-E5-S1)
+
+**Budget does not own transactions.** Money (`financial_events` / `cash_movements`) is the only spending ledger. A budget is a monthly *plan*; actual spending is never stored (no `actual_spent`) and is derived on every read from `money_category_breakdown()` — the same function behind "Where Money Went" — so Budget cannot diverge from Money.
+
+- **Tables:** `budgets` (one currency, explicit `period_start`/`period_end` constrained to a calendar month, `status` active/closed/archived, optional planning-only `expected_money_in`) and `budget_category_allocations` (`planned_amount >= 0` per canonical `money_spending_categories` code).
+- **Uniqueness:** one non-archived budget per (user, currency, month); archiving frees the slot.
+- **Period/timezone:** months are resolved in the profile timezone (not UTC), same as every Money period read.
+- **Zero vs Not budgeted:** an allocation row with `0` is an explicit zero; no row is "Not budgeted". Spending in a category with no allocation is surfaced as unbudgeted and never auto-allocates.
+- **Remaining = Planned − Actual** (exact decimal). `NULL` when nothing is planned (never a fake zero). May be negative; over-budget never blocks Money.
+- **Allocations are mutable** (no version history in V1; `updated_at` is the only trace). Closed/archived budgets are read-only.
+- **What counts as spending:** `money_spent` events, non-voided, in the budget currency and period. Excluded: transfers, FX transfers, opening balances, money received, loan proceeds, receivable recoveries, and the linked Liabilities events (`debt_principal_payment`, `debt_interest`, `debt_fee`). A user-recorded `money_spent` in the `debt_payment` category *is* counted. (Open V2 question: whether linked `debt_interest`/`debt_fee`, class `expense` with no category, should surface as an "uncategorized" spend line.)
+- **Asset purchases:** Money has no asset-purchase event; an asset purchase is budget spending only if the user recorded a `money_spent`.
+- **Commitments:** reuse `obligations` (no second bills table). `budget_upcoming_commitments` lists active same-currency obligations due in the rest of the period; they are informational and never counted as spending or subtracted from Remaining (no double counting).
+- **Custom categories:** none exist in Money, so none exist in Budget (documented limitation).
+- **Not** Available Cash or Safe to Deploy; the Rules engine is untouched.
+- **Future Decisions boundary:** `budget_facts_for_date(currency, date, category?)` returns planned/spent/remaining facts only (no advice); zero rows when no budget covers it.

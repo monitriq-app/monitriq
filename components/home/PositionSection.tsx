@@ -57,7 +57,7 @@ function CurrentPositionHeader() {
  * screen, is the one that actually subtracts protected/committed
  * amounts — "Cash Position" stays a neutral, accurate label for the
  * unadjusted total. The reference's top-right status chip ("Immediate
- * Cash Available") has no real Monatriq domain state behind it (liquid
+ * Cash Available") has no real Monitriq domain state behind it (liquid
  * cash overall doesn't carry an "immediate availability" flag), so it is
  * OMITTED rather than copied verbatim — the row is kept, just without a
  * fabricated badge. Net Worth and Safe to Deploy are two distinct
