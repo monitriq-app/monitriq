@@ -260,6 +260,13 @@ async function main() {
     android: "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36",
     desktop: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
     instagram: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 320.0",
+    // Real iOS third-party browser UAs (P0-E6-S1R1): Apple requires every iOS
+    // browser to run on WebKit, so each still identifies as an iPhone/iPad and
+    // reaches Add to Home Screen through the same OS Share sheet as Safari.
+    iphoneChrome: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/125.0.6422.80 Mobile/15E148 Safari/604.1",
+    iphoneFirefox: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/126.0 Mobile/15E148 Safari/605.1.15",
+    iphoneEdge: "Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 EdgiOS/125.2535.85 Mobile/15E148 Safari/605.1.15",
+    ipadChrome: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/125.0.6422.80 Mobile/15E148 Safari/604.1",
   };
 
   await runner.run("8/9 install experience: platform detection, standalone detection, and who sees what", async () => {
@@ -275,12 +282,44 @@ async function main() {
     assert(!/android|chrome/i.test(IOS_INSTALL_STEPS) && /Share/.test(IOS_INSTALL_STEPS) && /Add to Home Screen/.test(IOS_INSTALL_STEPS), "iOS wording is iOS-only");
   });
 
+  await runner.run("P0-E6-S1R1: iOS install guidance is a per-DEVICE decision, not Safari-only — Chrome/Firefox/Edge on iPhone and iPad get it too", async () => {
+    for (const [name, ua] of Object.entries({ "Chrome iPhone (CriOS)": UA.iphoneChrome, "Firefox iPhone (FxiOS)": UA.iphoneFirefox, "Edge iPhone (EdgiOS)": UA.iphoneEdge })) {
+      assert(detectPlatform({ userAgent: ua }) === "ios", `${name} must be detected as iOS`);
+      assert(installOffer({ standalone: false, platform: detectPlatform({ userAgent: ua }), hasPrompt: false, inAppBrowser: isInAppBrowser(ua) }) === "ios_guide", `${name} must be offered ios_guide, not "none"`);
+    }
+    // iPad Chrome presents the same iPadOS "Macintosh" UA as iPad Safari; only real touch support (not the browser name) tells it apart from a desktop Mac running Chrome.
+    assert(detectPlatform({ userAgent: UA.ipadChrome, platform: "MacIntel", maxTouchPoints: 5 }) === "ios", "iPad Chrome (Mac UA + touch) must be detected as iOS");
+    assert(installOffer({ standalone: false, platform: detectPlatform({ userAgent: UA.ipadChrome, platform: "MacIntel", maxTouchPoints: 5 }), hasPrompt: false, inAppBrowser: false }) === "ios_guide", "iPad Chrome gets Add to Home Screen guidance");
+    assert(detectPlatform({ userAgent: UA.ipadChrome, platform: "MacIntel", maxTouchPoints: 0 }) === "desktop", "a real desktop Mac running Chrome must still be desktop, not ios");
+    // Regressions this must keep true: standalone still hides it, in-app webviews still hide it, Android/desktop behaviour is untouched.
+    assert(installOffer({ standalone: true, platform: "ios", hasPrompt: false, inAppBrowser: false }) === "none", "standalone iOS (any browser) still hides the guidance");
+    assert(!isInAppBrowser(UA.iphoneChrome) && !isInAppBrowser(UA.iphoneFirefox) && !isInAppBrowser(UA.iphoneEdge), "real iOS browsers are never mistaken for an in-app webview");
+    assert(isInAppBrowser(UA.instagram) && installOffer({ standalone: false, platform: "ios", hasPrompt: false, inAppBrowser: true }) === "none", "Instagram/Facebook-style in-app webviews on iOS still get no install UI");
+    assert(installOffer({ standalone: false, platform: "android", hasPrompt: true, inAppBrowser: false }) === "prompt" && installOffer({ standalone: false, platform: "android", hasPrompt: false, inAppBrowser: false }) === "none", "Android behaviour is unchanged: beforeinstallprompt only");
+    // Guard against a future regression back to browser-name sniffing.
+    const installLogic = code("lib/pwa/install.ts");
+    assert(!/Safari|CriOS|FxiOS|EdgiOS|Chrome/.test(installLogic), "install.ts must not gate on a specific iOS browser name outside comments");
+  });
+
   await runner.run("install entry point is secondary: only in the profile menu (not Home), with the approved wording", async () => {
     assert(INSTALL_TITLE === "Install Monitriq" && INSTALL_ACTION === "Install Monitriq" && INSTALL_HELP === "Add Monitriq to your device for quicker access.", "copy");
     assert(/<InstallSection/.test(src("components/layout/AccountMenu.tsx")), "profile menu hosts it");
     for (const f of ["app/(app)/home/page.tsx", "components/home/PositionSection.tsx", "components/home/SpendingCheckCard.tsx", "components/layout/AppShell.tsx"]) assert(!/InstallSection|beforeinstallprompt/.test(src(f)), `${f}: no install banner outside the profile menu`);
     const section = src("components/pwa/InstallSection.tsx");
     assert(/min-h-12/.test(section) && /aria-hidden="true"/.test(section), "48px target; icons are decorative next to text labels");
+  });
+
+  await runner.run("P0-E6-S1R2: real-device diagnostics are opt-in only (?pwaDebug=1), never shown by default, and never gate the real install decision", async () => {
+    const section = src("components/pwa/InstallSection.tsx");
+    assert(/pwaDebug/.test(section) && /=== "1"/.test(section), "diagnostics require an explicit ?pwaDebug=1 query flag");
+    assert(!/NODE_ENV/.test(code("components/pwa/InstallSection.tsx")), "diagnostics logic must not gate on NODE_ENV alone — the real device under test is very likely a deployed or LAN build, not `next dev`");
+    assert(/TEMPORARY DIAGNOSTICS/.test(section) && /P0-E6-S1R2/.test(section), "clearly labelled temporary, so it is not mistaken for a permanent feature");
+    // debug must only ever come from window.location.search read inside snapshotEnv/try-catch — never influence detectPlatform/isInAppBrowser/isStandalone/installOffer's inputs.
+    const decisionLogic = code("lib/pwa/install.ts");
+    assert(!/pwaDebug|URLSearchParams/.test(decisionLogic), "the pure decision functions must stay untouched by the debug flag");
+    for (const raw of ["navigator.userAgent", "navigator.platform", "navigator.maxTouchPoints", "display-mode: standalone", "navigator.standalone", "detectPlatform() ->", "isInAppBrowser() ->", "installOffer() ->"]) {
+      assert(section.includes(raw), `diagnostics panel must surface ${raw}`);
+    }
   });
 
   await runner.run("offline and update states: honest copy, announced to assistive technology, never auto-reloading", async () => {
