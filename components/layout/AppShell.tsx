@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { PageContainer } from "@/components/layout/PageContainer";
 import { MobileBottomNav } from "@/components/layout/MobileBottomNav";
 import { ShellHeader } from "@/components/layout/ShellHeader";
+import { InstallBanner } from "@/components/pwa/InstallBanner";
 import { LanguageProvider } from "@/components/language/LanguageProvider";
 import { QuickAddProvider } from "@/components/quick-add/QuickAddProvider";
 import { getCurrentUser } from "@/lib/supabase/get-current-user";
@@ -57,6 +58,7 @@ export async function AppShell({ children }: AppShellProps) {
     <QuickAddProvider buckets={buckets} balances={balances} receivedCategories={receivedCategories} spendingCategories={spendingCategories}>
       <div className="flex min-h-dvh flex-col bg-background text-text-primary">
         <ShellHeader displayName={displayName} email={user?.email ?? null} preferredCurrency={profile?.preferred_currency ?? null} />
+        <InstallBanner />
         <main className="flex-1 pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
           <PageContainer className="py-6 md:py-8">{children}</PageContainer>
         </main>

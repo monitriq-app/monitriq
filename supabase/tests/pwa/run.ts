@@ -12,7 +12,24 @@ import { TestRunner, assert } from "../shared/assert.ts";
 import { buildManifest } from "../../../lib/pwa/manifest.ts";
 import { buildServiceWorker, deploymentVersion } from "../../../lib/pwa/service-worker.ts";
 import { detectPlatform, installOffer, isInAppBrowser, isStandalone } from "../../../lib/pwa/install.ts";
-import { INSTALL_ACTION, INSTALL_HELP, INSTALL_TITLE, IOS_INSTALL_STEPS, OFFLINE_MESSAGE, UPDATE_ACTION, UPDATE_MESSAGE } from "../../../lib/pwa/messages.ts";
+import { INSTALL_PROMPT_DISMISS_KEY, INSTALL_PROMPT_REMINDER_MS, INSTALL_PROMPT_SHOW_DELAY_MS, shouldShowInstallPrompt } from "../../../lib/pwa/install-prompt.ts";
+import {
+  INSTALL_ACTION,
+  INSTALL_BANNER_BODY,
+  INSTALL_BANNER_INSTALL,
+  INSTALL_BANNER_NOT_NOW,
+  INSTALL_BANNER_TITLE,
+  INSTALL_HELP,
+  INSTALL_TITLE,
+  IOS_INSTALL_STEPS,
+  IOS_SHEET_DISMISS,
+  IOS_SHEET_FOOTER,
+  IOS_SHEET_STEPS,
+  IOS_SHEET_TITLE,
+  OFFLINE_MESSAGE,
+  UPDATE_ACTION,
+  UPDATE_MESSAGE,
+} from "../../../lib/pwa/messages.ts";
 import { themeColors } from "../../../lib/config/site.ts";
 import { DRAWER_SECTIONS, PRIMARY_AFTER_ADD, PRIMARY_BEFORE_ADD } from "../../../components/layout/nav-items.ts";
 import { LANGUAGE_MODES } from "../../../lib/domain/language/types.ts";
@@ -247,9 +264,18 @@ async function main() {
     assert(/force-static/.test(route) && /no-cache, no-store, must-revalidate/.test(route) && /application\/javascript/.test(route), "the worker file is served fresh with the right type");
   });
 
-  await runner.run("no persistence of financial data offline: no IndexedDB / localStorage / Cache writes of user data anywhere in the PWA code", async () => {
+  await runner.run("no persistence of financial data offline: no IndexedDB / Cache writes of user data, and the ONE permitted localStorage use holds only a bare install-prompt-dismissal timestamp (P0-E6-S1R3 section 20)", async () => {
     const pwaFiles = [...walk("lib/pwa"), ...walk("components/pwa"), "app/offline/page.tsx", "app/sw.js/route.ts"];
-    for (const f of pwaFiles) assert(!/indexedDB|localStorage|sessionStorage|openDatabase/.test(src(f)), `${f}: client storage`);
+    const STORAGE_ALLOWLIST = new Set(["lib/pwa/install-prompt-store.ts"]);
+    for (const f of pwaFiles) {
+      assert(!/indexedDB|openDatabase/.test(src(f)), `${f}: IndexedDB is never permitted`);
+      if (STORAGE_ALLOWLIST.has(f)) continue;
+      assert(!/localStorage|sessionStorage/.test(code(f)), `${f}: client storage outside the one allowlisted dismissal-timestamp module`);
+    }
+    const dismissalStore = src("lib/pwa/install-prompt-store.ts");
+    assert(!/sessionStorage/.test(dismissalStore), "only localStorage is used, for the cross-visit reminder; the in-tab flag is a plain module variable");
+    assert(/localStorage\.setItem\(INSTALL_PROMPT_DISMISS_KEY, String\(Date\.now\(\)\)\)/.test(dismissalStore), "the only value ever written is a bare epoch-millisecond timestamp");
+    assert(!/\bbalance|\bbudget|\baccount\b|\bsession\b|\btoken\b|\bemail\b|user_id|supabase/i.test(code("lib/pwa/install-prompt-store.ts") + code("lib/pwa/install-prompt.ts")), "no financial, identity or auth data anywhere near the dismissal storage");
     assert(!/lib\/domain|supabase/i.test(pwaFiles.map(code).join("\n")), "PWA code imports no financial domain or Supabase code");
   });
 
@@ -301,25 +327,110 @@ async function main() {
     assert(!/Safari|CriOS|FxiOS|EdgiOS|Chrome/.test(installLogic), "install.ts must not gate on a specific iOS browser name outside comments");
   });
 
-  await runner.run("install entry point is secondary: only in the profile menu (not Home), with the approved wording", async () => {
-    assert(INSTALL_TITLE === "Install Monitriq" && INSTALL_ACTION === "Install Monitriq" && INSTALL_HELP === "Add Monitriq to your device for quicker access.", "copy");
-    assert(/<InstallSection/.test(src("components/layout/AccountMenu.tsx")), "profile menu hosts it");
-    for (const f of ["app/(app)/home/page.tsx", "components/home/PositionSection.tsx", "components/home/SpendingCheckCard.tsx", "components/layout/AppShell.tsx"]) assert(!/InstallSection|beforeinstallprompt/.test(src(f)), `${f}: no install banner outside the profile menu`);
-    const section = src("components/pwa/InstallSection.tsx");
-    assert(/min-h-12/.test(section) && /aria-hidden="true"/.test(section), "48px target; icons are decorative next to text labels");
+  await runner.run("install entry points: the top InstallBanner (primary) and the profile InstallSection (secondary fallback) are the only two, with the approved wording", async () => {
+    assert(INSTALL_TITLE === "Install Monitriq" && INSTALL_ACTION === "Install Monitriq" && INSTALL_HELP === "Add Monitriq to your device for quicker access.", "profile fallback copy unchanged");
+    assert(/<InstallSection/.test(src("components/layout/AccountMenu.tsx")), "profile menu hosts the fallback");
+    assert(/<InstallBanner/.test(src("components/layout/AppShell.tsx")), "AppShell hosts the primary top banner, once, for the whole authenticated app");
+    for (const f of ["app/(app)/home/page.tsx", "components/home/PositionSection.tsx", "components/home/SpendingCheckCard.tsx"]) assert(!/InstallSection|InstallBanner|beforeinstallprompt/.test(src(f)), `${f}: no page reimplements its own install UI outside the two shared entry points`);
+    for (const f of ["components/pwa/InstallSection.tsx", "components/pwa/InstallBanner.tsx", "components/pwa/InstallInstructionsSheet.tsx"]) {
+      const section = src(f);
+      assert(/min-h-12/.test(section), `${f}: 48px touch target`);
+    }
   });
 
-  await runner.run("P0-E6-S1R2: real-device diagnostics are opt-in only (?pwaDebug=1), never shown by default, and never gate the real install decision", async () => {
-    const section = src("components/pwa/InstallSection.tsx");
-    assert(/pwaDebug/.test(section) && /=== "1"/.test(section), "diagnostics require an explicit ?pwaDebug=1 query flag");
-    assert(!/NODE_ENV/.test(code("components/pwa/InstallSection.tsx")), "diagnostics logic must not gate on NODE_ENV alone — the real device under test is very likely a deployed or LAN build, not `next dev`");
-    assert(/TEMPORARY DIAGNOSTICS/.test(section) && /P0-E6-S1R2/.test(section), "clearly labelled temporary, so it is not mistaken for a permanent feature");
-    // debug must only ever come from window.location.search read inside snapshotEnv/try-catch — never influence detectPlatform/isInAppBrowser/isStandalone/installOffer's inputs.
-    const decisionLogic = code("lib/pwa/install.ts");
-    assert(!/pwaDebug|URLSearchParams/.test(decisionLogic), "the pure decision functions must stay untouched by the debug flag");
-    for (const raw of ["navigator.userAgent", "navigator.platform", "navigator.maxTouchPoints", "display-mode: standalone", "navigator.standalone", "detectPlatform() ->", "isInAppBrowser() ->", "installOffer() ->"]) {
-      assert(section.includes(raw), `diagnostics panel must surface ${raw}`);
+  await runner.run("P0-E6-S1R2 temporary diagnostics fully removed (P0-E6-S1R3 section 21): no ?pwaDebug UI, no debug panel, no diagnostic console logging left behind", async () => {
+    for (const f of [...walk("components/pwa"), ...walk("lib/pwa")]) {
+      assert(!/pwaDebug/.test(src(f)), `${f}: leftover ?pwaDebug reference`);
+      assert(!/TEMPORARY DIAGNOSTICS|InstallDiagnostics/.test(src(f)), `${f}: leftover diagnostics panel`);
     }
+    assert(!/console\.log/.test(code("components/pwa/InstallSection.tsx")), "no diagnostic console logging left in the profile fallback");
+    // The pure detection helpers themselves are exactly what a diagnostics tool would have used — keeping them is "keep only the pure internal helpers", not the removed user-visible panel.
+    for (const fn of [detectPlatform, isInAppBrowser, isStandalone, installOffer]) assert(typeof fn === "function", "pure detection helper still exists and is exported");
+  });
+
+  // ---------------- P0-E6-S1R3: TOP INSTALL BANNER ----------------
+  await runner.run("shouldShowInstallPrompt: eligibility, session suppression, standalone/in-app suppression (via offer), and the 7-day reminder", async () => {
+    const base = { offer: "prompt" as const, dismissedAt: null, now: 1_000_000, sessionDismissed: false, ready: true };
+    assert(shouldShowInstallPrompt(base) === true, "1/18 Android eligible + returning user: banner shows");
+    assert(shouldShowInstallPrompt({ ...base, offer: "ios_guide" }) === true, "5/6/7 any eligible iOS browser: banner shows");
+    assert(shouldShowInstallPrompt({ ...base, ready: false }) === false, "11 first-show delay: not yet ready");
+    assert(shouldShowInstallPrompt({ ...base, offer: "none" }) === false, "12/13 offer=none already covers standalone AND in-app — no second detector needed here");
+    assert(shouldShowInstallPrompt({ ...base, sessionDismissed: true }) === false, "11 session suppression: 'Not now' this tab session, no reload needed to hide it");
+    assert(shouldShowInstallPrompt({ ...base, dismissedAt: base.now - 1 }) === false, "10 just dismissed: still within the reminder window");
+    assert(shouldShowInstallPrompt({ ...base, dismissedAt: base.now - (INSTALL_PROMPT_REMINDER_MS - 1) }) === false, "10 one millisecond short of 7 days: still suppressed");
+    assert(shouldShowInstallPrompt({ ...base, dismissedAt: base.now - INSTALL_PROMPT_REMINDER_MS }) === true, "10 exactly 7 days later: eligible again");
+    assert(shouldShowInstallPrompt({ ...base, dismissedAt: base.now - INSTALL_PROMPT_REMINDER_MS - 1 }) === true, "10 well past 7 days: eligible again");
+    assert(INSTALL_PROMPT_REMINDER_MS === 7 * 24 * 60 * 60 * 1000, "reminder delay is centralized at exactly 7 days and easy to change (one constant)");
+    assert(INSTALL_PROMPT_SHOW_DELAY_MS >= 1000 && INSTALL_PROMPT_SHOW_DELAY_MS <= 2000, "11 first-show delay is the requested ~1-2s, not instant and not indefinite");
+    assert(INSTALL_PROMPT_DISMISS_KEY === "monitriq_install_prompt_dismissed_at", "the exact, approved storage key");
+  });
+
+  await runner.run("InstallBanner: Android invokes the REAL native prompt (never a fake button), declining applies the normal reminder delay, accepting clears state", async () => {
+    const banner = code("components/pwa/InstallBanner.tsx");
+    assert(/prompt\.prompt\(\)/.test(banner) && /prompt\.userChoice/.test(banner), "2 calls the real deferred browser install prompt, then inspects the result");
+    assert(/setDeferredInstallPrompt\(null\)/.test(banner), "4 clears the deferred prompt state after use, same as the profile fallback");
+    assert(/outcome === "accepted"[\s\S]{0,40}markInstallPromptInstalled\(\)/.test(banner), "4 success: marks installed, never offered again this session");
+    assert(/else[\s\S]{0,40}dismissInstallPromptForSession\(\)/.test(banner), "3 decline: dismissed politely with the normal 7-day reminder delay, not silently forgotten");
+    assert(!/fetch\(.*install|new Notification|apk|App Store/i.test(banner), "never fakes an install channel that doesn't exist");
+  });
+
+  await runner.run("InstallBanner: iOS Install opens the instruction sheet, never a fake programmatic install", async () => {
+    const banner = code("components/pwa/InstallBanner.tsx");
+    assert(/offer === "ios_guide"[\s\S]{0,40}setSheetOpen\(true\)/.test(banner), "6/8 iOS Install opens the sheet instead of calling a native prompt that doesn't exist on iOS");
+    assert(!/\.prompt\(\)/.test(banner.replace(/prompt\.prompt\(\)/, "")), "the native prompt() call only ever runs in the Android branch");
+  });
+
+  await runner.run("iOS instruction sheet: accessible dialog, the approved concise steps, Escape support, and Got it", async () => {
+    assert(IOS_SHEET_TITLE === "Install Monitriq" && IOS_SHEET_DISMISS === "Got it", "copy");
+    assert(IOS_SHEET_STEPS.length === 3 && /Share/.test(IOS_SHEET_STEPS[0]) && /Add to Home Screen/.test(IOS_SHEET_STEPS[1]) && /Add/.test(IOS_SHEET_STEPS[2]), "6 concise numbered steps, not a screenshot-heavy flow");
+    assert(/Then launch Monitriq from the new Home Screen icon\./.test(IOS_SHEET_FOOTER), "footer copy");
+    const sheet = src("components/pwa/InstallInstructionsSheet.tsx");
+    assert(/role="dialog"/.test(sheet) && /aria-modal="true"/.test(sheet) && /aria-labelledby="install-sheet-title"/.test(sheet), "19 accessible title, real dialog semantics");
+    assert(/event\.key === "Escape"/.test(sheet), "19 Escape closes it on desktop");
+    assert(/panelRef\.current\?\.focus\(\)/.test(sheet), "19 focus moves into the dialog on open");
+    assert(/<ol/.test(sheet) && !IOS_SHEET_STEPS.some((s) => /screenshot|\.png|\.jpg/i.test(s)), "readable ordered instructions, no screenshot-heavy onboarding");
+    assert(/aria-label="Close"/.test(sheet), "19 the icon-only close control has a real accessible name, not icon alone");
+  });
+
+  await runner.run("InstallBanner: copy, semantics, placement and approved icon — a tasteful banner, not a browser alert or full-screen interruption", async () => {
+    assert(INSTALL_BANNER_TITLE === "Install Monitriq" && INSTALL_BANNER_BODY === "Get quicker access from your Home Screen." && INSTALL_BANNER_NOT_NOW === "Not now" && INSTALL_BANNER_INSTALL === "Install", "15 approved copy, never Download APK / Download app / App Store");
+    const banner = src("components/pwa/InstallBanner.tsx");
+    assert(/role="region"/.test(banner), "19 an appropriate landmark, not a raw <div> soup");
+    assert(/<button type="button"/.test(banner), "19 real buttons, not clickable spans");
+    assert(/BrandLogo variant="mark"/.test(banner), "1 the approved app icon, never a redrawn/invented one");
+    assert(!/fixed inset-0|position:\s*fixed/.test(banner) && !/backdrop-blur|bg-black\/(?:[5-9]\d|100)/.test(banner), "1 in-shell placement, not a full-screen takeover or a giant modal on first paint");
+    assert(!/animate-pulse|glow|shadow-\[0.*0.*(?:teal|00d1b2)/i.test(banner) && !/gradient/i.test(banner), "1 no neon/glow/excessive gradients");
+    assert(/PageContainer/.test(banner), "2 reuses the shell's own safe-area horizontal padding, so it can never cause horizontal overflow");
+    assert(!/env\(safe-area-inset-top\)/.test(banner), "2 sits below ShellHeader (which already owns the top inset), so it never needs or duplicates its own top-safe-area padding");
+    assert(!/z-\[?[5-9]\d/.test(banner), "2 in normal document flow (no high z-index), so it structurally cannot cover the header, profile menu, drawer or forms");
+  });
+
+  await runner.run("dismissal and profile fallback: 'Not now' truly suppresses the banner without touching the Profile entry point", async () => {
+    const store = src("lib/pwa/install-prompt-store.ts");
+    assert(/sessionDismissed = true/.test(store), "9 an explicit in-memory session flag, checked before any storage read");
+    assert(/localStorage\.setItem/.test(store), "9 also persisted across visits");
+    const section = code("components/pwa/InstallSection.tsx");
+    assert(!/install-prompt-store|dismissInstallPromptForSession|isInstallPromptSessionDismissed/.test(section), "14 the profile fallback never reads the banner's dismissal state — dismissing the banner must never hide the fallback");
+    assert(!/dismiss|Not now/i.test(section), "14 the profile entry point has no dismiss action of its own; it is a stable, always-available fallback");
+  });
+
+  await runner.run("install vs update: never stacked, installation takes precedence, and this does not touch the update architecture itself", async () => {
+    const rt = code("components/pwa/PwaRuntime.tsx");
+    assert(/useInstallPromptVisible/.test(rt), "16 reads the SAME eligibility the banner renders from — one source of truth, not a second guess");
+    assert(/showUpdate = waiting !== null && !dismissed && !installPromptVisible/.test(rt), "16 installation takes precedence: the update banner is suppressed while the install banner is offered");
+    assert(/registration\.update|reg\.update|skipWaiting|SKIP_WAITING|updateViaCache/.test(src("components/pwa/PwaRuntime.tsx")), "17 update registration/detection/apply flow is untouched by this phase");
+  });
+
+  await runner.run("onboarding and first-run: the banner cannot appear before onboarding has settled, and appears once Home is reached", async () => {
+    assert(!/InstallBanner/.test(src("app/onboarding/page.tsx")), "the onboarding page does not render AppShell, so it structurally cannot show the top banner");
+    assert(!/AppShell/.test(code("app/onboarding/page.tsx")), "onboarding uses its own minimal shell, not AppShell");
+    for (const f of ["app/(auth)/signup/page.tsx", "app/(auth)/login/page.tsx", "app/auth/confirm/route.ts"]) assert(!/InstallBanner/.test(src(f)), `${f}: install banner cannot appear during signup/confirmation`);
+    assert(/<InstallBanner \/>/.test(src("components/layout/AppShell.tsx")), "13/18 mounted once for the whole authenticated shell (every (app) route, including Home for a returning user) — a persistent Next.js layout, so it does not remount (and re-offer itself) on every in-app navigation");
+  });
+
+  await runner.run("language mode: installation copy is identical regardless of financial_language_mode — no three-way install experience", async () => {
+    const installCode = [code("components/pwa/InstallBanner.tsx"), code("components/pwa/InstallInstructionsSheet.tsx"), code("components/pwa/InstallSection.tsx")].join("\n");
+    assert(!/financial_language_mode|languageMode|useLanguageMode|terms\.t\(/i.test(installCode), "16 install UI never reads the language-mode system; copy is the same simple text for every mode");
   });
 
   await runner.run("offline and update states: honest copy, announced to assistive technology, never auto-reloading", async () => {

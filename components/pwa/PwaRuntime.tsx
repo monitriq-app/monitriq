@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { setDeferredInstallPrompt, type DeferredInstallPrompt } from "@/lib/pwa/install-store";
+import { markInstallPromptInstalled } from "@/lib/pwa/install-prompt-store";
 import { OFFLINE_MESSAGE, UPDATE_ACTION, UPDATE_LATER, UPDATE_MESSAGE } from "@/lib/pwa/messages";
+import { useInstallPromptVisible } from "@/components/pwa/useInstallPromptVisible";
 
 const UPDATE_CHECK_MS = 60 * 60 * 1000;
 
@@ -29,13 +31,17 @@ export default function PwaRuntime() {
   const [dismissed, setDismissed] = useState(false);
   const online = useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true);
   const refreshing = useRef(false);
+  const { visible: installPromptVisible } = useInstallPromptVisible();
 
   useEffect(() => {
     const onPrompt = (event: Event) => {
       event.preventDefault();
       setDeferredInstallPrompt(event as DeferredInstallPrompt);
     };
-    const onInstalled = () => setDeferredInstallPrompt(null);
+    const onInstalled = () => {
+      setDeferredInstallPrompt(null);
+      markInstallPromptInstalled();
+    };
     window.addEventListener("beforeinstallprompt", onPrompt);
     window.addEventListener("appinstalled", onInstalled);
 
@@ -86,7 +92,9 @@ export default function PwaRuntime() {
     }, 3000);
   }
 
-  const showUpdate = waiting !== null && !dismissed;
+  // Installation takes precedence over the update notice for a browser user
+  // who hasn't installed yet — the two must never stack (P0-E6-S1R3).
+  const showUpdate = waiting !== null && !dismissed && !installPromptVisible;
   if (online && !showUpdate) return null;
 
   return (
