@@ -6,6 +6,7 @@ import Link from "next/link";
 import { KeyRound, User } from "lucide-react";
 import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { InstallSection } from "@/components/pwa/InstallSection";
 import { LanguageModeSelector } from "@/components/language/LanguageModeSelector";
 import { useLanguageMode } from "@/components/language/LanguageProvider";
 import { createClient } from "@/lib/supabase/client";
@@ -126,6 +127,8 @@ export function AccountMenu({ displayName, email, preferredCurrency, open, onOpe
               </p>
             ) : null}
           </div>
+
+          <InstallSection />
 
           <div className="flex flex-col gap-1 border-b border-border py-3">
             <span className="px-1 text-xs font-medium uppercase tracking-wide text-text-muted">Security</span>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
+  <title>Confirm your Monitriq email</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F8F7F2;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#F8F7F2;">Confirm your email address to finish setting up your Monitriq account.</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#F8F7F2;">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background-color:#FFFFFF;border:1px solid #D8DEE4;border-radius:12px;">
+          <tr>
+            <td align="left" style="background-color:#071820;border-radius:12px 12px 0 0;padding:24px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:24px;line-height:28px;font-weight:700;letter-spacing:-0.3px;color:#FFFFFF;">
+              Monitriq
+            </td>
+          </tr>
+          <tr>
+            <td align="left" style="padding:32px 32px 8px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#0B172A;">
+              <h1 style="margin:0 0 16px 0;font-size:22px;line-height:28px;font-weight:700;color:#0B172A;">Confirm your email</h1>
+              <p style="margin:0 0 12px 0;font-size:16px;line-height:24px;color:#0B172A;">Thanks for creating your Monitriq account.</p>
+              <p style="margin:0 0 24px 0;font-size:16px;line-height:24px;color:#0B172A;">Confirm your email address to finish setting up your account.</p>
+            </td>
+          </tr>
+          <tr>
+            <td align="left" style="padding:0 32px 24px 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" bgcolor="#0E6F62" style="background-color:#0E6F62;border-radius:8px;">
+                    <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email" target="_blank" style="display:inline-block;padding:14px 28px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:16px;line-height:20px;font-weight:600;color:#FFFFFF;text-decoration:none;border-radius:8px;">Confirm my email</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td align="left" style="padding:0 32px 32px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+              <p style="margin:0 0 12px 0;font-size:14px;line-height:20px;color:#4A5565;">If the button doesn&#8217;t work, copy and paste this link into your browser:</p>
+              <p style="margin:0 0 24px 0;font-size:12px;line-height:18px;color:#4A5565;word-break:break-all;">{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&amp;type=email</p>
+              <p style="margin:0;font-size:14px;line-height:20px;color:#4A5565;">If you didn&#8217;t create a Monitriq account, you can ignore this email.</p>
+            </td>
+          </tr>
+        </table>
+        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;">
+          <tr>
+            <td align="center" style="padding:16px 32px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:13px;line-height:18px;font-weight:600;color:#4A5565;">Monitriq</td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

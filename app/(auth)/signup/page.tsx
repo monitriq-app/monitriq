@@ -8,6 +8,8 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
+import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
+import { CHECK_EMAIL_INTRO, CHECK_EMAIL_NEXT, CHECK_EMAIL_TITLE, friendlyAuthError } from "@/lib/auth/messages";
 
 export default function SignupPage() {
   const [email, setEmail] = useState("");
@@ -27,16 +29,16 @@ export default function SignupPage() {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm`,
         },
       });
       if (signUpError) {
-        setError(signUpError.message);
+        setError(friendlyAuthError(signUpError, "signup"));
         return;
       }
       setSubmitted(true);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } catch {
+      setError("Something went wrong. Please try again.");
     } finally {
       setPending(false);
     }
@@ -44,11 +46,13 @@ export default function SignupPage() {
 
   if (submitted) {
     return (
-      <AuthCard title="Check your email">
-        <p className="text-sm text-text-secondary">
-          We sent a verification link to <span className="text-text-primary">{email}</span>.
-          Follow it to finish creating your account.
-        </p>
+      <AuthCard title={CHECK_EMAIL_TITLE}>
+        <p className="text-sm text-text-secondary">{CHECK_EMAIL_INTRO}</p>
+        <p className="mt-1 break-all text-sm font-medium text-text-primary">{email}</p>
+        <p className="mt-3 text-sm text-text-secondary">{CHECK_EMAIL_NEXT}</p>
+        <div className="mt-6">
+          <ResendConfirmation email={email} onChangeEmail={() => setSubmitted(false)} />
+        </div>
       </AuthCard>
     );
   }

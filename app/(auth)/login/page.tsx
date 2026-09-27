@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { AuthCard } from "@/components/auth/AuthCard";
@@ -9,9 +9,21 @@ import { FormField } from "@/components/ui/FormField";
 import { Input } from "@/components/ui/Input";
 import { PasswordInput } from "@/components/ui/PasswordInput";
 import { Button } from "@/components/ui/Button";
+import { ResendConfirmation } from "@/components/auth/ResendConfirmation";
+import { friendlyAuthError } from "@/lib/auth/messages";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginForm() {
   const router = useRouter();
+  const linkFailed = useSearchParams().get("error") === "auth-callback-failed";
+  const [unconfirmed, setUnconfirmed] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -20,6 +32,7 @@ export default function LoginPage() {
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     setError(null);
+    setUnconfirmed(false);
     setPending(true);
 
     try {
@@ -29,13 +42,14 @@ export default function LoginPage() {
         password,
       });
       if (signInError) {
-        setError(signInError.message);
+        setError(friendlyAuthError(signInError, "signin"));
+        setUnconfirmed(signInError.code === "email_not_confirmed");
         return;
       }
       router.replace("/home");
       router.refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } catch {
+      setError("Something went wrong. Please try again.");
     } finally {
       setPending(false);
     }
@@ -65,6 +79,11 @@ export default function LoginPage() {
             onChange={(event) => setPassword(event.target.value)}
           />
         </FormField>
+        {linkFailed && !error ? (
+          <p role="status" className="text-sm text-text-secondary">
+            That link couldn&apos;t be used. Please request a new one.
+          </p>
+        ) : null}
         {error ? (
           <p role="alert" className="text-sm text-danger">
             {error}
@@ -74,6 +93,11 @@ export default function LoginPage() {
           {pending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
+      {unconfirmed && email.trim() ? (
+        <div className="mt-4">
+          <ResendConfirmation email={email} buttonLabel="Send a new confirmation email" />
+        </div>
+      ) : null}
       <div className="mt-6 flex flex-col gap-1 text-sm text-text-secondary">
         <Link href="/forgot-password" className="underline underline-offset-2 hover:text-text-primary">
           Forgot your password?

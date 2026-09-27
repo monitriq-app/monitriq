@@ -1,0 +1,140 @@
+P0-E6-AUTH-R1 — BRANDED AUTH EMAIL + CONFIRMATION-TO-ONBOARDING REPAIR
+======================================================================
+
+STATUS
+------
+Implemented and validated LOCALLY. NOT committed, NOT pushed, NOT deployed.
+Production QA NOT performed: it needs the dashboard steps in section 12 (Supabase URL config, template, Resend SMTP) and a deployment first.
+
+1. EXISTING SIGNUP-FLOW AUDIT
+-----------------------------
+  - app/(auth)/signup/page.tsx: browser client `supabase.auth.signUp()` with emailRedirectTo = /auth/callback. Showed raw Supabase error text. "Check your email" state had no resend, no "different email".
+  - lib/supabase/client.ts (browser) / server.ts / session.ts (proxy): @supabase/ssr cookie sessions; proxy refreshes the session via getUser(). Correct, unchanged.
+  - app/auth/callback/route.ts: the ONLY callback. Exchanges a PKCE `?code=` for a session with exchangeCodeForSession, then redirects to `${origin}${next}` with `next` taken unvalidated from the query string. On any failure redirects to /login?error=auth-callback-failed.
+  - No /auth/confirm route existed. No resend flow existed.
+  - Login page: ignored ?error=, showed raw provider messages, no way to resend for an unconfirmed account.
+  - Guards: app/(app)/layout.tsx sends no-session -> /login and incomplete profile -> /onboarding; app/onboarding/page.tsx sends no-session -> /login and completed profile -> /home. Both correct.
+  - Profile creation: DB trigger on_auth_user_created -> handle_new_user() inserts the profile row (onboarding_completed defaults false). Correct; not touched.
+  - Password reset: forgot-password uses resetPasswordForEmail with redirectTo /auth/callback?next=/update-password (same PKCE callback).
+  - Supabase config: local site_url 127.0.0.1:3000 (dev server is localhost:3000), email confirmations OFF locally (so the confirmation path was never exercisable locally), default templates.
+
+2. ROOT CAUSE
+-------------
+PKCE flow + default email template. The browser client starts signup in PKCE mode and stores a one-time "code verifier" cookie in THAT browser. The default template link goes to Supabase's own verify endpoint, which redirects back with `?code=`. The callback can only exchange the code if the verifier cookie is present. Users usually open the confirmation email in a different context than the one that signed up (mail app / in-app browser / another device / the installed PWA, whose cookie jar is separate from Safari/Chrome). There the verifier is missing, exchangeCodeForSession fails, and the user is bounced to /login (or, if the redirect URL is not allowlisted in Supabase, to the site root with Sign In / Create account). Result: confirmed at Supabase but no Monitriq session, so "back at Sign Up / Sign In".
+Contributing defects: no resend, raw provider errors, login ignoring the callback error, and an unvalidated `next` in the callback (open-redirect: `next=@evil.example` produced https://<origin>@evil.example).
+
+3. CONFIRMATION ARCHITECTURE
+----------------------------
+  Signup -> Supabase Auth generates the token and hands the email to its SMTP provider (Resend, once configured) -> email link {{ .SiteURL }}/auth/confirm?token_hash=...&type=email -> Monitriq server route app/auth/confirm/route.ts.
+  Resend only delivers mail. Supabase Auth remains the token authority. No second token system, no Resend API call from the app, no Resend key in the repo.
+  The route (server client, cookie session):
+    1. reads token_hash + type; missing token or unsupported type -> /link-invalid?reason=missing
+    2. supabase.auth.verifyOtp({ type, token_hash }); error -> /link-invalid?reason=expired|invalid (Supabase reports expired and already-used identically as otp_expired)
+    3. supabase.auth.getUser() to confirm the session really exists in this cookie context; none -> /link-invalid
+    4. reads the EXISTING profile through getProfile() (RLS, anon key); never creates/updates it
+    5. redirects (Cache-Control: no-store)
+  Accepted types: email, signup (confirmation) and recovery (so the reset email can be moved to the same pattern later). Anything else is rejected.
+  Works from any browser: it does not depend on a code-verifier cookie. (Tokens generated for PKCE signups are prefixed `pkce_`; verifyOtp accepts them — verified in the browser test.)
+  Existing /auth/callback is kept for the PKCE recovery link; no duplicate system was created. Its `next` is now validated.
+
+4. SESSION ESTABLISHMENT
+------------------------
+verifyOtp runs on the SSR server client, so the Set-Cookie session is written to the same redirect response. Browser test: link opened in a brand-new browser context with no prior cookies arrived at /onboarding authenticated; refresh stayed on /onboarding; the cookie is the normal Supabase SSR auth cookie (SameSite=Lax, Path=/), no cookie setting weakened. Before this, the same route confirmed getUser() sees the user.
+
+5. ONBOARDING REDIRECT BEHAVIOUR
+--------------------------------
+onboarding_completed = false -> /onboarding (always; any `next` is ignored so first-run users cannot skip setup).
+Browser-verified: after confirmation -> /onboarding "Set up your workspace"; authenticated incomplete user visiting /home is sent to /onboarding; unauthenticated /onboarding -> /login; completing onboarding -> /home.
+
+6. ALREADY-ONBOARDED BEHAVIOUR
+------------------------------
+onboarding_completed = true -> approved `next` if given, else /home. Authenticated + onboarded visiting /onboarding -> /home (existing guard, verified). Sign out -> sign in -> /home (verified). Recovery links -> /update-password (verified for an onboarded account). A confirmed user is never sent to /login, /signup or /auth unless verification failed (unit-tested).
+
+7. OPEN-REDIRECT SECURITY
+-------------------------
+lib/auth/redirects.ts safeNextPath(): only approved internal app paths (home, money, budget, goals, assets, liabilities, receivables, decisions, financial-position, rules, spending-check, onboarding, update-password); query/fragment dropped; rejects https://, //, ///, backslash, @host, javascript:, encoded control characters, ../ and unlisted paths. Applied in /auth/confirm and /auth/callback. Tested with 15+ hostile inputs; browser test with next=https://evil.example stays on-site.
+
+8. SIGNUP, RESEND AND FAILURE UX
+--------------------------------
+  - Signup success: "Check your email / We sent a confirmation link to: <email> / Confirm your email to continue setting up Monitriq." plus [Resend email] and [Use a different email]. No Supabase wording. Shown identically whether or not the address already has an account (Supabase's own enumeration protection is untouched).
+  - Resend: auth.resend({ type: 'signup' }) — the same template/route. 60s UI cooldown (button shows "Resend email in 60s", disabled), single in-flight request, Supabase's own server-side limit still applies (max_frequency). Reply text is identical for known and unknown addresses ("If that address is waiting for confirmation, a new email is on its way."); tested that resending to an unknown address returns no error and creates no account.
+  - Invalid/expired/used link (/link-invalid): "This confirmation link is no longer valid" + explanation, email field, [Send a new confirmation email], [Back to sign in]. No provider text, no token in the URL. Distinct copy for incomplete links. A superseded older link (after a resend) is also rejected (verified).
+  - Sign-in for an unconfirmed account: "Please confirm your email before signing in." with an inline resend button. Wrong password: "That email and password don't match. Please try again." A failed callback shows "That link couldn't be used. Please request a new one."
+  - Logging (server): reason, type, Supabase error code/status only. Verified the production log contains no token_hash and no JWT.
+
+9. SUPABASE "CONFIRM SIGNUP" TEMPLATE
+------------------------------------
+Subject: Confirm your Monitriq email
+Body: supabase/templates/confirmation.html (paste this file verbatim into Supabase Dashboard > Authentication > Emails > Confirm signup). Key link:
+  {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=email
+(written &amp; inside the HTML attribute.) It deliberately does NOT use {{ .ConfirmationURL }}, which verifies at Supabase and returns without an SSR session.
+Locally the same file is wired through supabase/config.toml [auth.email.template.confirmation]. Verified against a real local signup: subject, link and Monitriq copy rendered as intended; message contains no "Supabase".
+Alternative if previews/localhost must use their own origin with one Supabase project: use {{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=email (needs emailRedirectTo allowlisted; the app already passes ${origin}/auth/confirm). Not used by default because {{ .SiteURL }} is deterministic and cannot be affected by an un-allowlisted redirect.
+
+10. EMAIL HTML / DESIGN
+-----------------------
+Table-based layout, inline styles, explicit colours, system font stack, no scripts, no web fonts, no gradients, no images, no external URLs, light colour scheme. Navy (#071820) header band with the text wordmark "Monitriq" (no logo image: the approved logos are SVG and there is no confirmed stable public HTTPS asset URL; SVG is unsupported by several mail clients), white card on warm off-white (#F8F7F2), deep-teal (#0E6F62) "Confirm my email" button with white text (good contrast), hidden preheader, fallback plain link under the button, ignore-if-not-you line, "Monitriq" footer. Copy follows the brief exactly. Rendered and visually checked at 375px and 700px. Recommended: send a test to Gmail, Outlook and Apple Mail after SMTP is live.
+
+11. RESEND SMTP REQUIREMENTS (configured IN SUPABASE, never in the repo)
+------------------------------------------------------------------------
+  Provider Resend; host smtp.resend.com; port 465; username `resend`; password = a Resend API key (sending access) entered only in the Supabase dashboard; sender name Monitriq; sender email = an address on a domain verified in Resend (SPF + DKIM, ideally DMARC).
+  No NEXT_PUBLIC_RESEND_* variable exists; no Resend key or service-role key is in app code, email, URLs or logs (tested).
+  TRACKING: disable Click Tracking and Open Tracking for the sending domain in Resend (Domains > the domain > Configuration). Click tracking rewrites links through a tracking host, which breaks or delays token_hash links and lets Resend's redirect service see them; open tracking injects an image that can trigger scanners. Authentication mail must be sent untracked.
+
+12. DASHBOARD ACTIONS STILL REQUIRED FROM THE PROJECT OWNER
+-----------------------------------------------------------
+(Nothing here can or should be done from code.) Do it for each Supabase project used by a deployment (Monitriq Dev and any Production project).
+  A. Resend: add and verify the sending domain (DNS records), create a sending-only API key, turn OFF click and open tracking.
+  B. Supabase > Authentication > SMTP Settings: enable custom SMTP with the values in section 11. Then raise Authentication > Rate Limits (emails per hour) as appropriate; the built-in mailer's very low limit no longer applies once custom SMTP is on.
+  C. Supabase > Authentication > Sign In / Providers > Email: keep "Confirm email" ON.
+  D. Supabase > Authentication > Emails > Confirm signup: set the subject "Confirm your Monitriq email" and paste supabase/templates/confirmation.html.
+  E. Supabase > Authentication > URL Configuration:
+       Site URL = the canonical deployed Monitriq origin, exactly (https, no trailing slash). The production URL is not recorded in the repo — confirm it (the Vercel project is "monitriq").
+       Redirect URLs: https://<canonical-origin>/auth/confirm and https://<canonical-origin>/auth/callback (exact, no wildcard). For a DEV project only, also http://localhost:3000/auth/confirm and http://localhost:3000/auth/callback. Remove wildcards you do not need.
+       NOTE: because the template uses {{ .SiteURL }}, every email from a project links to that project's Site URL. A dev project used both from localhost and from Vercel must pick one, or use the {{ .RedirectTo }} variant from section 9.
+  F. Optional but recommended: change Reset password template to {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery so password reset also works from any browser (the route already handles it). Also consider Email OTP expiration (default 1 hour).
+  G. After deploying this code: run a real signup on production and complete the section 15 checklist.
+
+13. RLS / SECURITY CONFIRMATION
+-------------------------------
+  - No RLS, schema, migration, profile-trigger or calculation change (git guard in tests). Profiles stay deny-by-default; the confirm route only reads the caller's own profile through the anon-key client.
+  - No service-role credential in the browser, email, URL or logs; the route uses the same anon-key SSR client as the rest of the app.
+  - Tokens are never logged (only reason/type/error code). Redirects are allowlisted. Cookie configuration unchanged.
+  - Account enumeration: signup and resend show identical states regardless of whether an account exists; unknown-address resend verified to succeed silently and create nothing. (Sign-in still distinguishes "not confirmed" from "wrong password" for a correct-password unconfirmed account — that is Supabase's behaviour and only reveals state to someone who already knows the password.)
+
+14. LOCAL QA (real Chrome, production build, local Supabase + Mailpit)
+------------------------------------------------------------------------
+Signup -> "Check your email" (no session cookie yet) -> resend (notice + 60s cooldown) -> 2 Monitriq emails, subject "Confirm your Monitriq email", link /auth/confirm?token_hash=...&type=email -> latest link opened in a SEPARATE browser context -> /onboarding authenticated -> refresh stays -> /home bounces to /onboarding while incomplete -> onboarding completed -> /home -> onboarded user opening /onboarding -> /home -> sign out -> /login -> sign in -> /home. Unauthenticated /onboarding -> /login. Reused link, and the older link superseded by the resend, -> /link-invalid (no session, no raw errors). No params / no type / unsupported type -> /link-invalid missing; garbage token -> expired/invalid; next=https://evil.example stays on-site. Resend from /link-invalid works. Unconfirmed sign-in shows friendly text + resend. Recovery token via /auth/confirm -> /update-password. /auth/callback?code=bad&next=https://evil.example -> /login?error=auth-callback-failed. No horizontal overflow at 320 and 393 px on /signup, /login, /link-invalid.
+Test-tooling notes: the email's Site URL is http://localhost:3000 (where the user's own dev server runs), so the QA script rewrote that origin to the scratch production server (port 3472); the link path and query were unchanged. The user's dev server was not touched.
+Local config changes: supabase/config.toml now has email confirmations ON, site_url http://localhost:3000, allowlist for localhost/127.0.0.1:3000, and the Monitriq template. I restarted ONLY this project's local Supabase stack (supabase stop/start; data preserved) to apply it. From now on local signups need Mailpit (http://127.0.0.1:54324) to confirm; test fixtures use the admin API and are unaffected.
+
+15. PRODUCTION QA
+-----------------
+NOT PERFORMED (prerequisites missing: dashboard configuration and deployment). Checklist after the owner completes section 12 and the code is deployed: (1) signup with a fresh mailbox; (2) email arrives from "Monitriq", not spam, no Supabase branding, link host = production origin, link not rewritten by tracking; (3) open the link on the phone's mail app and in a second browser; (4) lands on /onboarding signed in; (5) finish onboarding -> Home; (6) sign out/in; (7) click the same link again -> "no longer valid" screen; (8) resend works after 60s; (9) repeat with the installed PWA; (10) view the email in Gmail, Outlook, Apple Mail (light and dark).
+
+16. TESTS
+---------
+New suite: supabase/tests/auth-confirm/run.ts (13 tests, `npm run test:auth-confirm`, chained into `npm run test`; local stack only).
+  Unit: safeNextPath hostile-input matrix; type parsing; failure classification; post-confirm destination (incomplete/complete/recovery/evil next, never sign-in/up); friendly errors never echo provider text or reveal account existence; template contents (token_hash link, no ConfirmationURL, copy, no Supabase branding, email-safe HTML, brand colours); local config wiring; no Resend key in repo.
+  Integration against the REAL local Auth + Mailpit: signup yields no session and a Monitriq email whose link is /auth/confirm?...&type=email at the Site URL; verifyOtp(type email) confirms the user and gives a session; getUser sees the user; exactly one trigger-created un-onboarded profile is readable through RLS; unconfirmed password sign-in is refused (email_not_confirmed) and confirmed works; reused token rejected (otp_expired -> expired); tampered/garbage tokens rejected; onboarding via updateProfile flips the flag, sign-out/in destination is /home; resend produces a second Monitriq email whose token verifies; resend to an unknown address is silent and creates nothing; route/page source guards (verify -> getUser -> profile read order, no token logging, no service role, callback hardened).
+  Adjusted: the PWA suite's guard "auth code unchanged" (written for the PWA phase) now covers only session clients, profile/language domain, onboarding and migrations, since this phase intentionally changes the auth pages/routes.
+Results: all suites pass (rls 20, money 48, currency 11, assets 114, receivables 27, liabilities 25, goals 56, rules 86, decisions 90, financial-position 33, home-readiness 30, home 31, budget 30, budget-ui 22, core-ui 28, spending-check 34, app-shell 10, cash-status 20, language 14, home-density 7, pwa 16, auth-confirm 13). One full run stopped once with a transient local Auth "504 upstream timing out" in the budget suite right after the stack restart; the suite passed on immediate rerun (30/30) along with all following suites.
+Lint clean. Typecheck clean (app + tests). Build: the in-repo `npm run build` collides with the user's running `next dev` (shared .next; known from earlier phases); the identical source built successfully in a byte-identical scratch copy and was used for all browser QA. Stop `next dev` and run `npm run build` to confirm in-repo.
+
+17. FILES CHANGED (this phase)
+------------------------------
+New: app/auth/confirm/route.ts; app/(auth)/link-invalid/page.tsx; components/auth/ResendConfirmation.tsx; lib/auth/redirects.ts, lib/auth/confirm.ts, lib/auth/messages.ts; supabase/templates/confirmation.html; supabase/tests/auth-confirm/run.ts; this report.
+Modified: app/(auth)/signup/page.tsx (check-email state, resend, emailRedirectTo /auth/confirm, friendly errors); app/(auth)/login/page.tsx (friendly errors, unconfirmed resend, callback-failed notice, Suspense for useSearchParams); app/auth/callback/route.ts (validated `next`); supabase/config.toml (local confirmations, site URL/allowlist, template); package.json (test:auth-confirm); supabase/tests/pwa/run.ts (guard scope); docs/project/BUILD_STATE.md.
+Not touched: lib/supabase/*, proxy.ts (this phase), profile trigger/migrations/RLS, financial code, navigation, PWA/service worker, Budget/Goals/Money/Assets/Decisions.
+
+18. RISKS / OPEN ITEMS
+----------------------
+  - Mail scanners: some corporate/security mail gateways (and link-preview bots) open links with GET, which would consume the one-time token before the user does; the user then sees "no longer valid" and can resend. Resend click tracking OFF helps but does not remove this. If it appears in practice, the standard follow-up is an interstitial confirm page that verifies on a button press (POST) instead of on GET.
+  - Password-reset emails still use the PKCE callback (works only in the same browser that requested it) until step 12F is applied.
+  - {{ .SiteURL }} ties each Supabase project's emails to one origin (see 12E).
+  - Canonical production URL is not recorded in the repo; confirm it before setting Site URL.
+  - Production QA and real-client email rendering pending.
+
+19. GIT STATUS
+--------------
+Nothing committed or pushed. Working tree also contains the uncommitted P0-E6-S1 PWA work. Files from this phase are listed in section 17.

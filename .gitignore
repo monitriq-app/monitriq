@@ -43,3 +43,5 @@ coverage/
 
 .env.local
 .env.test.local
+.vercel
+.env*

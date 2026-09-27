@@ -1,0 +1,220 @@
+P0-E6-S1 — PWA INSTALLABILITY + MOBILE APP FOUNDATION
+======================================================
+
+1. PHASE
+--------
+P0-E6-S1: make the existing Next.js app an installable PWA (Android Chrome/Chromium, iPhone/iPad Safari Add to Home Screen, desktop Chromium) from the single existing codebase. No React Native, Capacitor, Expo or app-store work. No offline financial-data feature.
+
+2. STATUS
+---------
+IMPLEMENTED AND VALIDATED LOCALLY. NOT committed. NOT pushed. NOT deployed. Awaiting manual browser/device review.
+
+Validation summary:
+  - npm run test        : all 21 suites pass (new: pwa 16/16)
+  - npm run lint        : clean
+  - npm run typecheck   : clean (app + test tsconfig)
+  - production build    : passes in a byte-identical scratch copy (see section 22 for why not in-repo)
+  - browser QA          : real Chrome against a production build (`next start`), results in sections 8-19
+  - NOT verified        : a physical Android device, a physical iPhone/iPad, Lighthouse, real HTTPS (see 25/26)
+
+3. EXISTING PWA AUDIT
+---------------------
+Found before starting:
+  - app/manifest.ts existed but was minimal (name, colours, icons); it was extended, not duplicated.
+  - Approved logo/icon set already in public/brand (192, 512, 1024, favicons). Only two derivatives were missing.
+  - No service worker, no offline page, no install UI, no viewport-fit=cover, no Apple web-app metadata.
+  - App shell (header, drawer, bottom nav, profile menu), theme tokens, dvh/safe-area padding and the mobile "no permanent scrollbar" CSS already existed and were reused.
+  - proxy.ts ran a Supabase session refresh on every non-asset path (needed a narrow exclusion for the worker and offline page).
+No PWA library was present. A maintained library (e.g. Serwist) was considered and rejected: the requirement is deliberately narrow (three public path families, no runtime caching of pages), and a ~100-line hand-written worker is easier to audit for "does this ever cache private data" than a generic precache/runtime-caching framework. It is fully covered by executable tests.
+
+4. MANIFEST IMPLEMENTATION
+--------------------------
+lib/pwa/manifest.ts (buildManifest) served by app/manifest.ts at /manifest.webmanifest:
+  id "/", name "Monitriq", short_name "Monitriq", description "Know today. Go further.",
+  start_url "/", scope "/", display "standalone",
+  background_color and theme_color "#071820" (--monitriq-obsidian, the dark app background; a test reads brand-tokens.css and asserts equality),
+  lang "en", categories finance/productivity, orientation NOT locked.
+Theme colours live in lib/config/site.ts (themeColors) and are shared with the layout's viewport export. No "Monatriq" naming anywhere in PWA surfaces (tested). One manifest serves all three language modes (tested).
+
+5. ICON ASSETS
+--------------
+Approved logo only; no redesign.
+  Existing: monitriq-app-icon-192.png, monitriq-app-icon-512.png, favicon-32.png, favicon-64.png.
+  New (derived from docs/reference/monitriq brand/monitriq-app-icon-1024.png by scripts/generate-pwa-icons.py, reproducible, Pillow):
+    public/brand/monitriq-app-icon-maskable-512.png  (logo scaled to 84% inside the maskable safe zone on the icon's own background colour; visually verified)
+    public/brand/apple-touch-icon-180.png            (180x180)
+Manifest icons: 192 any, 512 any, 512 maskable. A test checks each file exists and its PNG header dimensions equal the declared size. Browser QA: all icon URLs return 200 image/png.
+
+6. iOS SUPPORT
+--------------
+Metadata (app/layout.tsx): apple-touch-icon 180x180, apple-mobile-web-app-capable, apple-mobile-web-app-title "Monitriq", status bar style "default", mobile-web-app-capable, telephone auto-detection off, viewport-fit=cover.
+Status bar: "default" was chosen over "black-translucent" because translucent would put light content over the light-theme background (unreadable) and forces every screen to manage the notch itself.
+theme-color is emitted for both schemes (light #F8F7F2, dark #071820) so light/dark/system are respected; installing never forces a theme (tested).
+iOS install guidance ("Tap Share, then Add to Home Screen.") appears only in the profile menu on iOS Safari (including iPadOS presenting a Mac UA, detected via touch points), never in in-app browsers (Instagram etc. cannot install), never when already standalone.
+
+7. ANDROID SUPPORT
+------------------
+Chrome installability (Page.getInstallabilityErrors) in the production build reports no manifest, icon, service-worker or start_url error; the only entry is Chrome's own "in-incognito" note, which comes from the headless test profile. The install button appears only when the browser has fired beforeinstallprompt (captured once, no user data), calls prompt() on tap, and disappears after appinstalled. Android wording never appears on iOS and iOS wording never appears on Android (tested and browser-verified).
+
+8. STANDALONE-MODE HANDLING
+---------------------------
+Detection: matchMedia(display-mode: standalone) or iOS navigator.standalone. In standalone the install section renders nothing. Verified in browser with an iOS navigator.standalone override and with a matchMedia override for Android (this Chrome's CDP display-mode emulation did not affect matchMedia, so the override was used; real standalone launch is a manual device check in section 21B).
+Shell reuse: header, drawer, profile menu and fixed bottom nav are unchanged and already dvh/safe-area based. Added: PageContainer and MobileBottomNav honour safe-area-inset-left/right (landscape notch). No global overflow:hidden anywhere (tested); mobile scrollbar chrome remains hidden below 768px; the document is the single scroller.
+
+9. SERVICE-WORKER ARCHITECTURE
+------------------------------
+  - Source: lib/pwa/service-worker.ts builds the worker string; app/sw.js/route.ts serves it (force-static) at /sw.js with Cache-Control "no-cache, no-store, must-revalidate", Service-Worker-Allowed "/", nosniff, application/javascript.
+  - Registered by components/pwa/PwaRuntime.tsx, PRODUCTION ONLY, scope "/", updateViaCache "none". Loaded through next/dynamic (ssr:false) so it is out of the initial bundle and adds no dependency.
+  - Version = VERCEL_GIT_COMMIT_SHA + VERCEL_DEPLOYMENT_ID (else "dev"): every deployment yields different worker bytes, hence a browser update, and new cache names.
+  - install: precache /offline only. NO skipWaiting.
+  - activate: delete every older "monitriq-" cache, clients.claim().
+  - message SKIP_WAITING: skipWaiting (sent only when the user presses Refresh).
+  - proxy.ts matcher now also excludes /sw.js and /offline (no Supabase session refresh / Set-Cookie on those two public resources). Nothing else in proxy.ts changed.
+
+10. EXACT CACHE POLICY
+----------------------
+  Request                                        Handling
+  ---------------------------------------------  ------------------------------------------------
+  Navigations (all pages, incl. /home, /money,   NETWORK ONLY. Never stored. On failure serve the
+    /budget, /goals, ... and public pages)         precached /offline page (or a 503 text fallback)
+  /_next/static/*  (immutable hashed assets)     Cache-first, only ok + same-origin "basic" responses
+  /brand/*         (public logos/icons)          Stale-while-revalidate, only ok + basic responses
+  /offline                                       Precached at install
+  Cross-origin (Supabase, fonts, anything)       NOT intercepted
+  Non-GET (POST/PUT/DELETE, auth, server actions) NOT intercepted
+  RSC / data fetches (?_rsc, non-navigate)       NOT intercepted
+  /api/*, /auth/callback                         NOT intercepted
+  Cookies, tokens, Authorization headers         Never read, stored or forwarded by the worker
+Browser QA after logging in and visiting /money /budget /goals /home: Cache Storage held exactly {/offline, /brand/*, /_next/static/*}; no HTML, no RSC, no API. localStorage, sessionStorage and IndexedDB were empty.
+
+11. FINANCIAL-DATA CACHING CONFIRMATION
+---------------------------------------
+Question: is any authenticated financial data cached broadly? ANSWER: NO.
+  - Not cached: Supabase authenticated API responses, profile, Money, Budget, Goals, Debts, Money Owed, Assets, Spending Check results, auth/session endpoints, cookies, tokens, any personalised server response, any page HTML.
+  - Cached: only the public offline page, content-hashed build assets, and public brand images — none contain user data.
+  - No IndexedDB / localStorage / sessionStorage / Cache writes of user data anywhere in lib/pwa, components/pwa, app/offline, app/sw.js (tested by scanning code with comments stripped).
+  - PWA code imports no financial-domain or Supabase code (tested).
+  - The worker source contains no env, secrets, storage APIs (tested).
+Automated proof is behavioural, not textual: the real worker is executed in a node:vm sandbox with a fake network and Cache Storage; authenticated navigations to eleven routes return fresh network content and leave the cache holding only /offline; nine categories of private traffic are asserted to be un-intercepted with zero worker network calls.
+Caveat (public only): statically prerendered public pages (/login, /offline, /) carry Next's "s-maxage=31536000" header. That is a shared/CDN directive on public, non-personalised HTML that Vercel purges on each deploy; it is not a browser cache and no authenticated route carries it. Documented for awareness.
+
+12. OFFLINE BEHAVIOUR
+---------------------
+  - Navigating offline shows the branded /offline page at the requested URL: "You're offline. Reconnect to refresh your financial information." plus "Monitriq doesn't store your financial information on this device, so nothing is shown while you're offline." No balances are ever shown from a cache (browser-verified: page contains no amounts).
+  - While already on a page, going offline shows a polite live-region banner with the same message; it clears when back online.
+  - "Try again" is a plain link to the current URL, so it works even though the offline page's JS chunks may not have loaded offline. (Found and fixed during QA: the first version was a JS button that did nothing until hydration. After the fix, reconnect + Try again returned to /money with live data.)
+  - If even the offline page is missing from cache, the worker returns a 503 with the same honest sentence.
+
+13. UPDATE STRATEGY
+-------------------
+  - New Vercel deployment -> new worker bytes -> browser installs it in the background and it WAITS (no skipWaiting on install).
+  - The app shows a status banner: "An update is available." with Later / Refresh (48px buttons), positioned above the bottom nav (safe-area aware).
+  - Refresh posts SKIP_WAITING, the new worker activates, the page reloads on controllerchange (3s fallback). Old caches are deleted on activate.
+  - Never reloads automatically, so a form is never interrupted. Later dismisses for the session.
+  - Update checks run on register, when the tab becomes visible, and hourly.
+  - No cache-forever: the worker file is no-store; static assets are content-hashed and version-scoped.
+Browser-verified with two real builds (aaa111-dpl_A then bbb222-dpl_B) under one open, signed-in page with the account menu open: banner appeared, page instance and open menu untouched, Later dismissed it, after reload + Refresh the served/active version became bbb222-dpl_B, old caches were removed, user stayed signed in.
+
+14. INSTALL EXPERIENCE
+----------------------
+  - One entry point: the profile/account menu, section "Install Monitriq — Add Monitriq to your device for quicker access." No Home banner, no modal, no nagging (tested that no other component references it).
+  - Chromium: shows the "Install Monitriq" button only after beforeinstallprompt.
+  - iOS Safari: shows the Share -> Add to Home Screen instruction.
+  - Hidden: standalone/installed, in-app browsers, desktop/Android with no prompt, everything else.
+Browser matrix (all verified): iOS Safari UA -> iOS guide only; iOS standalone -> nothing; iOS Instagram in-app -> nothing; Android without prompt -> nothing; Android with prompt -> button, no iOS wording; Android standalone -> nothing; desktop UA -> nothing.
+
+15. SAFE-AREA / VIEWPORT HANDLING
+---------------------------------
+viewport-fit=cover; header uses safe-area-inset-top, bottom nav uses inset-bottom plus new left/right insets, PageContainer uses max(1rem, inset-left/right); min-h-dvh (no 100vh layouts, tested); notices offset by env(safe-area-inset-bottom). Browser QA cannot emulate a real notch; an iPhone-style safe area needs the device check in 21B.
+
+16. AUTH VALIDATION
+-------------------
+  - Code guard (tested): git shows NO changes under lib/supabase, app/(auth), app/auth, app/onboarding, profile/language domain code or supabase/migrations. proxy.ts changed by one matcher line only (two public path exclusions), no cookie/getUser change.
+  - Browser (production build, worker active and controlling): sign-in from /login succeeded and landed on /home; the session survived reloads and 10+ navigations; server data always came from the network; the session cookie is the Supabase SSR cookie (SameSite=Lax, Path=/), unchanged — cookie config was NOT weakened.
+  - The worker never intercepts non-GET (sign-in/out, password change/reset are POSTs/server actions) or cross-origin Supabase calls or /auth/callback, so it cannot alter them.
+  - Not exercised in the browser this phase: sign-out, password change/reset, email-callback and onboarding flows. They are unmodified and un-intercepted (see above); include them in the manual device pass (21A/21B).
+
+17. LANGUAGE-MODE VALIDATION
+----------------------------
+Language modes (simple/balanced/financial), terminology and the profile setting are untouched (git guard; language suite 14/14 and all other suites pass). The manifest/worker do not depend on language mode. The language selector renders in the profile menu in the installed-app context (screenshots). Persistence across standalone launches relies on the unchanged profiles.financial_language_mode column; verify on device (21).
+
+18. MOBILE-WIDTH QA
+-------------------
+Production build, signed-in /home at 320, 360, 375, 393, 412, 430 px: no horizontal overflow at any width; layout viewport equals full width (0px vertical scrollbar, mobile scrollbar chrome hidden). Update and offline banners sit above the bottom nav at 393px (screenshots). Home card density from P0-E5-S5B unchanged.
+
+19. ACCESSIBILITY
+-----------------
+  - Update and offline notices are role="status" (polite live regions); update buttons are real buttons, 48px, keyboard-operable, visible labels.
+  - Install control is a button (48px) with text label; icons aria-hidden; iOS guidance is text.
+  - Offline page has an h1, readable message and a 48px link.
+  - Decorative icons are aria-hidden. Focus is not moved by the notices, so nothing steals focus mid-form.
+
+20. PERFORMANCE
+---------------
+No new dependencies. PWA runtime is code-split via next/dynamic (ssr:false) and loaded after hydration; the worker is a tiny static route. Worker caching makes repeat loads of hashed chunks and brand images local. No effect on data fetching or server rendering of authenticated pages.
+
+21. TESTS
+---------
+supabase/tests/pwa/run.ts (new, 16 tests, wired into `npm run test` as test:pwa; no database needed). Avoids fake string-duplication tests: the generated worker is executed in a Node vm sandbox with fake caches/fetch.
+  Manifest: name/short_name, start_url/scope/id/standalone, colours == brand tokens, no orientation lock, icons exist with true PNG dimensions, no old-brand naming.
+  Metadata: Apple + viewport-fit + theme colours; theme not forced.
+  Worker (behavioural): install precaches only /offline and never skipWaiting; SKIP_WAITING only via message; eleven authed routes never cached; offline fallback without stale data; nine kinds of private traffic un-intercepted; only allowlisted URLs cached and failed responses never; per-deploy versioning, old caches removed on activate, worker bytes differ per version; no client storage of user data.
+  Install logic: platform detection (iPhone, iPadOS-as-Mac, Android, desktop), standalone, in-app browsers, who sees what, no Android wording on iOS.
+  UI contracts: install only in profile menu; offline/update states are live regions; update applied only on Refresh; runtime code-split.
+  Regression guards: auth/profile/language/migrations untouched, proxy diff limited to public exclusions, navigation labels and drawer unchanged, three language modes, no keys in PWA code, safe-area/dvh/no overflow-hidden.
+Manual A. ANDROID (Chrome): 1) open the deployed HTTPS URL, sign in; 2) profile menu shows "Install Monitriq" (or Chrome's own install prompt); install; 3) launch from the home screen: opens standalone, no address bar, no install section in the menu; 4) navigate Home/Money/+/Budget/Goals and drawer; open keyboard in a form and confirm the bottom nav/fields behave; 5) sign out/in, change password, reset via email link and confirm returning to the app; 6) toggle airplane mode: banner appears, navigating shows the offline page with no balances; back online -> Try again works; 7) after a new deployment reopen the app: "An update is available." -> Refresh; 8) change language mode, close and relaunch, confirm it persisted; 9) dark/light/system theme and status bar colours; 10) icon on home screen looks right (maskable crop).
+Manual B. iPHONE/iPAD (Safari): 1) open the URL, sign in; 2) profile menu shows "Tap Share, then Add to Home Screen." (no Android wording); 3) Share -> Add to Home Screen, name "Monitriq", icon correct; 4) launch it: standalone, status bar readable in light and dark, content clear of the notch/Dynamic Island and home indicator, landscape insets ok; 5) the install section is gone in the installed app; 6) sign-in persists across launches; sign out/in works; 7) offline (airplane) shows the offline page; 8) forms with the keyboard open keep the field visible; 9) repeat steps in an in-app browser (e.g. Instagram) and confirm no install guidance.
+Responsive: repeat at 320/360/375/393/412/430 in device emulation with a notch profile.
+
+22. LINT / TYPECHECK / BUILD
+----------------------------
+  npm run test      : 21 suites pass (rls 20, money 48, currency 11, assets 114, receivables 27, liabilities 25, goals 56, rules 86, decisions 90, financial-position 33, home-readiness 30, home 31, budget 30, budget-ui 22, core-ui 28, spending-check 34, app-shell 10, cash-status 20, language 14, home-density 7, pwa 16).
+  npm run lint      : clean.
+  npm run typecheck : clean.
+  npm run build     : the in-repo build fails with the known Turbopack next/font/google module-not-found because the user's running `next dev` (port 3000) shares .next; it recurs every phase and is unrelated to this change. I did not stop the user's dev server. The same source built in a byte-identical scratch copy: compiled, typechecked, 23 static pages generated, routes include /manifest.webmanifest, /offline, /sw.js. To confirm in-repo, stop `next dev` and run `npm run build`.
+  Production-build checks (scratch, `next start`): manifest served as application/manifest+json and parsed with no errors; installability errors none (except headless "in-incognito"); /sw.js served no-store with Service-Worker-Allowed "/"; worker active, scope "/", updateViaCache "none", controlling the page after reload; icons 200; no mixed content (no non-local http:// subresources); localhost is a secure context, and Vercel serves HTTPS.
+
+23. PRODUCTION DEPLOYMENT STATUS
+--------------------------------
+Not deployed. The Vercel project "monitriq" is already linked (.vercel/project.json); it must NOT be recreated. After approval: commit, push (GitHub integration deploys), or `vercel deploy` from the linked project. The service worker only registers in production and needs HTTPS, so Android install / iOS Add to Home Screen must be tested on the deployed URL (or a preview URL). Environment: uses the existing Supabase env vars; no new secrets, none in the manifest or client JS. VERCEL_GIT_COMMIT_SHA / VERCEL_DEPLOYMENT_ID are provided by Vercel at build time for update versioning.
+
+24. FILES CHANGED
+-----------------
+New:
+  lib/pwa/manifest.ts, lib/pwa/service-worker.ts, lib/pwa/messages.ts, lib/pwa/install.ts, lib/pwa/install-store.ts
+  app/sw.js/route.ts, app/offline/page.tsx
+  components/pwa/PwaLoader.tsx, components/pwa/PwaRuntime.tsx, components/pwa/InstallSection.tsx
+  scripts/generate-pwa-icons.py
+  public/brand/apple-touch-icon-180.png, public/brand/monitriq-app-icon-maskable-512.png
+  supabase/tests/pwa/run.ts
+  docs/reports/P0-E6-S1-pwa-installability-foundation.txt
+Modified:
+  app/manifest.ts (delegates to buildManifest), app/layout.tsx (Apple/viewport metadata, PwaLoader), lib/config/site.ts (themeColors), proxy.ts (matcher: exclude /sw.js and /offline), components/layout/AccountMenu.tsx (InstallSection), components/layout/PageContainer.tsx and MobileBottomNav.tsx (left/right safe-area insets), package.json (test:pwa chained into test), docs/project/BUILD_STATE.md.
+Unrelated pending change from the Vercel link: .gitignore (.vercel, .env*).
+Removed during QA: components/pwa/OfflineRetry.tsx (replaced by a plain link).
+No changes to: database schema, migrations, RLS, financial calculations, auth code, navigation items, language system.
+
+25. OPEN ISSUES
+---------------
+  - Real-device confirmation still needed (Android install, iOS Add to Home Screen, standalone status bar, notch/home-indicator insets). Headless Chrome cannot prove these.
+  - Browser QA did not cover sign-out, password change/reset, email callback or onboarding in the browser (code untouched and un-intercepted; see 16).
+  - Chrome's display-mode emulation did not change matchMedia in this environment; standalone hiding was verified with a matchMedia override plus unit tests.
+  - Lighthouse PWA audit not run.
+  - In-repo `npm run build` blocked by the shared-.next collision with `next dev` (scratch build passes).
+  - Pre-existing, out of scope: MoneyActivityList locale date formatting hydration warning on /money.
+  - The offline page's own JS may not hydrate offline; by design it needs none.
+
+26. RISKS
+---------
+  - A future edit that widens the worker's allowlist (e.g. caching pages) would put private data on device. Mitigation: behavioural tests fail if anything outside /offline, /_next/static, /brand is cached or if navigations/private requests are touched.
+  - Update prompt relies on browser update checks (visibility + hourly); users on a stale tab see the banner on next check. The old worker keeps serving only public assets meanwhile; an old worker never serves stale data.
+  - iOS PWA storage/cookie behaviour is Apple-controlled; a session may need re-login after long inactivity (Supabase behaviour, not changed).
+  - Icon appearance in circle/squircle masks should be eyeballed on device.
+
+27. GIT STATUS
+--------------
+Nothing committed or pushed. Working tree contains this phase's modifications plus new untracked files listed in section 24 (and the earlier .gitignore change). The user's own prior commits through d462d15 are already on origin/main. Git author identity was not touched (noted earlier: the configured name/email are malformed with stray quotes, which is why commits may not appear against your GitHub account).
+
+28. RECOMMENDED NEXT PHASE
+--------------------------
+1) Review on real devices via a Vercel preview deployment (Manual A/B above) and approve. 2) Commit/push this phase after approval. 3) Then P0-E6-S2: install/standalone polish found on device (splash/status bar tuning), plus optional Lighthouse pass. Any future offline-read feature is a separate, explicitly-scoped security decision and is not part of this foundation.
